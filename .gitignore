@@ -1,6 +1,10 @@
 # binaries
 obj/*
 *.exe
+bin/server
+bin/client
+bin/manager
+bin/test3d
 
 # Account files
 bin/accounts/*

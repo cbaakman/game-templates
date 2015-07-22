@@ -1,0 +1,47 @@
+[test3d]
+
+Contains examples of some basic 3D features:
+* stencil shadows
+* collision detection, but triangle test still fails occasionally when the collider pushes against the edge between two triangles, causing glitches
+* shaders
+* render to texture
+* parsing and rendering svg fonts with kerning tables. These fonts can be created in fontforge. (http://fontforge.github.io/en-US/)
+* using meshes with skeletal animation, created in blender 2.49b (http://www.blender.org/) and exported with the script: xml_exporter.py
+
+[manager]
+
+Need to run this to create account files that the server can parse. It depends on a directory "accounts" residing in the same directory as where the manager runs.
+
+[server]
+
+Runs on the command line, handles requests from the client application. Depends on account files to handle login requests.
+Handles public chat messages and updates connected clients about each other's mouse cursor positions.
+
+[client]
+
+A graphical interface, that shows a simple login screen. Needs the server to be running in order to let the user log in.
+After logging in, users can see each other's mouse cursors and send chat messages to each other.
+
+[building on linux]
+
+By running GNU make (http://www.gnu.org/software/make/) in the project root directory, in combination with the gcc compiler 4.7. (https://gcc.gnu.org/)
+Must have the required development libraries installed.
+
+[building on windows]
+
+By using codeblocks (http://www.codeblocks.org/) with mingw, (http://www.mingw.org/) using the project files in the root directory.
+Must have the required development libraries installed.
+
+Dependencies:
+* OpenGL 2.0 (https://www.opengl.org/)
+* GLEW 1.0 (http://glew.sourceforge.net/)
+* cairo graphics library 1.2 (http://cairographics.org/)
+* libxml 2.0 (http://www.xmlsoft.org/)
+* SDL 2.0 (https://www.libsdl.org/)
+* SDL_net 2.0 (https://www.libsdl.org/projects/SDL_net/)
+* SDL_mixer 2.0 (https://www.libsdl.org/projects/SDL_mixer/)
+* unzip 1.01h (http://www.winimage.com/zLibDll/minizip.html)
+* libpng 1.2.49 (http://www.libpng.org/pub/png/libpng.html)
+* libcrypto 1.0.0 (https://www.openssl.org/) or libeay32 on windows
+* libncurses 5.9 (http://www.gnu.org/software/ncurses/ncurses.html) or pdcurses on windows (http://pdcurses.sourceforge.net/)
+* C and C++ standard libraries

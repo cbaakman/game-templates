@@ -296,6 +296,7 @@ public:
     void OnServerMessage (const Uint8 *data, const int len);
 
     void OnConnectionLoss ();
+    void OnLogout ();
 
     bool Init (void);
 };

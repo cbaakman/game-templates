@@ -46,6 +46,8 @@ ConnectedScene::~ConnectedScene()
 }
 void ConnectedScene::Logout ()
 {
+    OnLogout ();
+
     Uint8 msg = NETSIG_LOGOUT;
     pClient ->SendToServer(&msg, 1);
     logged_in = false;

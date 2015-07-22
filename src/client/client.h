@@ -101,6 +101,8 @@ public:
     bool IsFullscreen (void) { return fullscreen; }
     Uint32 GetVideoFlags (void);
 
+    SDL_Window *GetMainWindow () const { return mainWindow; }
+
     bool SendToServer (const Uint8* data, const int len);
 
     void SwitchScene (Scene* scene); // NULL to do nothing

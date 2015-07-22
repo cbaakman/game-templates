@@ -1030,6 +1030,8 @@ void TestConnectionScene::OnLogin(const char* username, UserParams* params, User
 {
     ConnectedScene::OnLogin(username, params, state);
 
+    SDL_SetWindowTitle (pClient->GetMainWindow (), username);
+
     strcpy(myUsername,username);
     myParams = *params;
     me = *state;
@@ -1206,8 +1208,6 @@ void TestConnectionScene::OnKeyPress (const SDL_KeyboardEvent *event)
         else
         {
             Logout();
-            pClient -> SwitchScene (loginScene);
-            loginScene -> SetMenuEnabled (true);
         }
         return;
 
@@ -1431,7 +1431,16 @@ void TestConnectionScene::Predict (UserState* out, const UserState* prev, const 
 }
 void TestConnectionScene::OnConnectionLoss ()
 {
+    SDL_SetWindowTitle (pClient->GetMainWindow (), "client");
+
     loginScene ->SetErrorMessage ("Connection was Lost");
+    pClient -> SwitchScene (loginScene);
+    loginScene -> SetMenuEnabled (true);
+}
+void TestConnectionScene::OnLogout ()
+{
+    SDL_SetWindowTitle (pClient->GetMainWindow (), "client");
+
     pClient -> SwitchScene (loginScene);
     loginScene -> SetMenuEnabled (true);
 }

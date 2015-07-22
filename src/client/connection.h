@@ -43,7 +43,8 @@ protected:
 
     void Logout (); // voluntary disconnect, tell server about logout
 
-    virtual void OnConnectionLoss () {}; // involuntary, when something wnet wrong
+    virtual void OnLogout () {};
+    virtual void OnConnectionLoss () {}; // involuntary, when something went wrong
 
 public:
 

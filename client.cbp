@@ -56,7 +56,6 @@
 		<Unit filename="src/client/gui.h" />
 		<Unit filename="src/client/login.cpp" />
 		<Unit filename="src/client/login.h" />
-		<Unit filename="src/client/sprite.h" />
 		<Unit filename="src/client/textscroll.cpp" />
 		<Unit filename="src/client/textscroll.h" />
 		<Unit filename="src/client/winres.h" />

@@ -104,15 +104,15 @@ public:
     bool WindowFocus () const;
 
     bool AudioEnabled () { return has_audio; }
+
+    bool SetFullScreen (const bool fullscreen);
+    bool SetResolution (const int w, const int h);
 private:
 
     Scene *pScene;
 
     // Event functions
     void HandleEvent (const SDL_Event* event);
-
-    bool SetFullScreen (const bool fullscreen);
-    bool SetResolution (const int w, const int h);
 };
 
 #endif // CLIENT_H

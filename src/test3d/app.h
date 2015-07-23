@@ -66,6 +66,9 @@ public:
 
     SDL_Window *GetMainWindow (void) { return mainWindow; }
 
+    bool SetFullScreen (const bool fullscreen);
+    bool SetResolution (const int w, const int h);
+
 #ifdef _WIN32
     HICON icon;
 #endif
@@ -87,9 +90,6 @@ private:
 
     // Event functions
     void HandleEvent(const SDL_Event* event);
-
-    bool SetFullScreen (const bool fullscreen);
-    bool SetResolution (const int w, const int h);
 };
 
 #endif // APP_H

@@ -55,18 +55,15 @@ Client::Client():
     done(false),
     pScene(NULL)
 {
+#ifdef _WIN32
+    icon = NULL;
+#endif
+
     settingsPath [0] = NULL;
 }
 Client::~Client()
 {
-    if (pScene)
-        delete pScene;
-
     CleanUp();
-
-#ifdef _WIN32
-    DestroyIcon (icon);
-#endif
 }
 Client :: Scene :: Scene (Client *p)
 {
@@ -238,7 +235,9 @@ bool Client::Init()
 
     // initialize SDL_net:
     char hostName [100];
-    int port = LoadSetting (settingsPath, PORT_SETTING);
+    int port = LoadSetting (settingsPath, PORT_SETTING),
+        w, h;
+
     LoadSettingString (settingsPath, HOST_SETTING, hostName);
 
     if (SDLNet_Init() < 0)
@@ -276,8 +275,8 @@ bool Client::Init()
 
     fullscreen = LoadSetting (settingsPath, FULLSCREEN_SETTING) > 0 ? true : false;
 
-    int error = SDL_Init(SDL_INIT_EVERYTHING);
-    if(error != 0)
+    int error = SDL_Init (SDL_INIT_EVERYTHING);
+    if (error != 0)
     {
         SetError ("Unable to initialize SDL: %s", SDL_GetError());
         return false;
@@ -296,7 +295,11 @@ bool Client::Init()
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
 
-    mainWindow = SDL_CreateWindow(WINDOW_TITLE, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, w, h, GetVideoFlags());
+    Uint32 flags = SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL ;
+    if (fullscreen)
+        flags |= SDL_WINDOW_FULLSCREEN | SDL_WINDOW_INPUT_GRABBED;
+
+    mainWindow = SDL_CreateWindow(WINDOW_TITLE, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, w, h, flags);
 
 #ifdef _WIN32
     /*
@@ -313,7 +316,7 @@ bool Client::Init()
     }
 
     HINSTANCE hInstance = GetModuleHandle (NULL);
-    HICON icon = LoadIcon (hInstance, MAKEINTRESOURCE(IDI_ICON));
+    icon = LoadIcon (hInstance, MAKEINTRESOURCE(IDI_ICON));
 
     // Set the icon for the window
     SendMessage (wm_info.info.win.window, WM_SETICON, ICON_SMALL, (LPARAM) icon);
@@ -360,9 +363,20 @@ bool Client::Init()
 }
 void Client::CleanUp()
 {
-    SDL_GL_DeleteContext(mainGLContext);
-    SDL_DestroyWindow(mainWindow);
-    SDL_Quit();
+    delete pScene;
+    pScene = NULL;
+
+#ifdef _WIN32
+    DestroyIcon (icon);
+    icon = NULL;
+#endif
+
+    SDL_GL_DeleteContext (mainGLContext);
+    SDL_DestroyWindow (mainWindow);
+    SDL_Quit ();
+
+    mainGLContext = NULL;
+    mainWindow = NULL;
 
     if (udpPackets)
     {
@@ -378,22 +392,86 @@ void Client::CleanUp()
     SDLNet_Quit();
     Mix_CloseAudio();
 }
-
-// Used to see what SDL videoflags we need
-Uint32 Client::GetVideoFlags()
-{
-    Uint32 videoFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL ;
-    if (fullscreen)
-        videoFlags |= SDL_WINDOW_FULLSCREEN;
-
-    return videoFlags;
-}
 void Client::SwitchScene (Scene *p)
 {
     this->pScene = p;
 }
-bool Client :: WindowFocus () const
+bool Client::SetFullScreen (const bool want_fullscreen)
 {
+    if (want_fullscreen == fullscreen)
+        return true;
+
+    if (want_fullscreen)
+    {
+        SDL_SetWindowPosition (mainWindow, 0, 0);
+
+        int x, y, w, h;
+        SDL_GetWindowSize (mainWindow, &w, &h);
+        SDL_GetMouseState (&x, &y);
+
+        // Clamp mouse position
+        x = std::max (0, std::min (x, w));
+        y = std::max (0, std::min (y, h));
+        SDL_WarpMouseInWindow (mainWindow, x, y);
+    }
+
+    Uint32 flags = want_fullscreen? SDL_WINDOW_FULLSCREEN : 0;
+
+    if (SDL_SetWindowFullscreen (mainWindow, flags) < 0)
+    {
+        SetError ("Cannot set fullscreen to %d: %s", want_fullscreen, SDL_GetError ());
+        return false;
+    }
+
+    fullscreen = want_fullscreen;
+    SaveSetting (settingsPath, FULLSCREEN_SETTING, fullscreen);
+
+    // Some final adjustments
+    if (fullscreen)
+    {
+        SDL_SetWindowGrab (mainWindow, SDL_TRUE);
+    }
+    else
+    {
+        SDL_SetWindowGrab (mainWindow, SDL_FALSE);
+        SDL_SetWindowPosition (mainWindow, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+    }
+
+    return true;
+}
+bool Client::SetResolution (const int w, const int h)
+{
+    SDL_DisplayMode mode;
+
+    SDL_SetWindowSize (mainWindow, w, h);
+
+    if (SDL_GetWindowDisplayMode (mainWindow, &mode) < 0)
+    {
+        SetError ("Error getting display mode: %s", SDL_GetError ());
+        return false;
+    }
+
+    mode.w = w;
+    mode.h = h;
+
+    if (SDL_SetWindowDisplayMode (mainWindow, &mode) < 0)
+    {
+        SetError ("Error setting display to %d x %d %s", w, h, SDL_GetError ());
+        return false;
+    }
+
+    if (fullscreen) //  need to switch to windowed to take effect
+    {
+        if (!SetFullScreen (false))
+            return false;
+
+        if (!SetFullScreen (true))
+            return false;
+    }
+
+    SaveSetting (settingsPath, SCREENWIDTH_SETTING, w);
+    SaveSetting (settingsPath, SCREENHEIGHT_SETTING, h);
+
     return true;
 }
 void Client::ShutDown()

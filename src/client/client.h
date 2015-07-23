@@ -49,7 +49,6 @@ class Client
 private:
 
     bool fullscreen, has_audio;
-    int w, h;
     char settingsPath [FILENAME_MAX];
 
     SDL_Window *mainWindow;
@@ -96,12 +95,7 @@ public:
 
     void ShutDown (void);
 
-    int GetScreenWidth (void) const { return w; }
-    int GetScreenHeight (void) const { return h; }
-    bool IsFullscreen (void) { return fullscreen; }
-    Uint32 GetVideoFlags (void);
-
-    SDL_Window *GetMainWindow () const { return mainWindow; }
+    SDL_Window *GetMainWindow () { return mainWindow; }
 
     bool SendToServer (const Uint8* data, const int len);
 
@@ -116,6 +110,9 @@ private:
 
     // Event functions
     void HandleEvent (const SDL_Event* event);
+
+    bool SetFullScreen (const bool fullscreen);
+    bool SetResolution (const int w, const int h);
 };
 
 #endif // CLIENT_H

@@ -104,7 +104,9 @@ void HubScene::Update (float dt)
 }
 void HubScene::Render ()
 {
-    int w = pApp->GetScreenWidth(), h = pApp->GetScreenHeight();
+    int w, h;
+    SDL_GL_GetDrawableSize (pApp->GetMainWindow (), &w, &h);
+
     glViewport(0, 0, w, h);
 
     pCurrent -> Render ();

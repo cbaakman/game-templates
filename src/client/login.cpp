@@ -112,7 +112,6 @@ LoginScene::UsernameBox::UsernameBox (GLfloat x, GLfloat y,
 {
     w = 300.0f;
     h = 50.0f;
-    fy = 0.2f;
     this->parent = parent;
 
     SetText("<username>");
@@ -355,7 +354,6 @@ LoginScene::PasswordBox::PasswordBox( GLfloat x, GLfloat y,
 {
     w=300.0f;
     h=50.0f;
-    fy=0.2f;
     this->parent = parent;
 
     SetText("------");
@@ -374,9 +372,6 @@ LoginScene::LoginScene (Client *p) : Scene(p),
     cursorTex.tex = bgTex.tex = buttonTex.tex = 0;
 
     pMenu = new LoginMenu (pClient, this, &cursorTex);
-
-    int screenWidth = pClient->GetScreenWidth (),
-        screenHeight = pClient->GetScreenHeight ();
 }
 LoginScene::~LoginScene ()
 {
@@ -553,12 +548,12 @@ bool LoginScene::Init ()
         }
     }
 
-    int screenWidth = pClient->GetScreenWidth (),
-        screenHeight = pClient->GetScreenHeight ();
+    int w, h;
+    SDL_GL_GetDrawableSize (pClient->GetMainWindow (), &w, &h);
 
-    usernameBox = new UsernameBox (screenWidth * 0.5f, 100.0f, &font, this);
-    passwordBox = new PasswordBox (screenWidth * 0.5f, 150.0f, &font, this);
-    loginButton = new LoginButton (screenWidth * 0.5f, 250.0f, &font, this);
+    usernameBox = new UsernameBox (w * 0.5f, 100.0f, &font, this);
+    passwordBox = new PasswordBox (w * 0.5f, 150.0f, &font, this);
+    loginButton = new LoginButton (w * 0.5f, 250.0f, &font, this);
 
     pMenu->AddMenuObject (usernameBox);
     pMenu->AddMenuObject (passwordBox);
@@ -573,6 +568,15 @@ void LoginScene::OnEvent (const SDL_Event *event)
     pMenu->OnEvent (event);
 
     Scene::OnEvent (event);
+
+    // screen size might have changed, put menu items in middle of screen
+
+    int w, h;
+    SDL_GL_GetDrawableSize (pClient->GetMainWindow (), &w, &h);
+
+    usernameBox->SetX (w * 0.5f);
+    passwordBox->SetX (w * 0.5f);
+    loginButton->SetX (w * 0.5f);
 }
 void LoginScene::OnKeyPress (const SDL_KeyboardEvent *event)
 {
@@ -681,8 +685,8 @@ void LoginScene::Update(const float dt)
 }
 void LoginScene::Render()
 {
-    int screenWidth = pClient->GetScreenWidth (),
-        screenHeight = pClient->GetScreenHeight ();
+    int screenWidth, screenHeight;
+    SDL_GL_GetDrawableSize (pClient->GetMainWindow (), &screenWidth, &screenHeight);
 
     // set a 2D projection matrix
     glMatrixMode(GL_PROJECTION);
@@ -982,8 +986,8 @@ TestConnectionScene::TestConnectionScene(Client *p, LoginScene* s, Texture* curs
 
     chat_text = "";
 
-    int w = pClient->GetScreenWidth (),
-        h = pClient->GetScreenHeight ();
+    int w, h;
+    SDL_GL_GetDrawableSize (pClient->GetMainWindow (), &w, &h);
 
     // These are menu objects without a menu, the scene must handle them by itself.
     // We don't use a menu here because the mouse has a different function here.
@@ -1097,6 +1101,19 @@ void TestConnectionScene::SendState()
 }
 void TestConnectionScene::Render()
 {
+    int screenWidth, screenHeight;
+    SDL_GL_GetDrawableSize (pClient->GetMainWindow (), &screenWidth, &screenHeight);
+
+    // set a 2D projection matrix
+    glMatrixMode (GL_PROJECTION);
+    glLoadMatrixf(
+        matOrtho(0, (GLfloat) screenWidth,
+                 0, (GLfloat) screenHeight,
+                 -1.0f, 1.0f)
+                 );
+
+    glMatrixMode(GL_MODELVIEW);
+
     glClearColor(0,0,0,0);
     glClear(GL_COLOR_BUFFER_BIT);
 
@@ -1118,19 +1135,22 @@ void TestConnectionScene::Render()
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     int mX,mY;
-    SDL_GetMouseState(&mX,&mY);
+    SDL_GetMouseState (&mX, &mY);
 
-    glPushMatrix();
-    matrix4 m =  matTranslation (vec3 (mX, mY, 0)) * matRotZ (0.7 * sin(8 * t));
-    glLoadMatrixf(m);
+    if (mX > 0 && mX < screenWidth && mY > 0 && mY < screenHeight)
+    {
+        glPushMatrix();
+        matrix4 m =  matTranslation (vec3 (mX, mY, 0)) * matRotZ (0.7 * sin(8 * t));
+        glLoadMatrixf(m);
 
-    glColorHSV (myParams.hue, 1.0f, 1.0f);
-    RenderSprite(tex,
-              0, 0,
-              96, 32, 128, 64,
-              16, 16);
+        glColorHSV (myParams.hue, 1.0f, 1.0f);
+        RenderSprite(tex,
+                  0, 0,
+                  96, 32, 128, 64,
+                  16, 16);
 
-    glPopMatrix();
+        glPopMatrix();
+    }
 
     // Render the other users too:
     for (std::list<RegisteredPlayer*>::iterator it = others.begin(); it != others.end(); it++)
@@ -1142,17 +1162,21 @@ void TestConnectionScene::Render()
 
         UserState now;
         Predict(&now,&other->prev,&other->next);
-        glPushMatrix();
-        matrix4 m = matTranslation (vec3 (now.pos.x, now.pos.y, 0)) * matRotZ (0.7 * sin(8 * t));
-        glLoadMatrixf(m);
 
-        glColorHSV (other->params.hue, 1.0f, 1.0f);
-        RenderSprite(tex,
-                  0, 0,
-                  96, 32, 128, 64,
-                  16, 16);
+        if (now.pos.x > 0 && now.pos.x < screenWidth && now.pos.y > 0 && now.pos.y < screenHeight)
+        {
+            glPushMatrix();
+            matrix4 m = matTranslation (vec3 (now.pos.x, now.pos.y, 0)) * matRotZ (0.7 * sin(8 * t));
+            glLoadMatrixf(m);
 
-        glPopMatrix();
+            glColorHSV (other->params.hue, 1.0f, 1.0f);
+            RenderSprite(tex,
+                      0, 0,
+                      96, 32, 128, 64,
+                      16, 16);
+
+            glPopMatrix();
+        }
     }
 
     glPopAttrib();

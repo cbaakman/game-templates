@@ -30,6 +30,7 @@
 #include "../ini.h"
 
 #include <stdio.h>
+#include <algorithm>
 
 #ifdef _WIN32
 #include "winres.h"
@@ -37,8 +38,12 @@
 #endif
 
 // Constructor
-App::App(void) : pScene(0), done(false), w(640), h(480), fullscreen (false)
+App::App(void) : pScene(0), done(false), fullscreen (false)
 {
+#ifdef _WIN32
+    icon = NULL;
+#endif
+
     settings_path [0] = NULL;
 }
 // Destructor
@@ -56,15 +61,6 @@ App :: Scene :: Scene (App *p)
     pApp = p;
 }
 
-Uint32 App::GetVideoFlags (void) const
-{
-    Uint32 videoFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL ;
-    if (fullscreen)
-        videoFlags |= SDL_WINDOW_FULLSCREEN;
-
-    return videoFlags;
-}
-
 #define SETTINGS_FILE "settings.ini"
 
 #define FULLSCREEN_SETTING "fullscreen"
@@ -75,6 +71,8 @@ Uint32 App::GetVideoFlags (void) const
 bool App::InitApp (void)
 {
     strcpy (settings_path, (std::string (SDL_GetBasePath()) + SETTINGS_FILE).c_str());
+
+    int w, h;
 
     // initialize SDL with screen sizes from settings file:
     w = LoadSetting (settings_path, SCREENWIDTH_SETTING);
@@ -88,7 +86,7 @@ bool App::InitApp (void)
     fullscreen = LoadSetting (settings_path, FULLSCREEN_SETTING) > 0 ? true : false;
 
     // Create a window.
-    if (!InitializeSDL(w, h, GetVideoFlags ()))
+    if (!InitializeSDL(w, h))
         return false;
 
     if (!InitializeGL())
@@ -145,7 +143,7 @@ bool App::InitializeGL(void)
     return true;
 }
 
-bool App::InitializeSDL (Uint32 width, Uint32 height, Uint32 flags)
+bool App::InitializeSDL (Uint32 width, Uint32 height)
 {
     int error;
 
@@ -168,8 +166,12 @@ bool App::InitializeSDL (Uint32 width, Uint32 height, Uint32 flags)
     SDL_GL_SetAttribute (SDL_GL_MULTISAMPLEBUFFERS, 1);
     SDL_GL_SetAttribute (SDL_GL_MULTISAMPLESAMPLES, 4);
 
+    Uint32 flags = SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL ;
+    if (fullscreen)
+        flags |= SDL_WINDOW_FULLSCREEN | SDL_WINDOW_INPUT_GRABBED;
+
     // Create the window
-    mainWindow = SDL_CreateWindow("3D Test", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, flags);
+    mainWindow = SDL_CreateWindow ("3D Test", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, flags);
 
 #ifdef _WIN32
     /*
@@ -186,7 +188,7 @@ bool App::InitializeSDL (Uint32 width, Uint32 height, Uint32 flags)
     }
 
     HINSTANCE hInstance = GetModuleHandle (NULL);
-    HICON icon = LoadIcon (hInstance, MAKEINTRESOURCE(IDI_ICON));
+    icon = LoadIcon (hInstance, MAKEINTRESOURCE(IDI_ICON));
 
     // Set the icon for the window
     SendMessage (wm_info.info.win.window, WM_SETICON, ICON_SMALL, (LPARAM) icon);
@@ -202,11 +204,20 @@ bool App::InitializeSDL (Uint32 width, Uint32 height, Uint32 flags)
 // Cleanup functions
 void App::Cleanup(void)
 {
+#ifdef _WIN32
+    DestroyIcon (icon);
+    icon = NULL;
+#endif
+
     delete pScene;
+    pScene = NULL;
 
     SDL_GL_DeleteContext (mainGLContext);
     SDL_DestroyWindow (mainWindow);
     SDL_Quit ();
+
+    mainGLContext = NULL;
+    mainWindow = NULL;
 }
 
 void ShowError (const char *msg)
@@ -232,12 +243,14 @@ void App::MainLoop (void)
 
     while(!done) {
 
+#ifdef DEBUG
         while ((statusGL = glGetError()) != GL_NO_ERROR)
         {
             GLErrorString (errorString, statusGL);
             std::string msg = std::string ("GL Error during main loop: %s") + errorString;
             ShowError (msg.c_str());
         }
+#endif // DEBUG
 
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -248,7 +261,8 @@ void App::MainLoop (void)
         dt = float(ticks - ticks0) / 1000;
         ticks0 = ticks;
 
-        if(dt>0.2f) dt=0.2f;
+        if (dt > 0.2f)
+            dt = 0.2f;
 
         pScene->Update(dt);
         pScene->Render();
@@ -287,7 +301,84 @@ void App :: Scene :: OnEvent (const SDL_Event *event)
 
     }   // End switch
 }
+bool App::SetFullScreen (const bool want_fullscreen)
+{
+    if (want_fullscreen == fullscreen)
+        return true;
 
+    if (want_fullscreen)
+    {
+        SDL_SetWindowPosition (mainWindow, 0, 0);
+
+        int x, y, w, h;
+        SDL_GetWindowSize (mainWindow, &w, &h);
+        SDL_GetMouseState (&x, &y);
+
+        // Clamp mouse position
+        x = std::max (0, std::min (x, w));
+        y = std::max (0, std::min (y, h));
+        SDL_WarpMouseInWindow (mainWindow, x, y);
+    }
+
+    Uint32 flags = want_fullscreen? SDL_WINDOW_FULLSCREEN : 0;
+
+    if (SDL_SetWindowFullscreen (mainWindow, flags) < 0)
+    {
+        SetError ("Cannot set fullscreen to %d: %s", want_fullscreen, SDL_GetError ());
+        return false;
+    }
+
+    fullscreen = want_fullscreen;
+    SaveSetting (settings_path, FULLSCREEN_SETTING, fullscreen);
+
+    // Some final adjustments
+    if (fullscreen)
+    {
+        SDL_SetWindowGrab (mainWindow, SDL_TRUE);
+    }
+    else
+    {
+        SDL_SetWindowGrab (mainWindow, SDL_FALSE);
+        SDL_SetWindowPosition (mainWindow, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+    }
+
+    return true;
+}
+bool App::SetResolution (const int w, const int h)
+{
+    SDL_DisplayMode mode;
+
+    SDL_SetWindowSize (mainWindow, w, h);
+
+    if (SDL_GetWindowDisplayMode (mainWindow, &mode) < 0)
+    {
+        SetError ("Error getting display mode: %s", SDL_GetError ());
+        return false;
+    }
+
+    mode.w = w;
+    mode.h = h;
+
+    if (SDL_SetWindowDisplayMode (mainWindow, &mode) < 0)
+    {
+        SetError ("Error setting display to %d x %d %s", w, h, SDL_GetError ());
+        return false;
+    }
+
+    if (fullscreen) //  need to switch to windowed to take effect
+    {
+        if (!SetFullScreen (false))
+            return false;
+
+        if (!SetFullScreen (true))
+            return false;
+    }
+
+    SaveSetting (settings_path, SCREENWIDTH_SETTING, w);
+    SaveSetting (settings_path, SCREENHEIGHT_SETTING, h);
+
+    return true;
+}
 void App::HandleEvent (const SDL_Event *event)
 {
     switch(event->type) {
@@ -297,6 +388,7 @@ void App::HandleEvent (const SDL_Event *event)
             break;
 
         default:
+
             if (pScene)
                 pScene -> OnEvent(event);
             break;
@@ -304,7 +396,7 @@ void App::HandleEvent (const SDL_Event *event)
     } // End switch
 }
 
-int main(int argc, char *argv[])
+int main (int argc, char *argv[])
 {
     App app;
 

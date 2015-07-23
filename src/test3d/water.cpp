@@ -65,7 +65,8 @@ WaterScene::WaterScene(App *pApp) : Scene(pApp),
 }
 bool WaterScene::Init()
 {
-    int w = pApp->GetScreenWidth(), h = pApp->GetScreenHeight();
+    int w, h;
+    SDL_GL_GetDrawableSize (pApp->GetMainWindow (), &w, &h);
 
     GLenum status;
 
@@ -507,8 +508,8 @@ const GLfloat colorCube[] = {0.0f, 1.0f, 0.0f, 1.0f},
 
 void WaterScene::Render()
 {
-    int w = pApp->GetScreenWidth(),
-        h = pApp->GetScreenHeight();
+    int w, h;
+    SDL_GL_GetDrawableSize (pApp->GetMainWindow (), &w, &h);
 
     // Init view and perspective
     glMatrixMode(GL_PROJECTION);

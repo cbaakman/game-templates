@@ -33,10 +33,6 @@ class App
 {
 public:
 
-    /*
-     * Scene should be flexible, even after the window is destroyed and created again it should still render in the same state.
-     * Could be a problem with loaded OpenGL textures. Could make the app reload those.
-     */
     class Scene
     {
     protected:
@@ -68,15 +64,14 @@ public:
 
     void ShutDown (void);
 
-    int GetScreenWidth (void) const { return w; }
-    int GetScreenHeight (void) const { return h; }
-    Uint32 GetVideoFlags (void) const;
+    SDL_Window *GetMainWindow (void) { return mainWindow; }
+
+#ifdef _WIN32
+    HICON icon;
+#endif
 
 private:
     char settings_path [FILENAME_MAX];
-
-    // screen width and height:
-    int w, h;
 
     bool fullscreen;
 
@@ -88,10 +83,13 @@ private:
 
     // Initialization functions
     bool InitializeGL (void);
-    bool InitializeSDL (Uint32 width, Uint32 height, Uint32 flags);
+    bool InitializeSDL (Uint32 width, Uint32 height);
 
     // Event functions
     void HandleEvent(const SDL_Event* event);
+
+    bool SetFullScreen (const bool fullscreen);
+    bool SetResolution (const int w, const int h);
 };
 
 #endif // APP_H

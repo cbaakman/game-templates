@@ -220,12 +220,12 @@ void Menu::Update(const float dt)
 }
 void Menu::Render()
 {
-    int mX,mY;
+    int mX, mY;
     SDL_GetMouseState (&mX, &mY);
 
     // Determine over which object the mouse rolls:
     MenuObject* mouseOverObj = NULL;
-    if (focussed && focussed->MouseOver ((GLfloat)mX, (GLfloat)mY))
+    if (focussed && focussed->MouseOver ((GLfloat) mX, (GLfloat) mY))
     {
         mouseOverObj = focussed;
     }
@@ -241,8 +241,11 @@ void Menu::Render()
         pObj->Render();
     }
 
+    int w, h;
+    SDL_GL_GetDrawableSize (pClient->GetMainWindow (), &w, &h);
+
     // Rendering the mouse cursor
-    if (pClient->WindowFocus())
+    if (mX > 0 && mX < w && mY > 0 && mY < h)
     {
         if (mouseOverObj && inputEnabled && mouseOverObj->enabled)
         {

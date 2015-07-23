@@ -150,6 +150,9 @@ private:
     void PasteText();
 
 protected:
+    void SetX (GLfloat _x) { x = _x; }
+    void SetY (GLfloat _y) { y = _y; }
+
     GLfloat GetX() const { return x; }
     GLfloat GetY() const { return y; }
     const Font *GetFont() const { return pFont; }

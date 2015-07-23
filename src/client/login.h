@@ -80,7 +80,7 @@ private:
     private:
         LoginScene* parent;
 
-        GLfloat w,h,fy;
+        GLfloat w,h;
 
         void RenderCursor(int mX, int mY);
     public:
@@ -105,7 +105,7 @@ private:
     private:
         LoginScene* parent;
 
-        GLfloat w,h,fy;
+        GLfloat w,h;
 
         void RenderCursor(int mX, int mY) ;
     public:
@@ -130,7 +130,7 @@ private:
     private:
         LoginScene* parent;
 
-        GLfloat x,y;
+        GLfloat x, y;
         Font* pFont;
     public:
         LoginButton (GLfloat x, GLfloat y, Font*, LoginScene* parent);
@@ -138,6 +138,9 @@ private:
         void OnMouseClick (const SDL_MouseButtonEvent *event);
         void Render ();
         void RenderCursor (int mX, int mY);
+
+        void SetX (GLfloat _x) { x = _x; }
+        void SetY (GLfloat _y) { y = _y; }
 
     friend class LoginScene;
 

@@ -533,7 +533,9 @@ void RenderSprite (const vec3 &pos, const Texture *pTex,
 #define SHADOW_STENCIL_MASK 0xFFFFFFFFL
 void ShadowScene::Render ()
 {
-    int w = pApp->GetScreenWidth(), h = pApp->GetScreenHeight();
+    int w, h;
+    SDL_GL_GetDrawableSize (pApp->GetMainWindow (), &w, &h);
+
     vec3 posCamera;
     getCameraPosition (posPlayer, angleX, angleY, distCamera, posCamera);
 

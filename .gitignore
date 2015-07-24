@@ -9,6 +9,9 @@ bin/test3d
 # Account files
 bin/accounts/*
 
+# Blender
+*.blend[0-9]
+
 # CodeBlocks auto generated
 *.layout
 *.depend

@@ -1,3 +1,5 @@
+Game templates version 1.0.0
+
 [test3d]
 
 Contains examples of some basic 3D features:

@@ -1,0 +1,66 @@
+#!/bin/bash
+
+function add_to {
+
+    if ! echo " $2 " | grep -q " $1 " ; then
+        echo $2 $1
+    else
+        echo $2
+    fi
+}
+
+inc_dir_guess=( /usr/include/libxml2 /usr/local/include /usr/include /usr/pkg/include /opt/local/include $@)
+
+inc_dirs=
+
+for header in unzip/unzip.h SDL2/SDL.h SDL2/SDL_net.h SDL2/SDL_mixer.h GL/glew.h GL/gl.h png.h zlib.h openssl/sha.h libxml/tree.h cairo/cairo.h curses.h ; do
+
+    dir_present=
+    for dir in ${inc_dir_guess[*]} ; do
+
+        inc_path=$dir/$header
+        if [ -f $inc_path ] ; then
+
+            echo $inc_path found
+            dir_present=$dir
+            break
+        fi
+    done
+
+    if [ "$dir_present" ] ; then
+        inc_dirs=`add_to $dir_present "$inc_dirs"`
+    else
+        echo not found: $header
+        exit 1
+    fi
+done
+
+lib_dir_guess=( /usr/lib /usr/lib64 /usr/local/lib /usr/local/lib64 /usr/pkg/lib /usr/pkg/lib64 /opt/local/lib \
+                /opt/local/lib64 /usr/lib/x86-linux-gnu /usr/lib/x86_64-linux-gnu $@)
+
+lib_dirs=
+
+for lib in SDL2 SDL2_net SDL2_mixer GL GLEW png unzip crypto xml2 cairo ncurses ; do
+
+    dir_present=
+    for dir in in ${lib_dir_guess[*]} ; do
+
+        lib_path=$dir/lib$lib.so
+        if [ -f $lib_path ] ; then
+
+            echo $lib_path found
+            dir_present=$dir
+            break
+        fi
+    done
+
+    if [ "$dir_present" ] ; then
+        lib_dirs=`add_to $dir_present "$lib_dirs"`
+    else
+        echo not found: -l$lib
+        exit 1
+    fi
+done
+
+config=make.config
+echo -e "LIBDIRS = $lib_dirs\nINCDIRS = $inc_dirs" > $config

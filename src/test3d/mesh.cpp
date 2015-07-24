@@ -1,0 +1,1066 @@
+/* Copyright (C) 2015 Coos Baakman
+
+  This software is provided 'as-is', without any express or implied
+  warranty.  In no event will the authors be held liable for any damages
+  arising from the use of this software.
+
+  Permission is granted to anyone to use this software for any purpose,
+  including commercial applications, and to alter it and redistribute it
+  freely, subject to the following restrictions:
+
+  1. The origin of this software must not be misrepresented; you must not
+     claim that you wrote the original software. If you use this software
+     in a product, an acknowledgment in the product documentation would be
+     appreciated but is not required.
+  2. Altered source versions must be plainly marked as such, and must not be
+     misrepresented as being the original software.
+  3. This notice may not be removed or altered from any source distribution.
+*/
+
+
+#include "mesh.h"
+#include "../util.h"
+#include "../str.h"
+#include "../err.h"
+
+MeshObject::MeshObject(const MeshData *data) : pMeshData(data)
+{
+    InitStates();
+}
+void MeshObject::InitStates()
+{
+    // Make state representatives
+    for (std::map<std::string, MeshVertex>::const_iterator it = pMeshData->vertices.begin(); it != pMeshData->vertices.end(); it++)
+    {
+        const std::string id = it->first;
+
+        vertexStates[id] = MeshVertex();
+        vertexStates[id].p = pMeshData->vertices.at(id).p;
+        vertexStates[id].n = pMeshData->vertices.at(id).n;
+    }
+    for (std::map<std::string, MeshBone>::const_iterator it = pMeshData->bones.begin(); it != pMeshData->bones.end(); it++)
+    {
+        const std::string id = it->first;
+
+        boneStates[id] = MeshBoneState();
+        boneStates[id].posHead = pMeshData->bones.at(id).posHead;
+        boneStates[id].posTail = pMeshData->bones.at(id).posTail;
+    }
+}
+MeshObject::~MeshObject()
+{
+}
+void MeshObject::RenderBones ()
+{
+    for (std::map<std::string, MeshBoneState>::const_iterator it = boneStates.begin(); it != boneStates.end(); it++)
+    {
+        const std::string id = it->first;
+        const MeshBoneState *pState = &boneStates.at (id);
+
+        const vec3 *pHead = &pState->posHead,
+                   *pTail = &pState->posTail;
+
+        glBegin (GL_LINES);
+        glVertex3f (pHead->x, pHead->y, pHead->z);
+        glVertex3f (pTail->x, pTail->y, pTail->z);
+        glEnd ();
+    }
+}
+void MeshObject::RenderNormals ()
+{
+    for (std::map<std::string, MeshVertex>::const_iterator it = vertexStates.begin(); it != vertexStates.end(); it++)
+    {
+        const std::string id = it->first;
+        const MeshVertex *pState = &vertexStates.at (id);
+
+        const float size = 0.3f;
+        const vec3 *p = &pState->p,
+                   pn = pState->p + size * pState->n;
+
+        glBegin (GL_LINES);
+        glVertex3f (p->x, p->y, p->z);
+        glVertex3f (pn.x, pn.y, pn.z);
+        glEnd ();
+    }
+}
+void ToTriangles (const MeshData *pMeshData, Triangle **pT, size_t *pN)
+{
+    size_t n_triangles = pMeshData->quads.size() * 2 + pMeshData->triangles.size();
+    Triangle *triangles = new Triangle [n_triangles];
+
+    size_t i = 0;
+    for (std::map<std::string, MeshQuad>::const_iterator it = pMeshData->quads.begin(); it != pMeshData->quads.end(); it++)
+    {
+        const PMeshQuad pQuad = &(it -> second);
+
+        triangles [i + 1].p[0] = triangles [i].p[0] = pMeshData->vertices.at (pQuad->GetVertexID (0)).p;
+                                 triangles [i].p[1] = pMeshData->vertices.at (pQuad->GetVertexID (1)).p;
+        triangles [i + 1].p[1] = triangles [i].p[2] = pMeshData->vertices.at (pQuad->GetVertexID (2)).p;
+        triangles [i + 1].p[2] = pMeshData->vertices.at (pQuad->GetVertexID (3)).p;
+
+        i += 2;
+    }
+    for (std::map<std::string, MeshTriangle>::const_iterator it = pMeshData->triangles.begin(); it != pMeshData->triangles.end(); it++)
+    {
+        const PMeshTriangle pTriangle = &(it -> second);
+
+        triangles [i].p[0] = pMeshData->vertices.at (pTriangle->GetVertexID (0)).p;
+        triangles [i].p[1] = pMeshData->vertices.at (pTriangle->GetVertexID (1)).p;
+        triangles [i].p[2] = pMeshData->vertices.at (pTriangle->GetVertexID (2)).p;
+
+        i ++;
+    }
+
+    *pN = n_triangles;
+    *pT = triangles;
+}
+void RenderUnAnimatedSubset (const MeshData *pMeshData, const std::string &id)
+{
+    if(pMeshData->subsets.find(id) == pMeshData->subsets.end())
+    {
+        SetError ("cannot render %s, no such subset", id.c_str());
+        return;
+    }
+    const MeshSubset *pSubset = &pMeshData->subsets.at(id);
+
+    const MeshTexel *t;
+    const vec3 *n, *p;
+
+    for (std::list<PMeshQuad>::const_iterator it = pSubset->quads.begin(); it != pSubset->quads.end(); it++)
+    {
+        glBegin(GL_QUADS);
+
+        PMeshQuad pQuad = *it;
+        for (size_t j = 0; j < 4; j++)
+        {
+            t = &pQuad->texels[j];
+            n = &pMeshData->vertices.at (pQuad->GetVertexID(j)).n;
+            p = &pMeshData->vertices.at (pQuad->GetVertexID(j)).p;
+
+            glTexCoord2f(t->u, t->v);
+            glNormal3f(n->x, n->y, n->z);
+            glVertex3f(p->x, p->y, p->z);
+        }
+
+        glEnd();
+    }
+
+    glBegin(GL_TRIANGLES);
+    for (std::list<PMeshTriangle>::const_iterator it = pSubset->triangles.begin(); it != pSubset->triangles.end(); it++)
+    {
+        PMeshTriangle pTri = *it;
+        for (size_t j = 0; j < 3; j++)
+        {
+            t = &pTri->texels[j];
+            n = &pMeshData->vertices.at (pTri->GetVertexID(j)).n;
+            p = &pMeshData->vertices.at (pTri->GetVertexID(j)).p;
+
+            glTexCoord2f(t->u, t->v);
+            glNormal3f(n->x, n->y, n->z);
+            glVertex3f(p->x, p->y, p->z);
+        }
+    }
+    glEnd();
+}
+void MeshObject::RenderSubset (const std::string &id)
+{
+    if(pMeshData->subsets.find(id) == pMeshData->subsets.end())
+    {
+        SetError ("cannot render %s, no such subset", id.c_str());
+        return;
+    }
+    const MeshSubset *pSubset = &pMeshData->subsets.at(id);
+
+    // TODO: apply bone transformations here
+
+    const MeshTexel *t;
+    const vec3 *n, *p;
+
+    for(std::list<PMeshQuad>::const_iterator it = pSubset->quads.begin(); it != pSubset->quads.end(); it++)
+    {
+        glBegin(GL_QUADS);
+
+        PMeshQuad pQuad = *it;
+        for(size_t j = 0; j < 4; j++)
+        {
+            t = &pQuad->texels[j];
+            n = &vertexStates[pQuad->GetVertexID(j)].n;
+            p = &vertexStates[pQuad->GetVertexID(j)].p;
+
+            glTexCoord2f(t->u, t->v);
+            glNormal3f(n->x, n->y, n->z);
+            glVertex3f(p->x, p->y, p->z);
+        }
+
+        glEnd();
+    }
+
+    glBegin(GL_TRIANGLES);
+    for(std::list<PMeshTriangle>::const_iterator it = pSubset->triangles.begin(); it != pSubset->triangles.end(); it++)
+    {
+        PMeshTriangle pTri = *it;
+        for(size_t j = 0; j < 3; j++)
+        {
+            t = &pTri->texels[j];
+            n = &vertexStates[pTri->GetVertexID(j)].n;
+            p = &vertexStates[pTri->GetVertexID(j)].p;
+
+            glTexCoord2f(t->u, t->v);
+            glNormal3f(n->x, n->y, n->z);
+            glVertex3f(p->x, p->y, p->z);
+        }
+    }
+    glEnd();
+}
+bool ParseRGBA(const xmlNodePtr pTag, GLfloat *c)
+{
+    xmlChar *pR = xmlGetProp(pTag, (const xmlChar *)"r"),
+            *pG = xmlGetProp(pTag, (const xmlChar *)"g"),
+            *pB = xmlGetProp(pTag, (const xmlChar *)"b"),
+            *pA = xmlGetProp(pTag, (const xmlChar *)"a");
+
+    bool bres;
+    if (pR && pG && pB && pA)
+    {
+        ParseFloat ((const char *)pR, &c[0]);
+        ParseFloat ((const char *)pG, &c[1]);
+        ParseFloat ((const char *)pB, &c[2]);
+        ParseFloat ((const char *)pA, &c[3]);
+        bres = true;
+    }
+    else
+    {
+        bres = false;
+    }
+
+    xmlFree (pR);
+    xmlFree (pG);
+    xmlFree (pB);
+    xmlFree (pA);
+
+    return bres;
+}
+bool ParseXYZ(const xmlNodePtr pTag, vec3 *pVec, const char *prefix = NULL)
+{
+    std::string id_x = "x", id_y = "y", id_z = "z";
+    if(prefix)
+    {
+        id_x = std::string(prefix) + id_x;
+        id_y = std::string(prefix) + id_y;
+        id_z = std::string(prefix) + id_z;
+    }
+
+    xmlChar *pX = xmlGetProp(pTag, (const xmlChar *)id_x.c_str()),
+            *pY = xmlGetProp(pTag, (const xmlChar *)id_y.c_str()),
+            *pZ = xmlGetProp(pTag, (const xmlChar *)id_z.c_str());
+
+
+    bool bres;
+    if (pX && pY && pZ)
+    {
+        ParseFloat ((const char *)pX, &pVec->x);
+        ParseFloat ((const char *)pY, &pVec->y);
+        ParseFloat ((const char *)pZ, &pVec->z);
+        bres = true;
+    }
+    else
+    {
+        bres = false;
+    }
+
+    xmlFree (pX);
+    xmlFree (pY);
+    xmlFree (pZ);
+
+    return bres;
+}
+bool ParseFloatAttrib(const xmlNodePtr pTag, const xmlChar *key, float *f)
+{
+    xmlChar *pF = xmlGetProp(pTag, key);
+    if(!pF)
+    {
+        return false;
+    }
+
+    if (!ParseFloat ((const char *)pF, f))
+    {
+        return false;
+    }
+
+    xmlFree (pF);
+
+    return true;
+}
+bool ParseIntAttrib(const xmlNodePtr pTag, const xmlChar *key, int *i)
+{
+    xmlChar *pI = xmlGetProp(pTag, key);
+    if(!pI)
+    {
+        return false;
+    }
+
+    *i = atoi ((const char *)pI);
+
+    xmlFree (pI);
+
+    return true;
+}
+bool ParseStringAttrib(const xmlNodePtr pTag, const xmlChar *key, std::string &s)
+{
+    xmlChar *pS = xmlGetProp(pTag, key);
+    if (!pS)
+    {
+        return false;
+    }
+
+    s.assign ((const char *)pS);
+    xmlFree (pS);
+
+    return true;
+}
+bool ParseVertex(const xmlNodePtr pTag, std::map<std::string, MeshVertex> &vertices)
+{
+    std::string id;
+    if (!ParseStringAttrib(pTag, (const xmlChar *)"id", id))
+    {
+        SetError ("no id found on %s", pTag->name);
+        return false;
+    }
+
+    vertices[id] = MeshVertex();
+
+    xmlNodePtr pChild = pTag->children;
+    while (pChild) {
+
+        if (StrCaseCompare((const char *)pChild->name, "pos") == 0)
+        {
+            if (!ParseXYZ(pChild, &vertices[id].p))
+            {
+                SetError ("no x, y, z on pos");
+                vertices.erase(id);
+
+                return false;
+            }
+        }
+        if (StrCaseCompare((const char *)pChild->name, "norm") == 0)
+        {
+            if (!ParseXYZ(pChild, &vertices[id].n))
+            {
+                SetError ("no x, y, z on norm");
+                vertices.erase(id);
+
+                return false;
+            }
+        }
+        pChild = pChild->next;
+    }
+
+    return true;
+}
+template <int N>
+bool ParseFace (const xmlNodePtr pTag,
+                const std::map<std::string, MeshVertex> &vertices,
+                std::map<std::string, MeshFace<N> > &faces)
+{
+    std::string id;
+    if (!ParseStringAttrib(pTag, (const xmlChar *)"id", id))
+    {
+        SetError ("no id found on %s", pTag->name);
+        return false;
+    }
+
+    faces[id] = MeshFace<N>();
+
+    size_t ncorner = 0;
+    xmlNodePtr pChild = pTag->children;
+    while (pChild) {
+
+        if (StrCaseCompare((const char *)pChild->name, "corner") == 0)
+        {
+            if(ncorner >= N)
+            {
+                SetError ("too many corners on %s %s, %d expected", pTag->name, id.c_str(), N);
+                faces.erase(id);
+                return false;
+            }
+
+            std::string vertex_id;
+
+            if (!ParseStringAttrib(pChild, (const xmlChar *)"vertex_id", vertex_id) ||
+                !ParseFloatAttrib(pChild, (const xmlChar *)"tex_u", &faces[id].texels[ncorner].u) ||
+                !ParseFloatAttrib(pChild, (const xmlChar *)"tex_v", &faces[id].texels[ncorner].v))
+            {
+                faces.erase(id);
+                return false;
+            }
+
+            if(vertices.find(vertex_id) == vertices.end())
+            {
+                faces.erase(id);
+                SetError ("no such vertex: %s, referred to by %d %d", vertex_id.c_str(), pTag->name, id.c_str());
+                return false;
+            }
+
+            faces[id].SetVertexID(ncorner, vertex_id);
+            ncorner++;
+        }
+
+        pChild = pChild->next;
+    }
+
+    if (ncorner < N)
+    {
+        SetError ("not enough corners on %s %s, %d expected", pTag->name, id.c_str(), N);
+        faces.erase(id);
+        return false;
+    }
+
+    return true;
+}
+bool ParseBone(const xmlNodePtr pTag,
+               const std::map<std::string, MeshVertex> &vertices,
+               std::map<std::string, MeshBone> &bones)
+{
+    std::string id, vert_id;
+    if(!ParseStringAttrib(pTag, (const xmlChar *)"id", id))
+    {
+        SetError ("No id found on %s", pTag->name);
+        return false;
+    }
+
+    bones[id] = MeshBone();
+
+    if(!ParseStringAttrib(pTag, (const xmlChar *)"parent_id", bones[id].parent_id))
+    {
+        bones[id].parent_id = "";
+    }
+
+    if (!ParseXYZ(pTag, &bones[id].posHead))
+    {
+        SetError ("No x, y, z on %s %s", pTag->name, id.c_str ());
+        return false;
+    }
+
+    if (!ParseXYZ(pTag, &bones[id].posTail, "tail_"))
+        bones[id].posTail = bones[id].posHead;
+
+    if (!ParseFloatAttrib(pTag, (const xmlChar *)"weight", &bones[id].weight))
+        bones[id].weight = 1.0f;
+
+    xmlNodePtr pChild = pTag->children, pVert;
+    while (pChild)
+    {
+        if (StrCaseCompare((const char *) pChild->name, "vertices") == 0)
+        {
+            pVert = pChild->children;
+            while (pVert)
+            {
+                if (StrCaseCompare((const char *) pVert->name, "vertex") == 0)
+                {
+                    if (!ParseStringAttrib(pVert, (const xmlChar *)"id", vert_id))
+                    {
+                        SetError ("no id found on vertex in %s %s\n", pTag->name, id.c_str());
+                        return false;
+                    }
+
+                    if (vertices.find(vert_id) == vertices.end())
+                    {
+                        SetError ("no such vertex: %s, referred to by %s %s\n", vert_id.c_str(), pTag->name, id.c_str());
+                        return false;
+                    }
+
+                    bones[id].vertex_ids.push_back(vert_id);
+                }
+
+                pVert = pVert->next;
+            }
+        }
+        pChild = pChild->next;
+    }
+    //printf("parsed bone %s with %d vertices\n", id.c_str(), bones[id].vertex_ids.size());
+    return true;
+}
+bool ParseSubset(const xmlNodePtr pTag,
+                 const std::map<std::string, MeshQuad> &quads,
+                 const std::map<std::string, MeshTriangle> &triangles,
+                 std::map<std::string, MeshSubset> &subsets)
+{
+    xmlNodePtr pChild, pFace;
+    std::string id, face_id;
+
+
+    if (!ParseStringAttrib(pTag, (const xmlChar *)"id", id))
+    {
+        SetError ("no id found on %s", pTag->name);
+        return false;
+    }
+
+    MeshSubset subset;
+    subsets[id] = subset;
+    //std::pair<std::string, MeshSubset> pair (id, subset);
+    //subsets.insert (pair);
+    for(int i=0; i<4; i++)
+    {
+        subsets[id].diffuse[i] = 1.0;
+        subsets[id].specular[i] = 1.0;
+        subsets[id].emission[i] = 1.0;
+    }
+
+    pChild = pTag->children;
+    while (pChild) {
+
+        if (StrCaseCompare((const char *) pChild->name, "diffuse") == 0) {
+
+            if(!ParseRGBA(pChild, subsets[id].diffuse))
+            {
+                SetError ("error getting %s RGBA for %s %s", pChild->name, id.c_str(), pTag->name);
+                return false;
+            }
+        }
+        else if (StrCaseCompare((const char *) pChild->name, "specular") == 0) {
+
+            if(!ParseRGBA(pChild, subsets[id].specular))
+            {
+                SetError ("error getting %s RGBA for %s %s", pChild->name, id.c_str(), pTag->name);
+                return false;
+            }
+        }
+        else if (StrCaseCompare((const char *) pChild->name, "emission") == 0) {
+
+            if(!ParseRGBA(pChild, subsets[id].emission))
+            {
+                SetError ("error getting %s RGBA for %s %s", pChild->name, id.c_str(), pTag->name);
+                return false;
+            }
+        }
+        else if (StrCaseCompare((const char *) pChild->name, "faces") == 0) {
+            pFace = pChild->children;
+            while (pFace)
+            {
+                if (StrCaseCompare((const char *) pFace->name, "quad") == 0)
+                {
+                    if (!ParseStringAttrib(pFace, (const xmlChar *)"id", face_id))
+                    {
+                        SetError ("no id found for %s in %s %s", pFace->name, pTag->name, id.c_str());
+                        return false;
+                    }
+
+                    if (quads.find(face_id) == quads.end())
+                    {
+                        SetError ("no such quad: %s", pFace->name, face_id.c_str());
+                        return false;
+                    }
+                    subsets[id].quads.push_back(&quads.at(face_id));
+                }
+                else if(StrCaseCompare((const char *) pFace->name, "triangle") == 0)
+                {
+                    if (!ParseStringAttrib(pFace, (const xmlChar *)"id", face_id))
+                    {
+                        SetError ("no id found for %s in %s %s", pFace->name, pTag->name, id.c_str());
+                        return false;
+                    }
+
+                    if (triangles.find(face_id) == triangles.end())
+                    {
+                        SetError ("no such triangle: %s", pFace->name, face_id.c_str());
+                        return false;
+                    }
+                    subsets[id].triangles.push_back(&triangles.at(face_id));
+                }
+
+                pFace = pFace->next;
+            }
+        }
+
+        pChild = pChild->next;
+    }
+    return true;
+}
+bool ParseAnimation(const xmlNodePtr pTag,
+                    const std::map<std::string, MeshBone> &bones,
+                    std::map<std::string, MeshAnimation> &animations)
+{
+    xmlNodePtr pChild, pLayer, pList, pKey;
+
+    std::string id, bone_id;
+    if(!ParseStringAttrib(pTag, (const xmlChar *)"name", id))
+    {
+        SetError ("%s without a name", pTag->name);
+        return false;
+    }
+
+    animations[id] = MeshAnimation();
+
+    if(!ParseIntAttrib(pTag, (const xmlChar *)"length", &animations[id].length))
+    {
+        SetError ("no length given for %s %s", pTag->name, id.c_str());
+        return false;
+    }
+
+    pLayer = pTag->children;
+    while (pLayer)
+    {
+        if(StrCaseCompare((const char *)pLayer->name, "layer") == 0)
+        {
+            if (!ParseStringAttrib(pLayer, (const xmlChar *)"bone_id", bone_id))
+            {
+                SetError ("no id on %s in %s %s", pLayer->name, pTag->name, id.c_str());
+                return false;
+            }
+
+            if(bones.find(bone_id) == bones.end())
+            {
+                SetError ("no such bone: %s", bone_id.c_str());
+                return false;
+            }
+
+            animations[id].layers.push_back(MeshBoneLayer());
+            animations[id].layers.back().pBone = &bones.at(bone_id);
+            animations[id].layers.back().bone_id = bone_id;
+
+            pKey = pLayer->children;
+            while (pKey)
+            {
+                if (StrCaseCompare((const char *)pKey->name, "key") == 0)
+                {
+                    float frame;
+                    if(!ParseFloatAttrib(pKey, (const xmlChar *)"frame", &frame))
+                    {
+                        SetError ("no frame number given for %s", pKey->name);
+                        return false;
+                    }
+
+                    animations[id].layers.back().keys [frame] = MeshBoneKey();
+                    if (ParseFloatAttrib(pKey, (const xmlChar *)"rot_w", &animations[id].layers.back().keys[frame].rot.w))
+                    {
+                        if (!ParseFloatAttrib (pKey, (const xmlChar *)"rot_x", &animations[id].layers.back().keys[frame].rot.x) ||
+                            !ParseFloatAttrib (pKey, (const xmlChar *)"rot_y", &animations[id].layers.back().keys[frame].rot.y) ||
+                            !ParseFloatAttrib (pKey, (const xmlChar *)"rot_z", &animations[id].layers.back().keys[frame].rot.z))
+                        {
+                            SetError ("%s bone %s rotation incomplete for key at %f", id.c_str(), bone_id.c_str(), frame);
+                            return false;
+                        }
+                    }
+                    else animations[id].layers.back().keys[frame].rot = QUAT_ID;
+
+                    if(!ParseXYZ(pKey, &animations[id].layers.back().keys[frame].loc))
+                        animations[id].layers.back().keys[frame].loc = vec3(0,0,0);
+                }
+                pKey = pKey->next;
+            }
+
+            if (animations[id].layers.back().keys.size () <= 0)
+            {
+                SetError ("layer %s with no keys in %s", bone_id.c_str(), id.c_str());
+                return false;
+            }
+        }
+        pLayer = pLayer->next;
+    }
+    return true;
+}
+bool ParseMesh(const xmlDocPtr pDoc, MeshData *pData)
+{
+    xmlNodePtr pChild, pRoot = xmlDocGetRootElement(pDoc), pList, pTag;
+    if(!pRoot) {
+
+        SetError ("no root element in mesh xml doc");
+        return false;
+    }
+
+    if (StrCaseCompare((const char *) pRoot->name, "mesh") != 0) {
+
+        SetError ("document of the wrong type, found \'%s\' instead of \'mesh\'", pRoot->name);
+        return false;
+    }
+
+    // First, collect all the vertices:
+    pChild = pRoot->children;
+    while (pChild) {
+        if (StrCaseCompare((const char *) pChild->name, "vertices") == 0) {
+
+            pTag = pChild->children;
+            while (pTag) {
+
+                if (StrCaseCompare((const char *) pTag->name, "vertex") == 0)
+                    if (!ParseVertex(pTag, pData->vertices))
+                    {
+                        return false;
+                    }
+                pTag = pTag->next;
+            }
+        }
+        pChild = pChild->next;
+    }
+
+    // Next, collect all faces, that refer to vertices:
+    pChild = pRoot->children;
+    while (pChild) {
+        if (StrCaseCompare((const char *) pChild->name, "faces") == 0) {
+
+            pTag = pChild->children;
+            while (pTag) {
+
+                if (StrCaseCompare((const char *) pTag->name, "quad") == 0)
+                {
+                    if (!ParseFace(pTag, pData->vertices, pData->quads))
+                        return false;
+                }
+                else if(StrCaseCompare((const char *) pTag->name, "triangle") == 0)
+                {
+                    if (!ParseFace(pTag, pData->vertices, pData->triangles))
+                        return false;
+                }
+
+                pTag = pTag->next;
+            }
+        }
+        pChild = pChild->next;
+    }
+
+    // Next collect subsets, which refer to faces:
+    pChild = pRoot->children;
+    while (pChild) {
+
+        if (StrCaseCompare((const char *) pChild->name, "subsets") == 0) {
+
+            pTag = pChild->children;
+            while (pTag) {
+
+                if (StrCaseCompare((const char *) pTag->name, "subset") == 0)
+                {
+                    if (!ParseSubset(pTag, pData->quads, pData->triangles, pData->subsets))
+                    {
+                        return false;
+                    }
+                }
+                pTag = pTag->next;
+            }
+        }
+        pChild = pChild->next;
+    }
+
+    // Next, look for bones, which refer to vertices also:
+    pChild = pRoot->children;
+    while (pChild) {
+        if (StrCaseCompare((const char *) pChild->name, "armature") == 0)
+        {
+            pList = pChild->children;
+            while (pList) {
+
+                if (StrCaseCompare((const char *) pList->name, "bones") == 0)
+                {
+                    pTag = pList->children;
+                    while (pTag) {
+
+                        if(StrCaseCompare((const char *) pTag->name, "bone") == 0)
+                        {
+                            if (!ParseBone(pTag, pData->vertices, pData->bones))
+                                return false;
+                        }
+
+                        pTag = pTag->next;
+                    }
+                }
+
+                pList = pList->next;
+            }
+        }
+        pChild = pChild->next;
+    }
+
+    // set the parents on the bones and check the vertex ids
+    for (std::map<std::string, MeshBone>::iterator it = pData->bones.begin(); it != pData->bones.end(); it++)
+    {
+        std::string id = it->first;
+        std::string parent_id = pData->bones[id].parent_id;
+        if(parent_id.size() <= 0)
+        {
+            pData->bones[id].parent = NULL;
+            continue;
+        }
+
+        for (std::list <std::string>::const_iterator it = pData->bones [id].vertex_ids.begin ();
+             it != pData->bones [id].vertex_ids.end (); it++)
+        {
+            std::string vertex_id = *it;
+            if (pData->vertices.find (vertex_id) == pData->vertices.end ())
+            {
+                SetError ("bone %s refers to nonexistent vertex %s", id.c_str(), vertex_id.c_str());
+                return false;
+            }
+        }
+
+        if (pData->bones.find(parent_id) == pData->bones.end())
+        {
+            SetError ("bone %s refers to nonexistent parent %s", id.c_str(), parent_id.c_str());
+            return false;
+        }
+        pData->bones[id].parent = &pData->bones[parent_id];
+    }
+
+    // Finally, look for animations, which refer to bones:
+    pChild = pRoot->children;
+    while (pChild) {
+        if (StrCaseCompare((const char *) pChild->name, "armature") == 0)
+        {
+            pList = pChild->children;
+            while (pList) {
+
+                if (StrCaseCompare((const char *) pList->name, "animations") == 0)
+                {
+                    pTag = pList->children;
+                    while (pTag) {
+
+                        if(StrCaseCompare((const char *) pTag->name, "animation") == 0)
+                        {
+                            if (!ParseAnimation(pTag, pData->bones, pData->animations))
+                                return false;
+                        }
+
+                        pTag = pTag->next;
+                    }
+                }
+
+                pList = pList->next;
+            }
+        }
+        pChild = pChild->next;
+    }
+
+    return true;
+}
+std::map<std::string, matrix4> GetBoneTransformations(MeshObject *pMesh, const MeshAnimation *pAnimation, const float frame, const bool loop)
+{
+    std::map<std::string, matrix4> transforms;
+
+    for (std::list<MeshBoneLayer>::const_iterator it = pAnimation->layers.begin(); it != pAnimation->layers.end(); it++)
+    {
+        const MeshBoneLayer *pLayer = &(*it);
+
+        float keyLeft = -1.0f,
+              keyRight = -1.0f,
+              keyFirst = -1.0f,
+              keyLast = -1.0f,
+              key;
+
+        for (std::map<float, MeshBoneKey>::const_iterator jt = pLayer->keys.begin(); jt != pLayer->keys.end(); ++jt)
+        {
+            key = jt->first;
+
+            if (key >= frame && (keyRight == -1.0f || key < keyRight))
+                keyRight = key;
+
+            if (key <= frame && (keyLeft == -1.0f || key > keyLeft))
+                keyLeft = key;
+
+            if (key < keyFirst || keyFirst == -1.0f)
+                keyFirst = key;
+
+            if (key > keyLast || keyLast == -1.0f)
+                keyLast = key;
+        }
+
+        transforms[pLayer->bone_id] = matID();
+
+        if (keyLast < 0 || keyFirst < 0)
+        {
+            fprintf (stderr, "layer %s: no keys\n", pLayer->bone_id.c_str());
+            continue;
+        }
+
+        if (keyLeft < 0)
+        {
+            if (loop)
+                keyLeft = keyLast;
+            else
+            {
+                fprintf (stderr, "layer %s: no left key at %.3f\n", pLayer->bone_id.c_str(), frame);
+                continue;
+            }
+        }
+        else if (keyRight < 0)
+        {
+            if (loop)
+                keyRight = keyFirst;
+            else
+            {
+                fprintf (stderr, "layer %s: no right key at %.3f\n", pLayer->bone_id.c_str(), frame);
+                continue;
+            }
+        }
+
+        const MeshBoneKey *pLeft = &pLayer->keys.at(keyLeft),
+                          *pRight = &pLayer->keys.at(keyRight);
+
+
+        // Determine the location and rotation of the bone in this frame:
+        vec3 loc;
+        Quaternion rot;
+        if (keyLeft == keyRight)
+        {
+            // easy !
+            loc = pLeft->loc;
+            rot = pLeft->rot;
+        }
+        else
+        {
+            // determine t and u factors, these tell how much of the left and rightkey must be taken
+            float range_length = keyRight - keyLeft,
+                  range_pos = frame - keyLeft,
+
+                  u = range_pos / range_length,
+                  t = 1.0f - u;
+
+            loc = t * pLeft->loc + u * pRight->loc;
+            rot = slerp (pLeft->rot, pRight->rot, u);
+        }
+
+        // make a matrix of it:
+        transforms[pLayer->bone_id] = matQuat(rot) * matTranslation(loc); // apply rotation && position
+    }
+
+    return transforms;
+}
+void MeshObject::ApplyBoneTransformations(const std::map<std::string, matrix4> transforms)
+{
+    std::map<std::string, int> bonesPerVertex;
+
+    // First set vertices to 0,0,0:
+    for(std::map<std::string, MeshVertex>::iterator it = vertexStates.begin(); it != vertexStates.end(); it++)
+    {
+        std::string id = it->first;
+        MeshVertex *pVertex = &it->second;
+        if (pMeshData->vertices.find(id) == pMeshData->vertices.end())
+        {
+            fprintf(stderr, "no such vertex: %s\n", id.c_str());
+            continue;
+        }
+        pVertex->n = vec3(0,0,0);
+        pVertex->p = vec3(0,0,0);
+
+        bonesPerVertex[id] = 0;
+    }
+
+    for(std::map<std::string, MeshBone>::const_iterator it = pMeshData->bones.begin(); it != pMeshData->bones.end(); it++)
+    {
+        const std::string bone_id = it->first;
+
+        if (pMeshData->bones.find(bone_id) == pMeshData->bones.end())
+        {
+            fprintf(stderr, "no such bone: %s\n", bone_id.c_str());
+            continue;
+        }
+        const MeshBone *pBone = &pMeshData->bones.at(bone_id);
+
+        // Transform the bone state:
+        MeshBoneState* pBoneState = &boneStates[bone_id];
+        std::string chainpoint_id = bone_id;
+        vec3 newHead = pBone->posHead,
+             newTail = pBone->posTail;
+        while (chainpoint_id.size() > 0)
+        {
+            const MeshBone *pChainPoint = &pMeshData->bones.at(chainpoint_id);
+            if (transforms.find(chainpoint_id) != transforms.end())
+            {
+                newHead = transforms.at(chainpoint_id) * (newHead - pChainPoint->posHead) + pChainPoint->posHead;
+                newTail = transforms.at(chainpoint_id) * (newTail - pChainPoint->posHead) + pChainPoint->posHead;
+            }
+
+            chainpoint_id = pChainPoint->parent_id;
+        }
+        pBoneState->posHead = newHead;
+        pBoneState->posTail = newTail;
+
+        // Transform the vertex states:
+        for(std::list<std::string>::const_iterator jt = pBone->vertex_ids.begin(); jt != pBone->vertex_ids.end(); jt++)
+        {
+            std::string vertex_id = *jt;
+            const MeshVertex *pDataVertex = &pMeshData->vertices.at(vertex_id);
+            MeshVertex *pVertex = &vertexStates[vertex_id];
+
+            vec3 newp = pDataVertex->p,
+                 newn = pDataVertex->n;
+
+            std::string chainpoint_id = bone_id;
+            while (chainpoint_id.size() > 0)
+            {
+                if (pMeshData->bones.find(chainpoint_id) == pMeshData->bones.end())
+                {
+                    fprintf(stderr, "no such bone: %s\n", chainpoint_id.c_str());
+                    break;
+                }
+
+                const MeshBone *pChainPoint = &pMeshData->bones.at(chainpoint_id);
+
+                if (transforms.find(chainpoint_id) != transforms.end())
+                {
+                    newp = transforms.at(chainpoint_id) * (newp - pChainPoint->posHead) + pChainPoint->posHead;
+
+                    // Special matrix for normals:
+                    matrix4 n_transform = matTranspose (matInverse (transforms.at (chainpoint_id)));
+                    newn = n_transform * newn;
+                }
+
+                chainpoint_id = pChainPoint->parent_id;
+            }
+
+            bonesPerVertex[vertex_id] ++;
+            pVertex->p += newp;
+            pVertex->n += newn;
+        }
+    }
+
+    // Convert vector sums to averages
+    for(std::map<std::string, MeshVertex>::iterator it = vertexStates.begin(); it != vertexStates.end(); it++)
+    {
+        std::string id = it->first;
+        MeshVertex* pVertex = &vertexStates[id];
+
+        if (bonesPerVertex[id] > 0)
+        {
+            pVertex->p /= bonesPerVertex[id];
+            pVertex->n /= bonesPerVertex[id];
+        }
+        else // not transformed, set to rest state
+        {
+            const MeshVertex *pDataVertex = &pMeshData->vertices.at(id);
+            pVertex->p = pDataVertex->p;
+            pVertex->n = pDataVertex->n;
+        }
+    }
+}
+void MeshObject::SetAnimationState(const char *animation_id, float frame, bool loop)
+{
+    const MeshAnimation *pAnimation;
+    if (animation_id)
+    {
+        if (pMeshData->animations.find(animation_id) == pMeshData->animations.end())
+        {
+            fprintf(stderr, "error, no such animation: %s\n", animation_id);
+            InitStates();
+            return;
+        }
+        else
+            pAnimation = &pMeshData->animations.at(animation_id);
+    }
+    else
+    {
+        InitStates();
+        return;
+    }
+
+    if (frame < 0)
+        frame = 0;
+
+    if (loop && frame > pAnimation->length)
+    {
+        int iframe = int (frame),
+            mframe = iframe % pAnimation->length;
+        frame = mframe + (frame - iframe);
+    }
+
+    std::map<std::string, matrix4> tranforms = GetBoneTransformations(this, pAnimation, frame, loop);
+
+    ApplyBoneTransformations(tranforms);
+}

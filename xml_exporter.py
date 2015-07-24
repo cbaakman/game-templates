@@ -34,7 +34,7 @@ def draw ():
     glClearColor(0.55,0.6,0.6,1)
     glClear(GL_COLOR_BUFFER_BIT)
     glRasterPos2d(20,75)
-    Draw.Button("Export Selelcted",1,20,155,75,30,"export the selected object")
+    Draw.Button("Export Selected",1,20,155,100,30,"export the selected object")
 
 def event (evt,val):
     if evt==Draw.ESCKEY: Draw.Exit()

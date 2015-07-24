@@ -17,9 +17,9 @@
    width="256"
    height="256"
    sodipodi:docname="dummy.svg"
-   inkscape:export-filename="C:\Users\Coos\Projects\test-apps\art\dummy.png"
-   inkscape:export-xdpi="144"
-   inkscape:export-ydpi="144">
+   inkscape:export-filename="dummy.png"
+   inkscape:export-xdpi="90"
+   inkscape:export-ydpi="90">
   <metadata
      id="metadata8">
     <rdf:RDF>
@@ -28,7 +28,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title />
+        <dc:title></dc:title>
       </cc:Work>
     </rdf:RDF>
   </metadata>

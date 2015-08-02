@@ -73,6 +73,8 @@
 		<Unit filename="src/test3d/mesh.h" />
 		<Unit filename="src/test3d/shadow.cpp" />
 		<Unit filename="src/test3d/shadow.h" />
+		<Unit filename="src/test3d/toon.cpp" />
+		<Unit filename="src/test3d/toon.h" />
 		<Unit filename="src/test3d/water.cpp" />
 		<Unit filename="src/test3d/water.h" />
 		<Unit filename="src/test3d/winres.h" />

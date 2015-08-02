@@ -17,40 +17,34 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 
+#ifndef TOON_H
+#define TOON_H
 
-#ifndef HUB_H
-#define HUB_H
+#include "app.h"
+#include "mesh.h"
+#include "../texture.h"
 
-#include "water.h"
-#include "shadow.h"
-#include "toon.h"
-
-#include "../font.h"
-
-class HubScene : public App::Scene{
-
+class ToonScene : public App::Scene
+{
 private:
-    WaterScene *pWaterScene;
-    ShadowScene *pShadowScene;
-    ToonScene *pToonScene;
-    Scene *pCurrent;
 
-    Font font;
+    // camera angles
+    GLfloat angleY, angleX, distCamera;
 
-    GLfloat alphaH;
+    Texture texBG;
 
-    int help;
-    std::string helpText[2];
+    MeshData meshDataHead;
+
+    GLuint shaderProgram;
 public:
-    void OnEvent (const SDL_Event *event);
 
-    HubScene (App*);
-    ~HubScene ();
+    ToonScene (App*);
+    ~ToonScene ();
 
-    bool Init(void);
-    void Update(float dt);
-    void Render(void);
-    void OnKeyPress (const SDL_KeyboardEvent *event);
+    bool Init (void);
+    void Render (void);
+    void OnMouseMove (const SDL_MouseMotionEvent *event);
+    void OnMouseWheel (const SDL_MouseWheelEvent *event);
 };
 
-#endif // HUB_H
+#endif // TOON_H

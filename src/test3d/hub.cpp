@@ -24,6 +24,8 @@
 #include "../xml.h"
 #include "../err.h"
 
+const GLfloat textColors [][3] = {{1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}};
+
 HubScene::HubScene (App *pApp) : Scene (pApp),
     pWaterScene (NULL),
     pShadowScene (NULL),
@@ -32,7 +34,8 @@ HubScene::HubScene (App *pApp) : Scene (pApp),
     help(0)
 {
     std::string nav = "F1: Dummy Test\n"
-                      "F2: Water Test";
+                      "F2: Water Test\n"
+                      "F3: Toon Test";
 
     helpText [0] = "Use w,a,s,d & SPACE to move mr. Dummy around\n"
                     "Use the mouse to move the camera\n"
@@ -43,9 +46,12 @@ HubScene::HubScene (App *pApp) : Scene (pApp),
     helpText [1] = "Use the arrow keys, pgUp & pgDown to move the cube.\n"
                    "Use the mouse to move the camera\n" + nav ;
 
+    helpText [2] = "Use the mouse to move the camera\n" + nav ;
+
 
     pWaterScene = new WaterScene (pApp);
     pShadowScene = new ShadowScene (pApp);
+    pToonScene = new ToonScene (pApp);
 
     pCurrent = pShadowScene;
     help = 0;
@@ -54,6 +60,7 @@ HubScene::~HubScene()
 {
     delete pWaterScene;
     delete pShadowScene;
+    delete pToonScene;
 }
 bool HubScene::Init ()
 {
@@ -64,6 +71,9 @@ bool HubScene::Init ()
         return false;
 
     if (!pShadowScene->Init())
+        return false;
+
+    if (!pToonScene->Init())
         return false;
 
     SDL_RWops *fontInput = SDL_RWFromZipArchive (resPath.c_str(), "Lumean.svg");
@@ -129,10 +139,10 @@ void HubScene::Render ()
     glMultMatrixf (matTranslation(10.0f, 10.0f, 0.0f).m);
 
     GLfloat maxWidth = w - 20.0f;
-    glColor4f (1.0f, 1.0f, 1.0f, 1.0f - alphaH);
+    glColor4f (textColors [help][0], textColors [help][1], textColors [help][2], 1.0f - alphaH);
     glRenderText (&font, "Press 'h' for help", TEXTALIGN_LEFT, maxWidth);
 
-    glColor4f (1.0f, 1.0f, 1.0f, alphaH);
+    glColor4f (textColors [help][0], textColors [help][1], textColors [help][2], alphaH);
     glRenderText (&font, helpText [help].c_str(), TEXTALIGN_LEFT, maxWidth);
 }
 void HubScene::OnEvent(const SDL_Event *event)
@@ -158,6 +168,12 @@ void HubScene::OnKeyPress (const SDL_KeyboardEvent *event)
         {
             pCurrent = pWaterScene;
             help = 1;
+        }
+
+        if(event->keysym.sym == SDLK_F3)
+        {
+            pCurrent = pToonScene;
+            help = 2;
         }
     }
 }

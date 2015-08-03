@@ -50,6 +50,8 @@ bool ToonScene::Init ()
     xmlDocPtr pDoc;
 
     f = SDL_RWFromZipArchive (resPath.c_str(), "head.xml");
+    if (!f)
+        return false;
     pDoc = ParseXML(f);
     f->close(f);
 
@@ -69,6 +71,8 @@ bool ToonScene::Init ()
     }
 
     f = SDL_RWFromZipArchive (resPath.c_str(), "toonbg.png");
+    if (!f)
+        return false;
     success = LoadPNG(f, &texBG);
     f->close(f);
 
@@ -80,7 +84,7 @@ bool ToonScene::Init ()
 
     f = SDL_RWFromZipArchive (resPath.c_str(), "shaders/toon.vsh");
     if (!f)
-        return false; // zip isn't open
+        return false;
 
     success = ReadAll (f, sourceV);
     f->close(f);
@@ -92,6 +96,8 @@ bool ToonScene::Init ()
     }
 
     f = SDL_RWFromZipArchive (resPath.c_str(), "shaders/toon.fsh");
+    if (!f)
+        return false;
     success = ReadAll (f, sourceF);
     f->close(f);
 

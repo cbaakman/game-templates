@@ -478,7 +478,7 @@ bool LoginScene::Init ()
     bool success;
 
     f = SDL_RWFromZipArchive (archive.c_str(), "handwriting.svg");
-    if (!f) // zip file won't open
+    if (!f) // file or archive missing
         return false;
 
     xmlDocPtr pDoc = ParseXML(f);
@@ -506,6 +506,8 @@ bool LoginScene::Init ()
     }
 
     f = SDL_RWFromZipArchive (archive.c_str(), "button.png");
+    if (!f)
+        return false;
     success = LoadPNG (f, &buttonTex);
     f->close (f);
 
@@ -516,6 +518,8 @@ bool LoginScene::Init ()
     }
 
     f = SDL_RWFromZipArchive (archive.c_str(), "bluebg.png");
+    if (!f)
+        return false;
     success = LoadPNG (f, &bgTex);
     f->close (f);
 
@@ -526,6 +530,8 @@ bool LoginScene::Init ()
     }
 
     f = SDL_RWFromZipArchive (archive.c_str(), "cursor.png");
+    if (!f)
+        return false;
     success = LoadPNG (f, &cursorTex);
     f->close (f);
 
@@ -538,6 +544,8 @@ bool LoginScene::Init ()
     if (pClient->AudioEnabled ())
     {
         f = SDL_RWFromZipArchive (archive.c_str(), "menu.wav");
+        if (!f)
+            return false;
         pSound = Mix_LoadWAV_RW(f, false);
         f->close (f);
 
@@ -1007,6 +1015,8 @@ bool TestConnectionScene::Init (void)
     bool success;
 
     f = SDL_RWFromZipArchive (archive.c_str(), "scroll.png");
+    if (!f)
+        return false;
     success = LoadPNG (f, &scrollTex);
     f->close (f);
 

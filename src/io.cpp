@@ -84,7 +84,7 @@ SDL_RWops *SDL_RWFromZipArchive (const char *_archive, const char *_entry)
 
     if (result != UNZ_OK)
     {
-        SetError ("not found in archive: %s", _entry);
+        SetError ("not found in %s: %s", _archive, _entry);
         unzClose (zip);
 
         return NULL;

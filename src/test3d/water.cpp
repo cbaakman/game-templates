@@ -152,7 +152,7 @@ bool WaterScene::Init()
 
     f = SDL_RWFromZipArchive (resourceZip.c_str(), pathVSH.c_str());
     if (!f)
-        return false; // zip isn't open
+        return false; // file or archive missing
 
     success = ReadAll (f, sourceV);
     f->close(f);
@@ -164,6 +164,8 @@ bool WaterScene::Init()
     }
 
     f = SDL_RWFromZipArchive (resourceZip.c_str(), pathFSH.c_str());
+    if (!f)
+        return false;
     success = ReadAll (f, sourceF);
     f->close(f);
 
@@ -173,7 +175,7 @@ bool WaterScene::Init()
         return false;
     }
 
-    shaderProgramWater = createShaderProgram(sourceV, sourceF);
+    shaderProgramWater = createShaderProgram (sourceV, sourceF);
     if (!shaderProgramWater)
     {
         SetError ("error creating shader program from %s and %s: %s", pathVSH.c_str(), pathFSH.c_str(), GetError ());

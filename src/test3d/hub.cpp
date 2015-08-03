@@ -29,6 +29,7 @@ const GLfloat textColors [][3] = {{1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f,
 HubScene::HubScene (App *pApp) : Scene (pApp),
     pWaterScene (NULL),
     pShadowScene (NULL),
+    pToonScene (NULL),
     pCurrent (NULL),
     alphaH(0),
     help(0)
@@ -50,7 +51,9 @@ HubScene::HubScene (App *pApp) : Scene (pApp),
 
 
     pWaterScene = new WaterScene (pApp);
+
     pShadowScene = new ShadowScene (pApp);
+
     pToonScene = new ToonScene (pApp);
 
     pCurrent = pShadowScene;
@@ -77,7 +80,7 @@ bool HubScene::Init ()
         return false;
 
     SDL_RWops *fontInput = SDL_RWFromZipArchive (resPath.c_str(), "Lumean.svg");
-    if (!fontInput) // zip won't open
+    if (!fontInput) // file or archive missing
         return false;
 
     xmlDocPtr pDoc = ParseXML(fontInput);

@@ -108,7 +108,7 @@ bool ShadowScene::Init(void)
     xmlDocPtr pDoc;
 
     f = SDL_RWFromZipArchive (resPath.c_str(), "dummy.png");
-    if (!f) // zip won't open
+    if (!f) // file or archive missing
         return false;
 
     success = LoadPNG(f, &texDummy);
@@ -121,6 +121,8 @@ bool ShadowScene::Init(void)
     }
 
     f = SDL_RWFromZipArchive (resPath.c_str(), "dummy.xml");
+    if (!f)
+        return false;
     pDoc = ParseXML(f);
     f->close(f);
 
@@ -140,6 +142,8 @@ bool ShadowScene::Init(void)
     }
 
     f = SDL_RWFromZipArchive (resPath.c_str(), "box.png");
+    if (!f)
+        return false;
     success = LoadPNG(f, &texBox);
     f->close(f);
 
@@ -150,6 +154,8 @@ bool ShadowScene::Init(void)
     }
 
     f = SDL_RWFromZipArchive (resPath.c_str(), "box.xml");
+    if (!f)
+        return false;
     pDoc = ParseXML(f);
     f->close(f);
 
@@ -169,6 +175,8 @@ bool ShadowScene::Init(void)
     }
 
     f = SDL_RWFromZipArchive (resPath.c_str(), "sky.png");
+    if (!f)
+        return false;
     success = LoadPNG(f, &texSky);
     f->close(f);
 
@@ -179,6 +187,8 @@ bool ShadowScene::Init(void)
     }
 
     f = SDL_RWFromZipArchive (resPath.c_str(), "sky.xml");
+    if (!f)
+        return false;
     pDoc = ParseXML(f);
     f->close(f);
 
@@ -198,6 +208,8 @@ bool ShadowScene::Init(void)
     }
 
     f = SDL_RWFromZipArchive (resPath.c_str(), "particle.png");
+    if (!f)
+        return false;
     success = LoadPNG(f, &texPar);
     f->close(f);
 

@@ -40,7 +40,7 @@ private:
     GLfloat alphaH;
 
     int help;
-    std::string helpText[2];
+    std::string helpText [3];
 public:
     void OnEvent (const SDL_Event *event);
 

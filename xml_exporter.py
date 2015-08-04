@@ -13,6 +13,15 @@ This script exports a Blender mesh to an xml formatted file
 format.
 """
 
+# This script exports the currently selected blender mesh to xml format.
+# Supports:
+# * - texture coordinates
+# * - vertex normals
+# * - material subsets
+# * - bones and skeletal animation
+#
+# The c++ code to parse the outgoing xml file can be found in "mesh.cpp"
+
 import Blender
 from Blender import Types, Object, Material,Armature,Mesh,Modifier
 from Blender.Mathutils import *
@@ -22,7 +31,7 @@ from Blender.IpoCurve import ExtendTypes, InterpTypes
 import math
 import xml.etree.ElementTree as ET
 
-EXTENSION='.xml'
+EXTENSION = '.xml' # not very specific
 
 def callback_sel(filename):
     if not filename.endswith (EXTENSION):
@@ -37,15 +46,16 @@ def draw ():
     Draw.Button("Export Selected",1,20,155,100,30,"export the selected object")
 
 def event (evt,val):
-    if evt==Draw.ESCKEY: Draw.Exit()
-
-def button_event(evt):
-    if evt==1:
-        fname = Blender.sys.makename(ext = EXTENSION)
-        Blender.Window.FileSelector(callback_sel, "Export xml mesh", fname)
+    if evt == Draw.ESCKEY:
         Draw.Exit()
 
-Draw.Register(draw,event,button_event)
+def button_event (evt):
+    if evt == 1:
+        fname = Blender.sys.makename(ext = EXTENSION)
+        Blender.Window.FileSelector (callback_sel, "Export xml mesh", fname)
+        Draw.Exit()
+
+Draw.Register (draw, event, button_event)
 
 def stripFilename (filename):
     return os.path.basename(os.path.splitext(filename)[0])
@@ -119,7 +129,7 @@ class Exporter(object):
 
     def __init__(self):
 
-        # Switch y and z:
+        # Swap y and z coordinates:
         self.transformVertex = Matrix ([1,0,0,0],
                                        [0,0,1,0],
                                        [0,1,0,0],
@@ -140,24 +150,25 @@ class Exporter(object):
         self.color_channels = ['r', 'g', 'b', 'a']
 
 
-    def exportSelected(self, filename):
+    def exportSelected (self, filename):
 
+        # Find the selected mesh and maybe an associated armature:
         mesh_obj = None
         arm_obj = None
 
         selected = Object.GetSelected()
 
-        if len(selected) == 0:
+        if len (selected) == 0:
             raise Exception ("No selection")
 
         sel_data = selected[0].getData(False,True)
 
-        if type(sel_data) == Types.MeshType:
+        if type (sel_data) == Types.MeshType:
 
             mesh_obj = selected [0]
             arm_obj = findMeshArmature (mesh_obj)
 
-        elif type(sel_data) == Types.ArmatureType:
+        elif type (sel_data) == Types.ArmatureType:
 
             arm_obj = selected [0]
             mesh_obj = findArmatureMesh (arm_obj)
@@ -167,8 +178,10 @@ class Exporter(object):
         else:
             raise Exception ("The selected object %s is not a mesh or armature." % str(type(selected [0])))
 
+        # Convert the blender objects to an xml tree
         root = self.toXML (mesh_obj, arm_obj)
 
+        # Write the xml tree ro a file:
         f = open(filename, "w")
         f.write(ET.tostring(root))
         f.close()
@@ -236,7 +249,10 @@ class Exporter(object):
 
     def subsetToXML (self, material, faces):
 
+        # Add the material name and properties to the subset.
+        # The user of the exported file is free to ignore these, of coarse.
         if material:
+
             name = material.name
             diffuse  = material.rgbCol + [1.0]
             specular = material.specCol + [1.0]
@@ -280,6 +296,10 @@ class Exporter(object):
 
     def faceToXML (self, face, face_factor):
 
+        # Only registers texture coordinates and vertex references.
+        # It doesn't store the actual vertex coordinates however.
+        # Those are in a different table and can occur in multiple faces.
+
         if len(face.verts) == 3:
             tag_face = ET.Element('triangle')
         elif len(face.verts) == 4:
@@ -311,6 +331,9 @@ class Exporter(object):
 
     def vertexToXML (self, vertex):
 
+        # In the xml, each vertex has its of id (reference),
+        # position (xyz) and normal. (xyz)
+
         tag_vertex = ET.Element('vertex')
 
         tag_vertex.attrib['id'] = str(vertex.index)
@@ -333,6 +356,10 @@ class Exporter(object):
 
 
     def armatureToXML (self, arm_obj, mesh_obj):
+
+        # An armature consists of bones.
+        # Bones have a head (xyz), tail (xzy), weight, and
+        # a set of references of the vertices which the bone modifies.
 
         armature = arm_obj.getData()
         mesh = mesh_obj.getData(False, True)
@@ -391,17 +418,24 @@ class Exporter(object):
 
     def armatureAnimationsToXML (self, arm_obj, arm2mesh, bone_list):
 
+        # Each blender action, attached to the armature is stored as animation.
+        # Each layer in the animation relates to a bone.
+        # Keys in the layer represent the bone's position at set time points.
+
         root = ET.Element('animations')
 
         for action in Armature.NLA.GetActions().values():
+        # iterate over actions
 
             animation_tag = ET.Element('animation')
 
             nLayers = 0
             for bone in bone_list:
+            # iterate over bones
 
                 action.setActive (arm_obj)
 
+                # See if this bone is moved in this action..
                 if bone.name not in action.getChannelNames ():
                     continue
 

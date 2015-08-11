@@ -65,11 +65,16 @@ ShadowScene::ShadowScene(App *pApp) : Scene(pApp),
 {
     texDummy.tex = texBox.tex = texSky.tex = texPar.tex = 0;
 
-    //colliders [0] = new FeetCollider (vec3 (0, -2.0f, 0));
+
+    // colliders [0] = new FeetCollider (vec3 (0, -2.0f, 0));
+
+    /*
+        Decided not to use the feet collider here. it's too buggy for onGround tests.
+     */
     colliders [0] = new SphereCollider (vec3 (0, -1.999f, 0), 0.001f);
     colliders [1] = new SphereCollider (VEC_O, PLAYER_RADIUS);
 
-    // Place particles at random positions with random speeds
+    // Place particles at random positions with random speeds and sizes
     for (int i = 0; i < N_PARTICLES; i++)
     {
         float a = RandomFloat (0, M_PI * 2),
@@ -101,11 +106,18 @@ ShadowScene::~ShadowScene()
 
 bool ShadowScene::Init(void)
 {
+    /*
+        Load and parse all resources.
+        On failure, set the error message and return false.
+     */
+
     std::string resPath = std::string(SDL_GetBasePath()) + "test3d.zip";
 
     SDL_RWops *f;
     bool success;
     xmlDocPtr pDoc;
+
+    // Load dummy texture:
 
     f = SDL_RWFromZipArchive (resPath.c_str(), "dummy.png");
     if (!f) // file or archive missing
@@ -120,6 +132,8 @@ bool ShadowScene::Init(void)
         return false;
     }
 
+    // Load dummy mesh as xml document:
+
     f = SDL_RWFromZipArchive (resPath.c_str(), "dummy.xml");
     if (!f)
         return false;
@@ -132,6 +146,8 @@ bool ShadowScene::Init(void)
         return false;
     }
 
+    // Convert xml document to mesh object:
+
     success = ParseMesh(pDoc, &meshDataDummy);
     xmlFreeDoc (pDoc);
 
@@ -140,6 +156,8 @@ bool ShadowScene::Init(void)
         SetError ("error parsing dummy.xml: %s", GetError ());
         return false;
     }
+
+    // Load environment texture:
 
     f = SDL_RWFromZipArchive (resPath.c_str(), "box.png");
     if (!f)
@@ -153,6 +171,8 @@ bool ShadowScene::Init(void)
         return false;
     }
 
+    // Load environment mesh as xml:
+
     f = SDL_RWFromZipArchive (resPath.c_str(), "box.xml");
     if (!f)
         return false;
@@ -165,6 +185,8 @@ bool ShadowScene::Init(void)
         return false;
     }
 
+    // Convert xml to mesh:
+
     success = ParseMesh(pDoc, &meshDataBox);
     xmlFreeDoc (pDoc);
 
@@ -173,6 +195,8 @@ bool ShadowScene::Init(void)
         SetError ("error parsing box.xml: %s", GetError ());
         return false;
     }
+
+    // Load skybox texture:
 
     f = SDL_RWFromZipArchive (resPath.c_str(), "sky.png");
     if (!f)
@@ -186,6 +210,8 @@ bool ShadowScene::Init(void)
         return false;
     }
 
+    // Load skybox mesh as xml:
+
     f = SDL_RWFromZipArchive (resPath.c_str(), "sky.xml");
     if (!f)
         return false;
@@ -198,6 +224,8 @@ bool ShadowScene::Init(void)
         return false;
     }
 
+    // convert xml to mesh:
+
     success = ParseMesh(pDoc, &meshDataSky);
     xmlFreeDoc (pDoc);
 
@@ -206,6 +234,8 @@ bool ShadowScene::Init(void)
         SetError ("error parsing sky.xml: %s", GetError ());
         return false;
     }
+
+    // Load texture for the particles:
 
     f = SDL_RWFromZipArchive (resPath.c_str(), "particle.png");
     if (!f)
@@ -219,6 +249,8 @@ bool ShadowScene::Init(void)
         return false;
     }
 
+    // Derive extra objects from the data we just loaded:
+
     shadowTriangles = new STriangle[meshDataDummy.triangles.size() + 2 * meshDataDummy.quads.size()];
 
     pMeshDummy = new MeshObject (&meshDataDummy);
@@ -231,6 +263,7 @@ bool ShadowScene::Init(void)
     return true;
 }
 
+/*
 float toAngle(const float x, const float z)
 {
     if (x == 0)
@@ -249,6 +282,8 @@ float toAngle(const float x, const float z)
         return M_PI - atan (z / x);
     }
 }
+*/
+
 void getCameraPosition( const vec3 &center,
         const GLfloat angleX, const GLfloat angleY, const GLfloat dist,
     vec3 &posCamera)
@@ -310,25 +345,30 @@ void ShadowScene::Update(const float dt)
 
     newPosPlayer.y += vy * dt;
 
+    /*
+        If on the ground, the collision mechanics are a little different.
+        We try to keep the feet on the ground. Unless the fall is too long
+     */
     if (onGround)
+
         posPlayer = CollisionWalk (posPlayer, newPosPlayer, colliders, N_PLAYER_COLLIDERS, collision_triangles, n_collision_triangles);
     else
         posPlayer = CollisionMove (posPlayer, newPosPlayer, colliders, N_PLAYER_COLLIDERS, collision_triangles, n_collision_triangles);
 
     // animate the mesh:
 
-    if (onGround && forward)
+    if (onGround && forward) // walking / running animation
     {
         frame += 15 * dt;
         pMeshDummy->SetAnimationState ("run", frame);
         touchDown = false;
     }
-    else if (vy > 0) // going up
+    else if (vy > 0) // going up animation
     {
         frame = 1.0f;
         pMeshDummy->SetAnimationState ("jump", frame);
     }
-    else if (!onGround) // falling
+    else if (!onGround) // falling animation
     {
         frame += 30 * dt;
         if (frame > 10.0f)
@@ -342,15 +382,17 @@ void ShadowScene::Update(const float dt)
         if (frame > 20.0f)
             touchDown = false;
 
-        if (touchDown)
+        if (touchDown) // touchdown animation
 
             pMeshDummy->SetAnimationState ("jump", frame);
-        else
+
+        else // stationary animation
+
             pMeshDummy->SetAnimationState (NULL, 0);
     }
 
 
-    // Move the particles
+    // Move the particles, according to time passed.
     for (int i = 0; i < N_PARTICLES; i++)
     {
         particles [i].vel += -0.03f * particles [i].pos * dt;
@@ -374,6 +416,11 @@ int GetTriangles(const MeshObject *pMesh, STriangle *triangles)
     for (std::map<std::string, MeshQuad>::const_iterator it = pData->quads.begin(); it != pData->quads.end(); it++)
     {
         const MeshQuad *pQuad = &it->second;
+
+        /*
+            Converting quads to triangles might not be exactly right,
+            unless the quads are completely flat of coarse.
+         */
 
         triangles[i].p[0] = &vertices.at (pQuad->GetVertexID(0)).p;
         triangles[i].p[1] = &vertices.at (pQuad->GetVertexID(1)).p;
@@ -410,17 +457,27 @@ void SetVisibilities(const vec3 &posEye, const int n_triangles, STriangle *trian
     {
         STriangle* t = &triangles[i];
 
-        // assume clockwise is front
-        vec3 n = Cross((*t->p[1] - *t->p[0]), (*t->p[2] - *t->p[0])).Unit();
-        float d = -Dot(*t->p[0], n),
+        /*
+           Calculate normal from triangle,
+           assume clockwise is front.
+         */
+
+        vec3 n = Cross ((*t->p[1] - *t->p[0]), (*t->p[2] - *t->p[0])).Unit();
+
+        float d = -Dot (*t->p[0], n), // plane's distance from origin
+
               side = Dot(n, posEye) + d;
+
+        // If the normal points towards the eye, then the triangle is visible.
 
         t->visible = (side > 0);
     }
 }
 
 struct Edge { const vec3 *p[2]; };
+
 /**
+ * Determines which triangle Edges should make up the shadow.
  * Precondition is that the 'visible' fields have been set on the triangles beforehand !!
  */
 void GetShadowEdges(const int n_triangles, const STriangle *triangles, std::list<Edge> &result)
@@ -510,7 +567,7 @@ void GetShadowEdges(const int n_triangles, const STriangle *triangles, std::list
     }
 }
 
-/*
+/**
  * Renders squares from every edge to infinity, using the light position as origin.
  */
 #define SHADOW_INFINITY 1000.0f
@@ -519,6 +576,8 @@ void ShadowPass(const std::list<Edge> &edges, const vec3 &posLight)
     for (std::list<Edge>::const_iterator it = edges.begin(); it != edges.end(); it++)
     {
         const Edge *pEdge = &(*it);
+
+        // These are the four vertices of the shadow quad:
         vec3 d1 = (*pEdge->p[0] - posLight).Unit(),
              d2 = (*pEdge->p[1] - posLight).Unit(),
 
@@ -534,14 +593,18 @@ void ShadowPass(const std::list<Edge> &edges, const vec3 &posLight)
     }
 }
 void RenderSprite (const vec3 &pos, const Texture *pTex,
-                   const float tx1, const float ty1, const float tx2, const float ty2,
+                   const float tx1, const float ty1, const float tx2, const float ty2, // texture coordinates (in pixels)
                    const float size = 1.0f)
 {
     matrix4 modelView;
     glGetFloatv (GL_MODELVIEW_MATRIX, modelView.m);
 
-    /* extract the axes system from the current modelview matrix and normalize it,
-       then render the quad on it, so that it's always pointed towards the camera */
+    /*
+       Extract the axes system from the current modelview matrix and normalize them,
+       then render the quad on the normalized axes system, so that it's always pointed towards the camera,
+       but it's zoom is still variable.
+    */
+
     const float sz = size / 2;
     vec3 modelViewRight = vec3 (modelView.m11, modelView.m12, modelView.m13).Unit(),
          modelViewUp = vec3 (modelView.m21, modelView.m22, modelView.m23).Unit(),
@@ -651,7 +714,6 @@ void ShadowScene::Render ()
     glDisable (GL_BLEND);
     glDisable (GL_TEXTURE_2D);
 
-    // For testing collision triangle generation
     if (show_triangles)
     {
         glDisable(GL_DEPTH_TEST);
@@ -695,6 +757,8 @@ void ShadowScene::Render ()
         pMeshDummy->RenderNormals ();
     }
 
+    // We need to have the light position in player space, because that's where the triangles are.
+
     const vec3 invPosLight = matInverse (transformPlayer) * posLight;
     const int n_triangles = GetTriangles (pMeshDummy, shadowTriangles);
     SetVisibilities (invPosLight, n_triangles, shadowTriangles);
@@ -718,14 +782,14 @@ void ShadowScene::Render ()
     glStencilOp (GL_KEEP, GL_KEEP, GL_DECR);
     ShadowPass (edges, invPosLight);
 
-    // Set the stencil pixels to zero where the dummy is drawn and where nothing is drawn
+    // Set the stencil pixels to zero where the dummy is drawn and where nothing is drawn (background)
     glFrontFace (GL_CW);
     glStencilOp (GL_KEEP, GL_KEEP, GL_ZERO);
     pMeshDummy->RenderSubset ("0");
 
     glLoadIdentity ();
 
-    // Set every pixel behind the walls/floor to zero
+    // Set every stencil pixel behind the walls/floor to zero
     glBegin (GL_QUADS);
         glVertex3f (-1.0e+15f, 1.0e+15f, 0.9f * SHADOW_INFINITY);
         glVertex3f ( 1.0e+15f, 1.0e+15f, 0.9f * SHADOW_INFINITY);
@@ -751,7 +815,10 @@ void ShadowScene::Render ()
         glVertex3f (-1.0f,-1.0f, NEAR_VIEW + 0.1f);
     glEnd ();
 
-    // Render the particles over the shadows
+    /*
+       Render the particles after the shadows, because they're transparent
+       and that doesn't go well with the depth buffer.
+    */
 
     glColor4f (1.0f, 1.0f, 1.0f, 1.0f);
     glLoadMatrixf (matCameraView.m);
@@ -767,14 +834,14 @@ void ShadowScene::Render ()
 }
 void ShadowScene::OnMouseWheel (const SDL_MouseWheelEvent *event)
 {
-    // zoom in or out
+    // zoom in or out, but not closer than 0.5
 
     distCamera -= 0.3f * event->y;
 
     if (distCamera < 0.5f)
         distCamera = 0.5f;
 }
-void ShadowScene::OnKeyPress(const SDL_KeyboardEvent *event)
+void ShadowScene::OnKeyPress (const SDL_KeyboardEvent *event)
 {
     if (event->type == SDL_KEYDOWN)
     {
@@ -783,6 +850,10 @@ void ShadowScene::OnKeyPress(const SDL_KeyboardEvent *event)
             // jump
             vy = 15.0f;
         }
+
+        /*
+            The following keys toggle settings:
+         */
         else if (event->keysym.sym == SDLK_b)
         {
             show_bones = !show_bones;
@@ -801,7 +872,7 @@ void ShadowScene::OnMouseMove(const SDL_MouseMotionEvent *event)
 {
     if(event -> state & SDL_BUTTON_LMASK)
     {
-        // Change camera angles
+        // Change camera angles, if mouse key is pressed
 
         angleY += 0.01f * event -> xrel;
         angleX += 0.01f * event -> yrel;

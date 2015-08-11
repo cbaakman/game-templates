@@ -36,6 +36,7 @@ struct Particle
 };
 
 struct STriangle
+/* Triangle format specially designed for calculating shadows */
 {
     const vec3 *p[3];
     bool visible;
@@ -61,25 +62,38 @@ private:
 
     vec3 posPlayer, directionPlayer;
 
-    Texture texDummy,
-            texBox,
-            texSky,
-            texPar;
+    Texture texDummy, // texture of the character mesh
+            texBox, // texture of the walls and floor
+            texSky, // texture for the sky
+            texPar; // semi-transparent particle texture
 
-    float frame;
-    bool show_bones, show_normals, show_triangles;
+    float frame; // current animation frame
 
-    STriangle *shadowTriangles;
+    // flags that represent the current settings for the scene:
+    bool show_bones,
+         show_normals,
+         show_triangles;
 
+    STriangle *shadowTriangles; // number of triangles depends on mesh used
+
+    // Objects to keep track of the state of each particle in the scene
     Particle particles [N_PARTICLES];
 
+    // Objects to represent the collision boundaries around the player
     ColliderP colliders [N_PLAYER_COLLIDERS];
 
+    /*
+        These triangles represent the environment.
+        They're used for collision detection.
+     */
     size_t n_collision_triangles;
     Triangle *collision_triangles;
 
-    MeshData meshDataDummy, meshDataBox, meshDataSky;
-    MeshObject *pMeshDummy;
+    MeshData meshDataDummy, // the movable character, with bones and animation data
+             meshDataBox, // environment: ground and walls
+             meshDataSky; // skybox, half a sphere
+
+    MeshObject *pMeshDummy; // animatable object, representing the player
 
 public:
     ShadowScene (App*);

@@ -423,66 +423,88 @@ struct Edge { const vec3 *p[2]; };
 /**
  * Precondition is that the 'visible' fields have been set on the triangles beforehand !!
  */
-void GetShadowEdges(const int n_triangles, const STriangle *triangles, std::list<Edge> &edges)
+void GetShadowEdges(const int n_triangles, const STriangle *triangles, std::list<Edge> &result)
 {
 
     // We're looking for edges that are not between two visible triangles,
     // but ARE part of a visible triangle
 
-    bool bUnshared[3]; // 0 between 0 and 1, 1 between 1 and 2, 2 between 2 and 0
-    int shared[2];
+    /*
+       one bool per edge of the triangle with points (0, 1, 2),
+       0 between triangle point 0 and 1,
+       1 between 1 and 2
+       and 2 between 2 and 0
+    */
+    bool use_edge [3];
+
     int i, j, x, y, n, x2, y2;
     for (i = 0; i < n_triangles; i++)
     {
+        // no need to check the edges of invisible triangles:
         if (!triangles[i].visible)
             continue;
 
+        /*
+            Include all edges by default.
+            Iteration must rule out edges that are shared by two visible triangles.
+         */
         for (x = 0; x < 3; x++)
-            bUnshared[x] = true;
+            use_edge [x] = true;
 
+        /*
+            Iterate to find visible triangles (j)
+            that share edges with visible triangles. (i)
+         */
         for (j = 0; j < n_triangles; j++)
         {
-            // make sure not to compare triangles with themselves
+            /*
+               Make sure not to compare triangles with themselves
+               and be sure to skip other invisible triangles.
+            */
 
-            if (i == j || !triangles[j].visible)
+            if (i == j || !triangles [j].visible)
                 continue;
 
             // compare the three edges of both triangles with each other:
 
             for (x = 0; x < 3; x++) // iterate over the edges of triangle i
             {
-                x2 = (x + 1) % 3;
+                x2 = (x + 1) % 3; // second point of edge x
 
                 for (y = 0; y < 3; y++) // iterate over the edges of triangle j
                 {
-                    y2 = (y + 1) % 3;
+                    y2 = (y + 1) % 3; // second point of edge y
 
                     if (triangles[i].p[x] == triangles[j].p[y] && triangles[i].p[x2] == triangles[j].p[y2] ||
                         triangles[i].p[x2] == triangles[j].p[y] && triangles[i].p[x] == triangles[j].p[y2])
                     {
                         // edge x on triangle i is equal to edge y on triangle j
 
-                        bUnshared[x] = false;
+                        use_edge [x] = false;
                         break;
                     }
                 }
             }
 
-            // We found shared visible edges on triangle j for all three edges on triangle i
-            if (!bUnshared[0] && !bUnshared[1] && !bUnshared[2])
+            /*
+               If all three edges (0, 1, 2) of triangle (i) were found shared with other triangles,
+               then search no more other triangles (j) for this particular triangle (i).
+            */
+            if (!use_edge [0] && !use_edge [1] && !use_edge [2])
                 break;
         }
 
+        // Add the edges (x) of triangle (i) that were found needed:
         for (x = 0; x < 3; x++)
         {
-            if (bUnshared[x])
+            if (use_edge [x])
             {
-                x2 = (x + 1) % 3;
+                x2 = (x + 1) % 3; // second point of edge x
 
                 Edge edge;
-                edge.p[0] = triangles[i].p[x];
-                edge.p[1] = triangles[i].p[x2];
-                edges.push_back(edge);
+                edge.p [0] = triangles [i].p [x];
+                edge.p [1] = triangles [i].p [x2];
+                result.push_back (edge);
             }
         }
     }

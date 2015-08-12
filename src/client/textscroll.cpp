@@ -54,6 +54,8 @@ TextScroll::TextScroll (const float _frame_left_x, const float _top_y,
 }
 void TextScroll::ClampBar ()
 {
+    // bar must stay withing min and max
+
     if (bar_top_y < min_bar_y)
         bar_top_y = min_bar_y;
     if (bar_top_y > max_bar_y)
@@ -67,6 +69,8 @@ void TextScroll::SetText (const char *_text)
 {
     if (pFont->glyphs.size () <= 0)
     {
+        // A font with no glyphs has probably not been loaded yet.
+
         fprintf (stderr, "TextScroll::SetText: error, font isn\'t ready yet\n");
         return;
     }
@@ -78,13 +82,22 @@ void TextScroll::SetText (const char *_text)
 }
 void TextScroll::DeriveDimensions ()
 {
-    float x1, x2, y1, y2, bar_frame_ratio, bar_domain,
+    float x1, x2, y1, y2,
+
+          bar_frame_ratio,
+          bar_domain,
 
           text_width = frame_width - 2 * spacing_text_frame,
           text_window_height = height - 2 * spacing_text_frame;
 
+    /*
+       Now that we know the width of the text area,
+       find out how much height the text will need
+     */
+
     DimensionsOfText (pFont, text.c_str(), x1, y1, x2, y2, textAlign, text_width);
 
+    // Convert to absolute coords:
     x1 += frame_left_x;
     x2 += frame_left_x;
 
@@ -93,7 +106,7 @@ void TextScroll::DeriveDimensions ()
 
     scrolled_area_height = y2 - y1;
 
-    // bar_domain: the entire area that the bar can possibly occupy
+    // bar_domain: the entire area that the bar can maximally occupy
     bar_domain = height - 2 * spacing_strip_bar;
 
     // bar_frame_ratio: 1.0 is max, determines how big the bar will be
@@ -103,9 +116,13 @@ void TextScroll::DeriveDimensions ()
 
     bar_height = bar_domain * bar_frame_ratio;
 
-    // determine which y positions the bar can have:
+    /*
+        Determine which y positions the bar can have.
+        It can move down until its bottom hits the strip's bottom.
+     */
     max_bar_y = min_bar_y + height - 2 * spacing_strip_bar - bar_height;
 
+    // Place bar within boundaries:
     ClampBar ();
 }
 TextScroll::~TextScroll()
@@ -127,8 +144,11 @@ void TextScroll::OnMouseClick (const SDL_MouseButtonEvent *event)
 
         float offY = GetTextYOffset(),
               x1, y1, x2, y2;
-        int cpos, prev_selectionStart = selectionStart;
 
+        int cpos,
+            prev_selectionStart = selectionStart;
+
+        // Remember, WhichGlyphAt takes relative coords !!
         GetTextRect (x1, y1, x2, y2);
 
         cpos = WhichGlyphAt (pFont, text.c_str(), event->x - x1, event->y - (y1 + offY), textAlign, x2 - x1);
@@ -171,6 +191,7 @@ void TextScroll::OnMouseClick (const SDL_MouseButtonEvent *event)
         OnScroll (DY);
     }
 
+    // When the bar changes position, make sure it stays within boundaries:
     ClampBar ();
 }
 void TextScroll::OnMouseMove (const SDL_MouseMotionEvent *event)
@@ -195,7 +216,7 @@ void TextScroll::OnMouseMove (const SDL_MouseMotionEvent *event)
     {
         // text is being selected, include the new mouse position in the selection.
 
-        // if the mouse cursor approaches the bottom or to of the frame while dragging, then scroll a bit:
+        // if the mouse cursor approaches the bottom or top of the frame while dragging, then scroll a bit:
         float charH = GetLineSpacing (pFont),
               DY = 0.05f * (max_bar_y - min_bar_y),
 
@@ -205,23 +226,34 @@ void TextScroll::OnMouseMove (const SDL_MouseMotionEvent *event)
 
         GetTextRect (x1, y1, x2, y2);
 
-        if (event->y < (y1 + charH))
+        if (event->y < (y1 + charH)) // mouse over top of frame
         {
             bar_top_y -= DY;
             OnScroll (-DY);
         }
-        else if (event->y > (y2 - charH))
+        else if (event->y > (y2 - charH)) // mouse over bottom
         {
             bar_top_y += DY;
             OnScroll (DY);
         }
+
+        // If the bar moved, it may not go outside boundaries
         ClampBar();
 
         offY = GetTextYOffset();
 
-        int cpos = WhichGlyphAt (pFont, text.c_str(), event->x - x1, event->y - (y1 + offY), textAlign, x2 - x1);
+        // Remember, WhichGlyphAt takes relative coords!
+
+        int cpos = WhichGlyphAt (pFont, text.c_str(),
+                                 event->x - x1, event->y - (y1 + offY),
+                                 textAlign, x2 - x1);
         if (cpos >= 0)
         {
+            /*
+                The movement direction of the mouse decides
+                whether to include the glyph under the cursor.
+             */
+
             if (cpos < text.size() && event->xrel > 0)
                 selectionEnd = cpos + 1;
             else
@@ -246,13 +278,15 @@ void TextScroll::OnMouseWheel (const SDL_MouseWheelEvent *event)
                 wheel_delta = -0.2f * GetLineSpacing (pFont);
 
     bar_top_y += wheel_delta * event->y;
+
+    // If the bar moved, it may not go outside boundaries
     ClampBar ();
 
     OnScroll (bar_top_y - prev_bar_y);
 
     if (dragging_text && MouseOverText (mX, mY))
     {
-        // user is still selecting text, move selecton to new cursor position
+        // user is still selecting text, move selection to new cursor position
 
         float y1, x1, y2, x2,
 
@@ -260,9 +294,13 @@ void TextScroll::OnMouseWheel (const SDL_MouseWheelEvent *event)
 
         GetTextRect (x1, y1, x2, y2);
 
+        // Remember, WhichGlyphAt takes relative coords!
+
         int cpos = WhichGlyphAt (pFont, text.c_str(), float (mX) - x1, float (mY) - (y1 + offY), textAlign, x2 - x1);
         if (cpos >= 0)
         {
+            // Move the selection to current cursor position
+
             selectionEnd = cpos;
         }
     }
@@ -271,18 +309,27 @@ void TextScroll::SetScroll (const float _bar_top_y)
 {
     // Scroll was set by something other than the mouse
 
+    int mX, mY;
+    const bool lbutton = SDL_GetMouseState(&mX, &mY) & SDL_BUTTON(SDL_BUTTON_LEFT);
+
+    // Releasing the mouse stops drag
+    if (!lbutton)
+    {
+        dragging_bar = false;
+        dragging_text = false;
+    }
+
     float prev_bar_y = bar_top_y;
     bar_top_y = _bar_top_y;
+
+    // If the bar moved, it may not go outside boundaries
     ClampBar ();
 
     OnScroll (bar_top_y - prev_bar_y);
 
-    int mX, mY;
-    SDL_GetMouseState(&mX, &mY);
-
     if (dragging_text && MouseOverText (mX, mY))
     {
-        // user is still selecting text, move selecton to new cursor position
+        // user is still selecting text, move selection to new cursor position
 
         float y1, x1, y2, x2,
 
@@ -290,9 +337,13 @@ void TextScroll::SetScroll (const float _bar_top_y)
 
         GetTextRect (x1, y1, x2, y2);
 
+        // Remember, WhichGlyphAt takes relative coords!
+
         int cpos = WhichGlyphAt (pFont, text.c_str(), float (mX) - x1, float (mY) - (y1 + offY), textAlign, x2 - x1);
         if (cpos >= 0)
         {
+            // Move the selection to current cursor position
+
             selectionEnd = cpos;
         }
     }
@@ -303,7 +354,7 @@ void TextScroll::OnKeyPress (const SDL_KeyboardEvent *event)
     const SDL_Scancode scn = event->keysym.scancode;
     const Uint16 mod = event->keysym.mod;
 
-    if (mod & KMOD_CTRL && sym == SDLK_c)
+    if (mod & KMOD_CTRL && sym == SDLK_c && text_selectable)
     { // Ctrl + C
 
         CopySelectedText();
@@ -320,16 +371,27 @@ GLfloat TextScroll::GetTextYOffset() const
 
     const float window_height = height - 2 * spacing_text_frame;
 
+    /*
+        When the bar is at max_bar_y, the bottom of
+        the text is visible. When the bar is at min_bar_y,
+        the top of the text is visible.
+     */
+
     return -(scrolled_area_height - window_height) * (bar_top_y - min_bar_y) / (max_bar_y - min_bar_y);
 }
 void TextScroll::GetTextRect (float &x1, float &y1, float &x2, float &y2) const
 {
+    /*
+        Return the area where text is visible.
+        It's simply the frame, shrunk by the spacing.
+     */
+
     x1 = frame_left_x + spacing_text_frame;
     x2 = frame_left_x + frame_width - spacing_text_frame;
     y1 = top_y + spacing_text_frame;
     y2 = top_y + height - spacing_text_frame;
 }
-void TextScroll::GetFrameRect(float& x1, float& y1, float& x2, float& y2) const
+void TextScroll::GetFrameRect (float& x1, float& y1, float& x2, float& y2) const
 {
     x1 = frame_left_x;
     x2 = x1 + frame_width;
@@ -338,16 +400,16 @@ void TextScroll::GetFrameRect(float& x1, float& y1, float& x2, float& y2) const
 }
 void TextScroll::GetStripRect (float &x1, float &y1, float &x2, float &y2) const
 {
-    if (strip_width == 0)
+    if (strip_width == 0) // there can be no strip this way
     {
         x1 = 0; x2 = 0;
     }
-    else if (strip_width < 0.0f)
+    else if (strip_width < 0.0f) //  strip is on left side
     {
         x2 = frame_left_x - spacing_frame_strip;
         x1 = x2 + strip_width;
     }
-    else if (strip_width > 0.0f)
+    else if (strip_width > 0.0f) // strip is on right side
     {
         x1 = frame_left_x + frame_width + spacing_frame_strip;
         x2 = x1 + strip_width;
@@ -358,6 +420,8 @@ void TextScroll::GetStripRect (float &x1, float &y1, float &x2, float &y2) const
 }
 void TextScroll::GetBarRect(float& x1, float& y1, float& x2, float& y2) const
 {
+    // Bar is on strip. Strip determines x position:
+
     GetStripRect (x1, y1, x2, y2);
 
     x1 += spacing_strip_bar;
@@ -371,19 +435,25 @@ void TextScroll::CopySelectedText() const
     int start = std::min (selectionStart, selectionEnd),
         end = std::max (selectionStart, selectionEnd);
 
-    if (start >= end)
+    if (start >= end) // no selection
         return;
 
+    // Get selected substring:
     std::string ctxt = text.substr (start, end - start);
 
+    // let SDL fill up the clipboard for us
     SDL_SetClipboardText (ctxt.c_str());
 }
 bool TextScroll::MouseOver(GLfloat mX, GLfloat mY) const
 {
-    return (MouseOverBar(mX, mY) || MouseOverFrame(mX, mY) || MouseOverStrip(mX, mY) != 0);
+    // Mouse must be over either of the three:
+
+    return (MouseOverBar (mX, mY) || MouseOverFrame (mX, mY) || MouseOverStrip (mX, mY) != 0);
 }
 bool TextScroll::MouseOverText (float mX, float mY) const
 {
+    // Mouse must be over the area where text is visible:
+
     float x1, x2, y1, y2;
     GetTextRect (x1, y1, x2, y2);
 
@@ -391,6 +461,8 @@ bool TextScroll::MouseOverText (float mX, float mY) const
 }
 bool TextScroll::MouseOverBar(GLfloat mX, GLfloat mY) const
 {
+    // Mouse must be over bar rectangular area:
+
     float barX1, barX2, barY1, barY2;
     GetBarRect (barX1, barY1, barX2, barY2);
 
@@ -398,6 +470,11 @@ bool TextScroll::MouseOverBar(GLfloat mX, GLfloat mY) const
 }
 int TextScroll::MouseOverStrip(float mX, float mY) const
 {
+    /*
+        Mouse must be over strip rectangular area,
+        below, or above bar rectangular area.
+     */
+
     float stripX1, stripX2, stripY1, stripY2;
     GetStripRect (stripX1, stripY1, stripX2, stripY2);
 
@@ -408,7 +485,7 @@ int TextScroll::MouseOverStrip(float mX, float mY) const
     {
         if (mY > stripY1 && mY < barY1)
             return -1;
-        else if(mY < stripY2 && mY > barY2)
+        else if (mY < stripY2 && mY > barY2)
             return 1;
     }
 
@@ -416,6 +493,8 @@ int TextScroll::MouseOverStrip(float mX, float mY) const
 }
 bool TextScroll::MouseOverFrame (float mX, float mY) const
 {
+    // Mouse must be over frame rectangular area:
+
     float x1, x2, y1, y2;
     GetFrameRect (x1, y1, x2, y2);
 
@@ -426,7 +505,9 @@ void TextScroll::RenderText ()
     float x, y, x2, y2;
     GetTextRect (x, y, x2, y2);
 
-    y += GetTextYOffset();
+    y += GetTextYOffset(); // offset from scrolling
+
+    // glRenderText starts at the origin, so we transform:
 
     glTranslatef (x, y, 0);
     glRenderText (pFont, text.c_str(), textAlign, x2 - x);
@@ -437,10 +518,13 @@ void TextScroll::RenderTextSelection ()
     float x, y, x2, y2;
     GetTextRect (x, y, x2, y2);
 
-    y += GetTextYOffset();
+    y += GetTextYOffset(); // offset from scrolling
 
+    // Determine selection substring:
     int start = std::min (selectionStart, selectionEnd),
         end = std::max (selectionStart, selectionEnd);
+
+    // glRenderTextAsRects starts at the origin, so we transform:
 
     glTranslatef (x, y, 0);
     glRenderTextAsRects (pFont, text.c_str(), start, end, textAlign, x2 - x);

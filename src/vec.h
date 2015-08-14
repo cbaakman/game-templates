@@ -53,8 +53,10 @@ struct vec3
         z = v.z;
     }
 
+    // Length2 is computationally less expensive than Length
     float    Length()    const    {return sqrt(x*x+y*y+z*z);}
     float    Length2()    const    {return (x*x+y*y+z*z);}
+
     vec3    Unit()        const
     {
         float l=Length();

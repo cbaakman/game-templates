@@ -247,7 +247,7 @@ void App::MainLoop (void)
         while ((statusGL = glGetError()) != GL_NO_ERROR)
         {
             GLErrorString (errorString, statusGL);
-            std::string msg = std::string ("GL Error during main loop: %s") + errorString;
+            std::string msg = std::string ("GL Error during main loop: ") + errorString;
             ShowError (msg.c_str());
         }
 #endif // DEBUG

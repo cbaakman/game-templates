@@ -39,24 +39,35 @@ private:
     // camera angles
     GLfloat angleY, angleX, distCamera;
 
+    // position of the cube
     vec3 posCube;
 
+    // time-dependent variables for vertical movement of the water grid:
     float gridforces [GRIDSIZE][GRIDSIZE],
           gridspeeds [GRIDSIZE][GRIDSIZE];
 
+    // positions and normals of the water grid vertices:
     vec3 gridpoints [GRIDSIZE][GRIDSIZE],
          gridnormals [GRIDSIZE][GRIDSIZE];
 
+    // Frame color/depth buffers to render to and textures to derive from them:
     GLuint
         fbReflection, cbReflection, dbReflection, texReflection,
         fbRefraction, cbRefraction, dbRefraction, texRefraction,
+
+        // handle to shader program
         shaderProgramWater;
 
-    void UpdateWater(const float dt);
-    void UpdateWaterNormals(void);
-    void MakeWave(const vec3 p, const float l);
+    // Moves water grid points in time:
+    void UpdateWater (const float dt);
 
-    void RenderWater();
+    // Re-calculates normals for water grid points:
+    void UpdateWaterNormals (void);
+
+    // Create a wave at point p with length l
+    void MakeWave (const vec3 p, const float l);
+
+    void RenderWater ();
 
 public:
     WaterScene (App*);

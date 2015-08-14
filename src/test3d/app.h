@@ -70,7 +70,7 @@ public:
     bool SetResolution (const int w, const int h);
 
 #ifdef _WIN32
-    HICON icon;
+    HICON icon; // icon to use for the main window
 #endif
 
 private:
@@ -82,6 +82,7 @@ private:
     SDL_GLContext mainGLContext;
     bool done;
 
+    // Current scene to show
     Scene *pScene;
 
     // Initialization functions

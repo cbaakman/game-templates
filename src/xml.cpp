@@ -27,7 +27,7 @@ xmlDocPtr ParseXML(SDL_RWops *io)
 {
     const size_t bufsize = 1024;
     size_t res;
-    char buf[bufsize];
+    char buf [bufsize];
 
     xmlParserCtxtPtr ctxt;
     xmlDocPtr doc;
@@ -40,31 +40,31 @@ xmlDocPtr ParseXML(SDL_RWops *io)
     }
 
     // Create a progressive parsing context
-    ctxt = xmlCreatePushParserCtxt(NULL, NULL, buf, res, NULL);
+    ctxt = xmlCreatePushParserCtxt (NULL, NULL, buf, res, NULL);
     if (! ctxt) {
         SetError ("Failed to create parser context!");
         return NULL;
     }
 
     // loop on the input getting the document data
-    while ((res = io->read(io, buf, 1, bufsize)) > 0) {
+    while ((res = io->read (io, buf, 1, bufsize)) > 0) {
 
-        xmlParseChunk(ctxt, buf, res, 0);
+        xmlParseChunk (ctxt, buf, res, 0);
     }
 
     // there is no more input, indicate the parsing is finished.
-    xmlParseChunk(ctxt, buf, 0, 1);
+    xmlParseChunk (ctxt, buf, 0, 1);
 
     // check if it was well formed
     doc = ctxt->myDoc;
     res = ctxt->wellFormed;
-    xmlFreeParserCtxt(ctxt);
+    xmlFreeParserCtxt (ctxt);
 
     if (!res) {
 
         SetError ("xml document is not well formed");
 
-        xmlFreeDoc(doc);
+        xmlFreeDoc (doc);
         doc = NULL;
     }
 

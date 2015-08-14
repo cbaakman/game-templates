@@ -24,7 +24,7 @@
 #include "err.h"
 #include "shader.h"
 
-GLuint createShader(const std::string& source, int type)
+GLuint CreateShader(const std::string& source, int type)
 {
     if(type != GL_VERTEX_SHADER && type != GL_FRAGMENT_SHADER)
     {
@@ -57,14 +57,14 @@ GLuint createShader(const std::string& source, int type)
     return shader;
 }
 
-GLuint createShaderProgram(const std::string& sourceVertex, const std::string& sourceFragment)
+GLuint CreateShaderProgram(const std::string& sourceVertex, const std::string& sourceFragment)
 {
     GLint result = GL_FALSE;
     int logLength;
     GLuint program=0, vertexShader, fragmentShader;
 
-    vertexShader = createShader(sourceVertex, GL_VERTEX_SHADER);
-    fragmentShader = createShader(sourceFragment, GL_FRAGMENT_SHADER);
+    vertexShader = CreateShader(sourceVertex, GL_VERTEX_SHADER);
+    fragmentShader = CreateShader(sourceFragment, GL_FRAGMENT_SHADER);
 
     if(vertexShader && fragmentShader)
     {

@@ -33,8 +33,11 @@ struct vec2
     void operator-= (const vec2& v2);
     bool operator== (const vec2& other) const;
     vec2 operator- () const;
+
+    // Length2 is computationally less expensive than Length
     float length2() const;
     float length() const;
+
     float angle() const; // with x-axis
     vec2 unit() const;
     vec2 rotate(float angle) const;

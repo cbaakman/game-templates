@@ -48,6 +48,7 @@ struct Quaternion {
             q[i] = other.q[i];
     }
 
+    // Length2 is computationally less expensive than Length
     float Length2 () const
     {
         float length2 = 0.0f;

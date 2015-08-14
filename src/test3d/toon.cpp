@@ -107,7 +107,7 @@ bool ToonScene::Init ()
         return false;
     }
 
-    shaderProgram = createShaderProgram (sourceV, sourceF);
+    shaderProgram = CreateShaderProgram (sourceV, sourceF);
     if (!shaderProgram)
     {
         SetError ("error creating shader program from toon.vsh and toon.fsh: %s", GetError ());

@@ -60,21 +60,21 @@ void MenuObject::SetFocus (const bool b)
 
     focussed = b;
 }
-Menu::Menu(Client *p) : pClient (p)
+Menu::Menu (Client *p) : pClient (p)
 {
     focussed = NULL;
     inputEnabled = true;
 }
-Menu::~Menu()
+Menu::~Menu ()
 {
-    for(std::list<MenuObject*>::iterator it = objects.begin(); it != objects.end(); it++)
+    for(std::list <MenuObject*>::iterator it = objects.begin(); it != objects.end(); it++)
     {
         MenuObject *obj = *it;
         delete obj;
     }
-    objects.clear();
+    objects.clear ();
 }
-void Menu::DisableInput()
+void Menu::DisableInput ()
 {
     /*
     if(focussed)
@@ -85,12 +85,14 @@ void Menu::DisableInput()
     */
     inputEnabled = false;
 }
-void Menu::EnableInput()
+void Menu::EnableInput ()
 {
     inputEnabled = true;
 }
-void Menu::DisableObjectFocus(MenuObject* obj)
+void Menu::DisableObjectFocus (MenuObject* obj)
 {
+    // disables the underlying menu object
+
     for(std::list<MenuObject*>::iterator it = objects.begin(); it != objects.end(); it++)
     {
         MenuObject *o = *it;
@@ -102,8 +104,10 @@ void Menu::DisableObjectFocus(MenuObject* obj)
         }
     }
 }
-void Menu::EnableObjectFocus(MenuObject* obj)
+void Menu::EnableObjectFocus (MenuObject* obj)
 {
+    // enables the underlying menu object and cancels focus
+
     for(std::list<MenuObject*>::iterator it = objects.begin(); it != objects.end(); it++)
     {
         MenuObject *o = *it;
@@ -120,16 +124,16 @@ void Menu::EnableObjectFocus(MenuObject* obj)
         }
     }
 }
-void Menu::AddMenuObject(MenuObject* o)
+void Menu::AddMenuObject (MenuObject* o)
 {
     o->menu = this;
     objects.push_back (o);
 }
-void Menu::FocusMenuObject(MenuObject* obj)
+void Menu::FocusMenuObject (MenuObject* obj)
 {
     if (obj != focussed)
     {
-        // uset the old
+        // unset the old
         if (focussed)
         {
             focussed->SetFocus (false);
@@ -160,6 +164,8 @@ void Menu::OnKeyPress (const SDL_KeyboardEvent *event)
     case SDLK_TAB:
         if (focussed)
         {
+            // tab key is pressed, switch to next menu object
+
             MenuObject* next = focussed->NextInLine();
             if (next)
                 FocusMenuObject (next);
@@ -173,7 +179,11 @@ void Menu::OnMouseClick (const SDL_MouseButtonEvent *event)
     if(!inputEnabled)
         return;
 
-    // The last object Rendered, is the focussed object
+    /*
+        When multiple objects are hit by the mouse cursor,
+        the last one in the list gets the focus. Because that
+        object is rendered on top.
+     */
     MenuObject* mouseOverObj=NULL;
     for (std::list<MenuObject*>::iterator it = objects.begin(); it != objects.end(); it++)
     {
@@ -198,7 +208,10 @@ void Menu::OnMouseWheel (const SDL_MouseWheelEvent *event)
     int mX, mY;
     SDL_GetMouseState (&mX, &mY);
 
-    // Mouse wheel events are sent through to anything under the mouse
+    /*
+        Mouse wheel events are sent through to anything under the mouse.
+        (also if not focussed) They might be scroll events.
+     */
     for (std::list<MenuObject*>::iterator it = objects.begin(); it != objects.end(); it++)
     {
         MenuObject *pObj = *it;
@@ -211,6 +224,8 @@ void Menu::OnMouseWheel (const SDL_MouseWheelEvent *event)
 }
 void Menu::Update(const float dt)
 {
+    // All menu objects get updated, not just the focussed one
+
     for (std::list<MenuObject*>::iterator it = objects.begin(); it != objects.end(); it++)
     {
         MenuObject *pObj = *it;
@@ -223,7 +238,10 @@ void Menu::Render()
     int mX, mY;
     SDL_GetMouseState (&mX, &mY);
 
-    // Determine over which object the mouse rolls:
+    /*
+        Determine over which object the mouse rolls, focussed has priority.
+        The chosen object gets to render the cursor.
+    */
     MenuObject* mouseOverObj = NULL;
     if (focussed && focussed->MouseOver ((GLfloat) mX, (GLfloat) mY))
     {
@@ -244,7 +262,7 @@ void Menu::Render()
     int w, h;
     SDL_GL_GetDrawableSize (pClient->GetMainWindow (), &w, &h);
 
-    // Rendering the mouse cursor
+    // Render the mouse cursor, if in the window.
     if (mX > 0 && mX < w && mY > 0 && mY < h)
     {
         if (mouseOverObj && inputEnabled && mouseOverObj->enabled)
@@ -272,11 +290,12 @@ TextInputBox::TextInputBox(const GLfloat x, const GLfloat y,
     this->x = x;
     this->y = y;
 
-    textMask=mask;
-    if(textMask)
+    textMask = mask;
+    if (textMask)
     {
-        showText=new char[maxTextLength+1];
-        showText[0]=NULL;
+        // only allocate this string when a text mask is used
+        showText = new char [maxTextLength+1];
+        showText [0] = NULL;
     }
     else showText=NULL;
 
@@ -286,7 +305,7 @@ TextInputBox::TextInputBox(const GLfloat x, const GLfloat y,
 }
 void TextInputBox::UpdateShowText()
 {
-    if(textMask)
+    if (textMask) // only used when masking
     {
         int i;
         for(i=0; text[i]; i++)
@@ -296,8 +315,8 @@ void TextInputBox::UpdateShowText()
 }
 TextInputBox::~TextInputBox()
 {
-    delete[] showText;
-    delete[] text;
+    delete [] showText;
+    delete [] text;
 }
 int TextInputBox::GetCursorPos() const
 {
@@ -305,9 +324,9 @@ int TextInputBox::GetCursorPos() const
 }
 void TextInputBox::GetCursorCoords(GLfloat& cx, GLfloat& cy) const
 {
-    if(pFont)
+    if (pFont)
     {
-        char* t = textMask ? showText : text;
+        char *t = textMask ? showText : text;
 
         CoordsOfGlyph (pFont, t, cursorPos, cx, cy, textAlign);
         cx += x; cy += y;
@@ -329,48 +348,63 @@ const char* TextInputBox::GetText() const
 }
 void TextInputBox::CopySelectedText() const
 {
-    int start = (cursorPos<fixedCursorPos) ? cursorPos : fixedCursorPos,
-        end = (cursorPos>fixedCursorPos) ? cursorPos : fixedCursorPos;
+    // Determine where selection starts and where it ends:
 
+    int start = (cursorPos < fixedCursorPos) ? cursorPos : fixedCursorPos,
+        end = (cursorPos > fixedCursorPos) ? cursorPos : fixedCursorPos;
+
+    // There might be no selection:
     if (start >= end)
         return;
 
+    // If a text mask was used, the masked text is copied:
     std::string ctxt;
     if (textMask)
         ctxt = std::string (showText + start, end - start);
     else
         ctxt = std::string (text + start, end - start);
 
+    // SDL must fill the clipboard for us
     SDL_SetClipboardText (ctxt.c_str());
 }
 void TextInputBox::PasteText()
 {
-    int start = (cursorPos < fixedCursorPos)? cursorPos : fixedCursorPos,
-        end = (cursorPos > fixedCursorPos)? cursorPos : fixedCursorPos,
+    // Determine where selection starts and where it ends:
+
+    int start = (cursorPos < fixedCursorPos) ? cursorPos : fixedCursorPos,
+        end = (cursorPos > fixedCursorPos) ? cursorPos : fixedCursorPos,
         n, i,
         space,
         charsPasted;
 
-    if(end > start) // Some text was selected
+    if(end > start) // Some text was selected, clear it first
     {
         ClearText (start, end);
     }
 
-    n = strlen(text);
+    /*
+        Inserted text might exceed the max length.
+        We therefore only insert the text that still fits in.
+     */
+    n = strlen (text);
     space = maxTextLength - n; // space remaining for fill
 
-    // move everything maximally to the right:
+    // move the right side of the cursor maximally to the right:
     // (including null)
     for(i=n+1; i>=start; i--)
     {
-        text[i + space] = text[i];
+        text [i + space] = text[i];
     }
 
+    // Let sdl fetch the clipboard contents for us, then insert it:
     strncpy (text + start, SDL_GetClipboardText (), space);
     charsPasted = std::min ((int)strlen (SDL_GetClipboardText ()), space);
 
+    // move the cursor after the inserted part:
     cursorPos = fixedCursorPos = start + charsPasted;
 
+    // Move the right half of the original text back to the left,
+    // to follow after the inserted text.
     if (charsPasted < space)
     {
         int holeSize = space - charsPasted;
@@ -384,15 +418,18 @@ void TextInputBox::PasteText()
         }
     }
 
+    // update the masked text with the new state
     UpdateShowText();
 }
 void TextInputBox::RenderText() const
 {
     char* t=text;
-    if(textMask)
+    if (textMask)
     {
-        t=showText;
+        t = showText;
     }
+
+    // glRenderText renders at the origin, so translate to x, y.
 
     glTranslatef (x, y, 0.0f);
     glRenderText (pFont, t, textAlign);
@@ -400,11 +437,15 @@ void TextInputBox::RenderText() const
 }
 void TextInputBox::RenderTextCursor() const
 {
+    /*
+        The text cursor has a fluctuating alpha value.
+        This alpha value is determined from the cursor_time field in the object.
+     */
+
     glPushAttrib (GL_TEXTURE_BIT | GL_CURRENT_BIT);
+    glDisable (GL_TEXTURE_2D);
 
     GLfloat alpha = 0.6f + 0.3f * sin (10 * cursor_time);
-
-    glDisable (GL_TEXTURE_2D);
 
     GLfloat clr [4];
     glGetFloatv (GL_CURRENT_COLOR, clr);
@@ -414,8 +455,8 @@ void TextInputBox::RenderTextCursor() const
     int selectionStart = std::min (cursorPos, fixedCursorPos),
         selectionEnd = std::max (cursorPos, fixedCursorPos);
 
-    if (selectionStart == selectionEnd)
-    // no text selected, just render a single square at the cursor position
+    if (selectionStart >= selectionEnd)
+    // no text selected, just render a narrow rectangle at the cursor position
     {
         GLfloat h1,h2,cx,cy,cx2;
 
@@ -425,13 +466,13 @@ void TextInputBox::RenderTextCursor() const
         h2 = h1 + GetLineSpacing (pFont);
 
         glBegin(GL_QUADS);
-            glVertex2f(cx - 2.0f, cy + h1);
-            glVertex2f(cx + 2.0f, cy + h1);
-            glVertex2f(cx + 2.0f, cy + h2);
-            glVertex2f(cx - 2.0f, cy + h2);
+            glVertex2f (cx - 2.0f, cy + h1);
+            glVertex2f (cx + 2.0f, cy + h1);
+            glVertex2f (cx + 2.0f, cy + h2);
+            glVertex2f (cx - 2.0f, cy + h2);
         glEnd();
     }
-    else
+    else // render a rectangle over the selected text
     {
         char* t=text;
         if(textMask)
@@ -462,9 +503,11 @@ void TextInputBox::OnFocusLose()
     fixedCursorPos = cursorPos = strlen (t);
 }
 #define TEXTSELECT_XMARGE 15.0f
-bool TextInputBox::MouseOver(GLfloat mX, GLfloat mY) const
+bool TextInputBox::MouseOver (GLfloat mX, GLfloat mY) const
 {
-    char* t=textMask?showText:text;
+    // See if the cursor hits the text:
+
+    char* t = textMask ? showText : text;
 
     int cpos = WhichGlyphAt (pFont, t, (GLfloat)(mX - x),(GLfloat)(mY - y), textAlign),
         n = strlen(t);
@@ -479,6 +522,12 @@ bool TextInputBox::MouseOver(GLfloat mX, GLfloat mY) const
         CoordsOfGlyph (pFont, t, n, cx2, cy2, textAlign);
         cx2 += x; cy2 += y;
 
+        /*
+            When mX, mY is located left or right from the text,
+            WhichGlyphAt returns the index of the leftmost or rightmost character, respectively.
+            If it's very close to the text, we will consider it a hit, else not.
+         */
+
         if (mX > (cx1 - TEXTSELECT_XMARGE) && mX < (cx2 + TEXTSELECT_XMARGE))
         {
             return true;
@@ -486,140 +535,174 @@ bool TextInputBox::MouseOver(GLfloat mX, GLfloat mY) const
     }
     return false;
 }
-void TextInputBox::OnDelChar(char){}
-void TextInputBox::OnAddChar(char){}
-void TextInputBox::OnBlock(){}
-void TextInputBox::OnMoveCursor(int direction){}
-void TextInputBox::ClearText(int start, int end)
+void TextInputBox::OnDelChar (char) {}
+void TextInputBox::OnAddChar (char) {}
+void TextInputBox::OnBlock () {}
+void TextInputBox::OnMoveCursor (int direction) {}
+void TextInputBox::ClearText (int start, int end)
 {
-    int n = strlen(text),i,d;
-    if(end>n) end=n;
+    // clamp start to the string's fist character.
+    // clamp end to the string's last character.
+    int n = strlen (text), i, d;
 
-    d=end-start;
-    if(d<0) return;
+    if (start < 0)
+        start = 0;
 
-    for(i=start; i<(n-d+1); i++)
+    if (end > n)
+        end = n;
+
+    d = end - start;
+    if (d < 0)
+        return; // invalid function arguments
+
+    // Move characters to the left:
+    for(i = start; i < (n - d + 1); i++)
     {
-        text[i]=text[i+d];
+        text [i] = text [i + d];
     }
+
+    // If the text changes, then the masked text should also change:
     UpdateShowText();
 }
 void TextInputBox::BackspaceProc()
 {
     int n = strlen(text);
-    if(n>0)
+    if (n > 0)
     {
-        if(fixedCursorPos>cursorPos)
+        /*
+            Either remove the selected text if any,
+            or the first character before the cursor.
+         */
+        if (fixedCursorPos > cursorPos)
         {
-            ClearText(cursorPos,fixedCursorPos);
-            fixedCursorPos=cursorPos;
+            ClearText (cursorPos, fixedCursorPos);
+            fixedCursorPos = cursorPos;
         }
-        else if(fixedCursorPos<cursorPos)
+        else if (fixedCursorPos < cursorPos)
         {
-            ClearText(fixedCursorPos,cursorPos);
-            cursorPos=fixedCursorPos;
+            ClearText (fixedCursorPos, cursorPos);
+            cursorPos = fixedCursorPos;
         }
-        else if(cursorPos>0)
+        else if (cursorPos > 0)
         {
-            OnDelChar(text[cursorPos-1]);
+            // Remove a single character:
 
-            ClearText(cursorPos-1,cursorPos);
+            OnDelChar (text [cursorPos - 1]);
+
+            ClearText (cursorPos - 1, cursorPos);
             cursorPos--;
-            fixedCursorPos=cursorPos;
+            fixedCursorPos = cursorPos;
         }
-        else OnBlock();
+        else OnBlock (); // cannot go further
     }
-    else OnBlock();
+    else OnBlock (); // cannot go further
 
-    UpdateShowText();
+    // If the text changes, then the masked text should also change:
+    UpdateShowText ();
 }
 void TextInputBox::DelProc()
 {
-    int n = strlen(text);
-    if(n>0)
+    int n = strlen (text);
+    if (n > 0)
     {
-        if(fixedCursorPos>cursorPos)
-        {
-            ClearText(cursorPos,fixedCursorPos);
-            fixedCursorPos=cursorPos;
-        }
-        else if(fixedCursorPos<cursorPos)
-        {
-            ClearText(fixedCursorPos,cursorPos);
-            cursorPos=fixedCursorPos;
-        }
-        else if(cursorPos<n)
-        {
-            OnDelChar(text[cursorPos]);
+        /*
+            Either remove the selected text if any,
+            or the first character after the cursor.
+         */
 
-            ClearText(cursorPos,cursorPos+1);
-            fixedCursorPos=cursorPos;
+        if (fixedCursorPos > cursorPos)
+        {
+            ClearText (cursorPos, fixedCursorPos);
+            fixedCursorPos = cursorPos;
         }
-        else OnBlock();
+        else if (fixedCursorPos < cursorPos)
+        {
+            ClearText (fixedCursorPos, cursorPos);
+            cursorPos = fixedCursorPos;
+        }
+        else if (cursorPos < n)
+        {
+            // Remove a single character:
+
+            OnDelChar (text [cursorPos]);
+
+            ClearText (cursorPos, cursorPos + 1);
+            fixedCursorPos = cursorPos;
+        }
+        else OnBlock(); // cannot go further
     }
-    else OnBlock();
+    else OnBlock(); // cannot go further
 
-    UpdateShowText();
+    // If the text changes, then the masked text should also change:
+    UpdateShowText(); 
 }
 void TextInputBox::LeftProc()
 {
     const Uint8 *keystate = SDL_GetKeyboardState(NULL);
-    const bool shift = keystate[SDL_SCANCODE_LSHIFT] || keystate[SDL_SCANCODE_RSHIFT];
+    const bool shift = keystate [SDL_SCANCODE_LSHIFT] || keystate [SDL_SCANCODE_RSHIFT];
 
+    // See if we can move the cursor one to the left:
     cursorPos--;
 
-    if(cursorPos<0)
+    if(cursorPos < 0)
     {
-        cursorPos=0;
-        OnBlock();
+        // cannot go further
+
+        cursorPos = 0;
+        OnBlock ();
     }
     else
-        OnMoveCursor(-1);
+        OnMoveCursor (-1);
 
+    // if shift is down, keep fixedCursorPos the same, else move it along.
     if (!shift)
-        fixedCursorPos=cursorPos;
+        fixedCursorPos = cursorPos;
 
-    UpdateShowText();
+    // If the text changes, then the masked text should also change:
+    UpdateShowText ();
 }
 void TextInputBox::RightProc()
 {
     int n = strlen(text);
 
-    const Uint8 *keystate = SDL_GetKeyboardState(NULL);
-    const bool shift = keystate[SDL_SCANCODE_LSHIFT] || keystate[SDL_SCANCODE_RSHIFT];
+    const Uint8 *keystate = SDL_GetKeyboardState (NULL);
+    const bool shift = keystate [SDL_SCANCODE_LSHIFT] || keystate [SDL_SCANCODE_RSHIFT];
 
+    // See if we can move the cursor one to the right:
     cursorPos++;
-    if(!shift)
-        fixedCursorPos=cursorPos;
-
-    if(cursorPos>n)
+ 
+    if (cursorPos > n)
     {
-        cursorPos=n;
-        OnBlock();
+        // cannot go further
+
+        cursorPos = n;
+        OnBlock ();
     }
     else
-        OnMoveCursor(1);
+        OnMoveCursor (1);
 
+    // if shift is down, keep fixedCursorPos the same, else move it along.
     if(!shift)
-        fixedCursorPos=cursorPos;
+        fixedCursorPos = cursorPos;
 
-    UpdateShowText();
+    // If the text changes, then the masked text should also change:
+    UpdateShowText ();
 }
 void TextInputBox::AddCharProc(char c)
 {
-    // clear the selection first
-    if(fixedCursorPos > cursorPos)
+    // clear the selection first, if any
+    if (fixedCursorPos > cursorPos)
     {
         ClearText (cursorPos,fixedCursorPos);
         fixedCursorPos = cursorPos;
     }
-    else if(fixedCursorPos < cursorPos)
+    else if (fixedCursorPos < cursorPos)
     {
         ClearText (fixedCursorPos,cursorPos);
         cursorPos = fixedCursorPos;
     }
 
-    int n = strlen(text), i;
+    int n = strlen (text), i;
 
     if (n < maxTextLength) // room for more?
     {
@@ -630,6 +713,7 @@ void TextInputBox::AddCharProc(char c)
         }
         text[cursorPos] = c;
 
+        // move the cursor to the right, also
         cursorPos++;
         fixedCursorPos = cursorPos;
 
@@ -637,51 +721,59 @@ void TextInputBox::AddCharProc(char c)
     }
     else
     {
+        // Cannot add more characters
+
         OnBlock();
     }
 
+    // If the text changes, then the masked text should also change:
     UpdateShowText();
 }
 #define TEXT_BUTTON_INTERVAL 0.03f
 #define FIRST_TEXT_BUTTON_INTERVAL 0.3f
 void TextInputBox::Update(const float dt)
 {
-    if(IsFocussed())
+    if (IsFocussed ())
     {
-        cursor_time += dt;
+        cursor_time += dt; // for cursor blinking
 
-        if (button_time<0)
+        if (button_time < 0)
             button_time += dt;
 
-        const Uint8 *keystate = SDL_GetKeyboardState(NULL);
+        const Uint8 *keystate = SDL_GetKeyboardState (NULL);
 
         if (button_time >= 0)
         {
-            if ( keystate[SDL_SCANCODE_BACKSPACE] )
+            /*
+                If a button is held down for a certain amount of time
+                it must be repeated.
+             */
+
+            if (keystate [SDL_SCANCODE_BACKSPACE] )
             {
-                BackspaceProc();
-                button_time=-TEXT_BUTTON_INTERVAL;
+                BackspaceProc ();
+                button_time = -TEXT_BUTTON_INTERVAL;
             }
-            else if( keystate[SDL_SCANCODE_DELETE] )
+            else if (keystate [SDL_SCANCODE_DELETE] )
             {
-                DelProc();
-                button_time=-TEXT_BUTTON_INTERVAL;
+                DelProc ();
+                button_time = -TEXT_BUTTON_INTERVAL;
             }
-            else if( keystate[SDL_SCANCODE_LEFT] )
+            else if (keystate[SDL_SCANCODE_LEFT] )
             {
-                LeftProc();
-                button_time=-TEXT_BUTTON_INTERVAL;
+                LeftProc ();
+                button_time = -TEXT_BUTTON_INTERVAL;
             }
-            else if( keystate[SDL_SCANCODE_RIGHT] )
+            else if (keystate [SDL_SCANCODE_RIGHT] )
             {
-                RightProc();
-                button_time=-TEXT_BUTTON_INTERVAL;
+                RightProc ();
+                button_time = -TEXT_BUTTON_INTERVAL;
             }
 
             if (keystate [lastCharKey])
             {
-                AddCharProc(lastCharKeyChar);
-                button_time=-TEXT_BUTTON_INTERVAL;
+                AddCharProc (lastCharKeyChar);
+                button_time = -TEXT_BUTTON_INTERVAL;
             }
             else
             {
@@ -690,20 +782,26 @@ void TextInputBox::Update(const float dt)
             }
         }
 
-        UpdateShowText();
+        // If the text changes, then the masked text should also change:
+        UpdateShowText ();
     }
 }
-void TextInputBox::OnMouseMove(const SDL_MouseMotionEvent *event)
+void TextInputBox::OnMouseMove (const SDL_MouseMotionEvent *event)
 {
     if (event->state & SDL_BUTTON_LMASK)
     {
+        /*
+            Mouse key is pressed down while moving the cursor.
+            This means text can be selected. Determine which
+            glyph is under the cursor:
+         */
+
         char* t = text;
         if (textMask)
         {
             t=showText;
         }
         int cpos = WhichGlyphAt (pFont, t, (GLfloat)(event->x - x), (GLfloat)(event->y - y), textAlign);
-//        int cpos = font->IndexCursorPos (x, y, t, textAlign, (GLfloat)event->x, (GLfloat)event->y);
 
         if (cpos >= 0)
         {
@@ -719,6 +817,7 @@ void TextInputBox::OnMouseMove(const SDL_MouseMotionEvent *event)
                 CoordsOfGlyph (pFont, t, cpos, leftBound, textY, textAlign);
                 CoordsOfGlyph (pFont, t, cpos + 1, rightBound, textY, textAlign);
 
+                // make leftBound and rightBound absolute:
                 leftBound += x;
                 rightBound += x;
 
@@ -737,25 +836,33 @@ void TextInputBox::OnMouseMove(const SDL_MouseMotionEvent *event)
 }
 void TextInputBox::OnMouseClick (const SDL_MouseButtonEvent *event)
 {
-    char* t = text;
+    /*
+        See if a glyph was hit by the click. If so,
+        move the cursor and perhaps the selection.
+     */
+
+    char *t = text;
     if (textMask)
     {
         t = showText;
     }
-    int cpos, prev_fixedCursorPos = fixedCursorPos;
+    int cpos,
+        prev_fixedCursorPos = fixedCursorPos;
 
-    const Uint8 *keystate = SDL_GetKeyboardState(NULL);
+    const Uint8 *keystate = SDL_GetKeyboardState (NULL);
 
     cpos = WhichGlyphAt (pFont, t, event->x - x, event->y - y, textAlign);
     if (cpos >= 0)
     {
-        if (event->clicks > 1)
+        if (event->clicks > 1) // double click, select entire word
+
             WordAt (t, cpos, fixedCursorPos, cursorPos);
         else
             // place the cursor at the left side of the selected character
             fixedCursorPos = cursorPos = cpos;
 
-        if(keystate[SDL_SCANCODE_LSHIFT] || keystate[SDL_SCANCODE_RSHIFT])
+        // If shift is down, the selection start should stay where it was.
+        if (keystate [SDL_SCANCODE_LSHIFT] || keystate [SDL_SCANCODE_RSHIFT])
             fixedCursorPos = prev_fixedCursorPos;
     }
 }
@@ -767,17 +874,27 @@ void TextInputBox::OnKeyPress (const SDL_KeyboardEvent *event)
 
     bool bCTRL = mod & KMOD_CTRL;
 
+    /*
+        Take the approriate action, according to
+        key pressed.
+     */
+
     if (sym == SDLK_TAB || sym == SDLK_RETURN)
     {
-        // ignore '\t' and '\n'
+        // This input box only works for single lined text,
+        // ignore '\t' and '\n'.
         return;
     }
     else if (bCTRL && sym == SDLK_c)
     {
+        // CTRL + C
+
         CopySelectedText();
     }
     else if (bCTRL && sym == SDLK_v)
     {
+        // CTRL + V
+
         PasteText();
     }
     else if (sym == SDLK_BACKSPACE)
@@ -815,6 +932,7 @@ void TextInputBox::OnKeyPress (const SDL_KeyboardEvent *event)
             return;
     }
 
+    // When the text changes, the masked text should also change:
     UpdateShowText();
 }
 void TextInputBox::Render ()
@@ -837,18 +955,21 @@ void TextInputBox::Render ()
 
     RenderText();
 
-    if (IsFocussed())
+    if (IsFocussed ())
         RenderTextCursor();
 
     glPopAttrib();
 }
 void TextInputBox::SetText (const char* text)
 {
+    // copy text
     strncpy (this->text, text, maxTextLength - 1);
     this->text [maxTextLength] = NULL;
 
-    int n = strlen(this->text);
+    // set cursor position to the rightmost end:
+    int n = strlen (this->text);
     cursorPos = fixedCursorPos = n;
 
+    // When the text changes, the masked text should also change:
     UpdateShowText ();
 }

@@ -24,19 +24,23 @@
 
 #include <stdio.h>
 
-size_t NoWriteCallBack(SDL_RWops *context, const void *ptr, size_t size, size_t num)
+size_t NoWriteCallBack (SDL_RWops *context, const void *ptr, size_t size, size_t num)
 {
+    // Tell that we cannot write any bytes:
     return 0;
 }
 
-Sint64 NoSeekCallBack(SDL_RWops *context, Sint64 offset, int whence)
+Sint64 NoSeekCallBack (SDL_RWops *context, Sint64 offset, int whence)
 {
+    // Tell that we cannot seek:
     return -1;
 }
-Sint64 ZipArchiveSizeCallBack(SDL_RWops *context)
+Sint64 ZipArchiveSizeCallBack (SDL_RWops *context)
 {
+    // Get the unzip pointer from the object:
     unzFile zip = (unzFile)context->hidden.unknown.data1;
 
+    // Get the file info from unzip:
     unz_file_info info;
 
     int res = unzGetCurrentFileInfo (zip, &info, NULL, 0, NULL, 0, NULL, 0);
@@ -46,33 +50,43 @@ Sint64 ZipArchiveSizeCallBack(SDL_RWops *context)
         return -1;
     }
 
+    // Get the size part from info:
     return info.uncompressed_size;
 }
 
-size_t ZipArchiveReadCallBack(SDL_RWops *context, void *data, size_t size, size_t maxnum)
+size_t ZipArchiveReadCallBack (SDL_RWops *context, void *data, size_t size, size_t maxnum)
 {
+    // Get the unzip pointer from the object:
     unzFile zip = (unzFile)context->hidden.unknown.data1;
 
+    // Read from the currently pointed file in the archive:
     int res = unzReadCurrentFile (zip, data, size*maxnum);
 
+    // Return the number of objects read:
     return res / size;
 }
 int ZipArchiveCloseCallBack (SDL_RWops *context)
 {
+    // Get the unzip pointer from the object:
     unzFile zip = (unzFile)context->hidden.unknown.data1;
 
+    // Call unzip's close procedures:
     unzCloseCurrentFile (zip);
     unzClose (zip);
+
+    // Delete the SDL_RWops:
+    SDL_FreeRW (context);
 
     return 0;
 }
 SDL_RWops *SDL_RWFromZipArchive (const char *_archive, const char *_entry)
 {
+    // Create an SDL_RWops:
     SDL_RWops *c=SDL_AllocRW();
     if (!c)
         return NULL;
 
-
+    // Let unzip open the archive:
     unzFile zip = unzOpen(_archive);
     if (!zip)
     {
@@ -80,6 +94,7 @@ SDL_RWops *SDL_RWFromZipArchive (const char *_archive, const char *_entry)
         return NULL;
     }
 
+    // Let unzip find the desired file in the archive:
     int result = unzLocateFile (zip, _entry, 1);
 
     if (result != UNZ_OK)
@@ -90,15 +105,18 @@ SDL_RWops *SDL_RWFromZipArchive (const char *_archive, const char *_entry)
         return NULL;
     }
 
+    // Open the desired file in the archive:
     unzOpenCurrentFile (zip);
 
+    // Set the callbacks, for size, read and close.
+    // unzip cannot seek nor write.
     c->size = ZipArchiveSizeCallBack;
     c->seek = NoSeekCallBack;
     c->read = ZipArchiveReadCallBack;
     c->write = NoWriteCallBack;
     c->close = ZipArchiveCloseCallBack;
     c->type = SDL_RWOPS_UNKNOWN;
-    c->hidden.unknown.data1 = (voidp)zip;
+    c->hidden.unknown.data1 = (voidp) zip;
 
     return c;
 }

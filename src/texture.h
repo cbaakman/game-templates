@@ -34,6 +34,9 @@ struct Texture {
     GLsizei w, h;
 };
 
-bool LoadPNG(SDL_RWops *, Texture *);
+/**
+ * Loads a png image from SDL_RWops as an OpenGL texture.
+ */
+bool LoadPNG (SDL_RWops *, Texture *);
 
 #endif // TEXTURE_H

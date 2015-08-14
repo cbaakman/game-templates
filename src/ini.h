@@ -21,9 +21,20 @@
 #ifndef INI_H
 #define INI_H
 
-int LoadSetting(const char* filename, const char* setting);
-bool LoadSettingString(const char* filename, const char* setting, char* value);
-void SaveSetting(const char* filename, const char* setting, const int value);
-void SaveSettingString(const char* filename, const char* setting, const char* value);
+/*
+ Syntax of settings files:
+    <setting1> = <value1>
+    <setting2> = <value2>
+    ...
+
+ Whitespaces are ignored.
+ Settings can be either loaded / saved as string or integer value.
+ Use 0/1 integers for booleans.
+ */
+
+int LoadSetting (const char *filename, const char *setting);
+bool LoadSettingString (const char *filename, const char *setting, char *value);
+void SaveSetting (const char *filename, const char *setting, const int value);
+void SaveSettingString (const char *filename, const char *setting, const char *value);
 
 #endif // INI_H

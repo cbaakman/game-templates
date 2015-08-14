@@ -35,11 +35,18 @@
 class TextScroll : public MenuObject
 {
 private:
-    std::string text;
+
+    std::string text; // text to be shown
+
+    /*
+        Font and alignment need to be set
+        for the scroll to know the text's
+        dimensions.
+     */
     const Font *pFont;
     int textAlign;
 
-    bool text_selectable;
+    bool text_selectable; // if false, text is not selectable by mouse
 
     float frame_left_x,
           frame_width,
@@ -49,33 +56,43 @@ private:
 
           strip_width, // negative if on the left side of the frame, positive if on the right, zero if no barstrip
 
-          spacing_text_frame,
-          spacing_frame_strip,
+          spacing_text_frame, // spacing between text and frame bounding boxes
+          spacing_frame_strip, // 0 for the strip to be right next to the frame
           spacing_strip_bar, // can be negative if the bar is wider
 
-          last_mouseclick_x, last_mouseclick_y, last_mouseclick_bar_y,
+          // Variables to remember the state of the scroll at teh moment the mouse was clicked:
+          last_mouseclick_x,
+          last_mouseclick_y,
+          last_mouseclick_bar_y,
 
           bar_top_y, // changes when scrolling, determines text offset
 
-          // these are determined when text is set:
+          // These parameters are determined when text is set:
+          // (using DeriveDimensions function)
           min_bar_y,
           max_bar_y,
           bar_height,
           scrolled_area_height;
 
+    // These booleans describe what's happening at the moment:
     bool dragging_bar,
          dragging_text;
 
+    /*
+       These variables remember what part of the text
+       is selected. If selecting is enabled of coarse.
+     */
     int selectionStart,
         selectionEnd;
 
-    void DeriveDimensions ();
-    void ClampBar ();
+    void DeriveDimensions (); // derives dimensions from newly set text
+    void ClampBar (); // keeps bar within frame
 
-    void CopySelectedText () const;
+    void CopySelectedText () const; // copies to clipboard
 
 protected:
 
+    // Some MenuObject functions that need to be overridden:
     void OnFocusLose ();
     void OnMouseClick (const SDL_MouseButtonEvent *event);
     void OnMouseMove (const SDL_MouseMotionEvent *event);
@@ -83,15 +100,16 @@ protected:
     void OnMouseWheel (const SDL_MouseWheelEvent *event);
 
     /*
-     * These two subroutines can be used to render the text at the correct position.
-     * position of text is determined by scrolling and the frame's set position,
-     * when function 'Render' calls this, it's responsible for clipping, stencil buffering or alpha masking the text
+       These two subroutines can be used to render the text at the correct position.
+       The position of text is determined by scrolling and the frame's set position,
+       when a render function calls these subroutines, it'll be responsible for
+       clipping or alpha masking the text.
      */
     void RenderText ();
     void RenderTextSelection (); // only needed when text is selectable
 
-
-    virtual void OnScroll (float y) {};
+    // Overridable, called when scroll state changes.
+    virtual void OnScroll (float bar_delta_y) {};
 
     /*
      * false by default
@@ -100,19 +118,19 @@ protected:
 
 public:
 
-    // These can be useful for rendering:
+    // These can be useful when rendering:
     void GetFrameRect (float &x1, float &y1, float &x2, float &y2) const;
     void GetStripRect (float &x1, float &y1, float &x2, float &y2) const;
     void GetBarRect (float &x1, float &y1, float &x2, float &y2) const;
-    void GetTextRect (float &x1, float &y1, float &x2, float &y2) const;
+    void GetTextRect (float &x1, float &y1, float &x2, float &y2) const; // area where text is visible
 
     float GetBarY () const { return bar_top_y; }
     float GetMinBarY () const { return min_bar_y; }
     float GetMaxBarY () const { return max_bar_y; }
-    float GetBarHeight() const;
+    float GetBarHeight () const;
 
-    float GetTextYOffset() const;
-    void SetScroll (const float bar_top_y);
+    float GetTextYOffset () const; // 0 when scrolled to the top
+    void SetScroll (const float bar_top_y); // in bar-strip space
 
     int MouseOverStrip (float mX, float mY) const; // -1 (yes, under bar), 0 (not on strip, or over bar), 1 (yes, above bar)
     bool MouseOverBar (float mX, float mY) const;

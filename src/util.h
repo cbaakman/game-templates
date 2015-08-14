@@ -35,27 +35,62 @@
 
 #include "io.h"
 
+/**
+ * square function, x must be a number
+ */
 template <typename T>
-T sqr(T x)
+T sqr (T x)
 {
     return x * x;
 }
 
+/**
+ * Swaps the values of n1 and n2
+ */
 template <class Value>
-void swap(Value& n1, Value& n2)
+void swap (Value& n1, Value& n2)
 {
     Value r=n1;
     n1=n2;
     n2=r ;
 }
 
+/**
+ * Converts the SDL key code to an ascii character
+ *
+ * Only works for american key board setting.
+ */
 char GetKeyChar (const SDL_KeyboardEvent *event);
-bool ReadAll(SDL_RWops *, std::string &out);
+
+/**
+ * Reads the entire content of an input source to a string
+ */
+bool ReadAll (SDL_RWops *, std::string &out);
+
+/**
+ * Converts a GL error status to a string.
+ */
 void GLErrorString (char *out, GLenum status);
+
+/**
+ * Gives a h,s,v color to OpenGL
+ */
 void glColorHSV (float h, float s, float v);
-bool CheckGLOK(const char *doing);
+
+/**
+ * Check GL status and sets error string if not OK.
+ * See err.h
+ */
+bool CheckGLOK (const char *doing);
+
+/**
+ * Sets memory to zeros.
+ */
 void Zero(void *p, size_t size);
 
+/*
+    Shortcuts to give vec and matrix objects to OpenGL:
+ */
 inline void glVertex2f(const vec2& v)
 {
     glVertex2f((GLfloat)v.x,(GLfloat)v.y);

@@ -89,10 +89,10 @@ void SaveSettingString(const char* filename, const char* setting, const char* va
     {
         c=fgetc(f); while( !feof(f) && isspace(c) ) c=fgetc(f);
 
-        i=0; while( !feof(f) && c!='=' && !isspace(c) ) { var[i]=c; i++; c=fgetc(f); } var[i]=NULL;
+        i=0; while( !feof(f) && c != '=' && !isspace(c) ) { var[i]=c; i++; c=fgetc(f); } var[i]=NULL;
         while( !feof(f) && isspace(c)) c=fgetc(f);
 
-        if( c=='=' && fscanf(f,"%s",val)==1 )
+        if (c=='=' && fscanf (f, "%s", val) == 1)
         {
             if(strcmp(var,setting)==0)
             {
@@ -123,7 +123,7 @@ int LoadSetting(const char* filename, const char* setting)
 }
 void SaveSetting(const char* filename, const char* setting, const int value)
 {
-    char val[100];
-    sprintf(val,"%d",value);
-    SaveSettingString(filename,setting,val);
+    char val [100];
+    sprintf (val, "%d", value);
+    SaveSettingString (filename, setting, val);
 }

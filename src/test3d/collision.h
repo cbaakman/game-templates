@@ -76,7 +76,7 @@ vec3 CollisionMove (const vec3& p1, const vec3& p2,
 vec3 CollisionTraceBeam (const vec3& p1, const vec3 &p2,
                          const Triangle *triangles, const int n_triangles);
 
-/*
+/**
  * Slightly different from CollisionMove, keeps colliders stuck to the ground. (if possible)
  */
 vec3 CollisionWalk (const vec3& p1, const vec3& p2,

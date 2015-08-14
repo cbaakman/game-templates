@@ -24,6 +24,10 @@
 #include <libxml/tree.h>
 #include <SDL2/SDL.h>
 
+/**
+ * Gets data from SDL_RWops input stream and makes libxml
+ * parse it as a tree.
+ */
 xmlDocPtr ParseXML (SDL_RWops *);
 
 #endif // XML_H

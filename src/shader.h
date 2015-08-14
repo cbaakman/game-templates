@@ -26,6 +26,6 @@
 
 #include <string>
 
-GLuint createShaderProgram(const std::string& sourceVertex, const std::string& sourceFragment);
+GLuint CreateShaderProgram (const std::string& sourceVertex, const std::string& sourceFragment);
 
 #endif // SHADER_H

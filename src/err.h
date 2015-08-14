@@ -21,6 +21,12 @@
 #ifndef ERR_H
 #define ERR_H
 
+/*
+    Set the error string when something goes wrong, and make the
+    parser/converter/loader return false. The application can then
+    read out this error string and show in in a window/console.
+ */
+
 const char *GetError ();
 void SetError (const char* format, ...);
 

@@ -29,18 +29,22 @@
 #include <math.h>
 #include <algorithm>
 
-const char *utf8_next(const char *pString, unicode_char *out)
+/**
+ * Picks one utf8 character from the byte array and returns
+ * a pointer to the data after it.
+ */
+const char *utf8_next(const char *pBytes, unicode_char *out)
 {
     int take;
-    if (pString[0] >> 5 == 0x6)
+    if (pBytes [0] >> 5 == 0x6)
     {
         take = 2;
     }
-    else if (pString[0] >> 4 == 0xe)
+    else if (pBytes [0] >> 4 == 0xe)
     {
         take = 3;
     }
-    else if (pString[0] >> 3 == 0x1e)
+    else if (pBytes [0] >> 3 == 0x1e)
     {
         take = 4;
     }
@@ -49,25 +53,32 @@ const char *utf8_next(const char *pString, unicode_char *out)
         take = 1;
     }
 
+    // store the bytes that make up the utf8 character
     *out = 0;
     for (int i = 0; i < take; i++)
     {
-        *out = (*out << 8) | pString[i];
+        *out = (*out << 8) | pBytes [i];
     }
-    return pString + take;
-}
 
-bool ParseHtmlUnicode(const char *repr, unicode_char *out)
+    return pBytes + take; // move to the next utf8 character
+}
+/**
+ * Parses a XML character reference from a string.
+ * (https://en.wikipedia.org/wiki/Numeric_character_reference)
+ *
+ * Only handles strings with one unicode character in it :(
+ */
+bool ParseXMLUnicode (const char *repr, unicode_char *out)
 {
-    size_t len = strlen(repr);
+    size_t len = strlen (repr);
     if (len == 1) // ascii
     {
-        *out = repr[0];
+        *out = repr [0];
         return true;
     }
-    else if (repr[0] == '&' || repr[1] == '#' || repr[len - 1] == ';' ) // html code
+    else if (repr [0] == '&' || repr [1] == '#' || repr [len - 1] == ';' ) // html code
     {
-        if (repr[2] == 'x') // hexadecimal
+        if (repr [2] == 'x') // hexadecimal
 
             sscanf (repr + 3, "%x;", out);
 
@@ -80,6 +91,10 @@ bool ParseHtmlUnicode(const char *repr, unicode_char *out)
     return false;
 }
 
+/**
+ * Parses n comma/space separated floats from the given string and
+ * returns a pointer to the text after it.
+ */
 const char *SVGParsePathFloats (const int n, const char *text, float outs [])
 {
     const char *tmp = text;
@@ -97,16 +112,16 @@ const char *SVGParsePathFloats (const int n, const char *text, float outs [])
                 return NULL;
         }
 
-        text = ParseFloat(text, &outs[i]);
+        text = ParseFloat (text, &outs[i]);
         if (!text)
             return NULL;
     }
 
     return text;
 }
-/*
- * The following chunk of code, used to draw quadratic curves in cairo, was
- * borrowed from cairosvg (http://cairosvg.org/)
+/**
+ * This function, used to draw quadratic curves in cairo, is
+ * based on code from cairosvg (http://cairosvg.org/)
  */
 void Quadratic2Bezier (float *px1, float *py1, float *px2, float *py2, const float x, const float y)
 {
@@ -120,6 +135,13 @@ void Quadratic2Bezier (float *px1, float *py1, float *px2, float *py2, const flo
     *px2 = xq2;
     *py2 = yq2;
 }
+
+/**
+ * Turns a cairo surface into a GL texture of equal dimensions.
+ * Only works for colored surfaces with alpha channel.
+ * Should only be used for generating glyph textures, was not
+ * tested for other things.
+ */
 bool Cairo2GLTex (cairo_surface_t *surface, GLuint *pTex)
 {
     char errorString[128];
@@ -158,16 +180,15 @@ bool Cairo2GLTex (cairo_surface_t *surface, GLuint *pTex)
         return false;
     }
 
-    glBindTexture(GL_TEXTURE_2D, *pTex);
+    glBindTexture (GL_TEXTURE_2D, *pTex);
 
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    // These settings make it look smooth:
+    glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+    // This automatically clamps texture coordinates to [0.0 -- 1.0]
+    glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+    glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 
     /*
      * Turn transparent black into transparent white.
@@ -190,16 +211,17 @@ bool Cairo2GLTex (cairo_surface_t *surface, GLuint *pTex)
     // fill the texture:
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8,
                  (GLsizei)w, (GLsizei)h,
-                 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, pData);
+                 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, // (cairo has ARGB, but GL wants BGRA)
+                 pData);
 
     glBindTexture(GL_TEXTURE_2D, 0);
 
     return true;
 }
 
-/*
- * The following chunk of code, used for drawing an svg arc in cairo, was
- * borrowed from cairosvg (http://cairosvg.org/)
+/**
+ * This function, used for drawing an svg arc in cairo, is
+ * based on code from cairosvg (http://cairosvg.org/)
  */
 void cairo_svg_arc (cairo_t *cr, float current_x, float current_y,
                     float rx, float ry,
@@ -284,8 +306,19 @@ void cairo_svg_arc (cairo_t *cr, float current_x, float current_y,
             sweep?'+':'-', large_arc? '>':'<', xc, yc, xe, ye, rx, angle1 * (180/M_PI), angle2 * (180/M_PI)); */
 }
 
+// This is used only when clearing the background in cairo:
 #define GLYPH_BBOX_MARGE 10.0f
 
+/**
+ * Parses the glyph path and creates its texture.
+ * (http://www.w3.org/TR/SVG/paths.html)
+ *
+ * :param pGlyph: glyph object, whose texture must be created.
+ * :param pBox: font's bounding box
+ * :param d: path data as in svg
+ * :param multiply: multiplies the size of the glyph
+ * :returns: true on success, falso on error
+ */
 bool ParseGlyphPath (const char *d, const BBox *pBox, const float multiply, Glyph *pGlyph)
 {
     const char *nd, *sd = d;
@@ -335,20 +368,24 @@ bool ParseGlyphPath (const char *d, const BBox *pBox, const float multiply, Glyp
     {
         prev_symbol = symbol;
 
+        // Get the next path symbol:
+
         while (isspace (*d))
             d++;
 
-        upper = isupper(*d);
+        upper = isupper(*d); // upper is absolute, lower is relative
         symbol = tolower(*d);
         d++;
 
+        // Take the approriate action for the symbol:
         switch (symbol)
         {
-        case 'z':
+        case 'z': // closepath
+
             cairo_close_path(cr);
             break;
 
-        case 'm':
+        case 'm': // moveto (x y)+
 
             while ((nd = SVGParsePathFloats (2, d, f)))
             {
@@ -369,7 +406,7 @@ bool ParseGlyphPath (const char *d, const BBox *pBox, const float multiply, Glyp
             }
             break;
 
-        case 'l':
+        case 'l': // lineto (x y)+
 
             while ((nd = SVGParsePathFloats (2, d, f)))
             {
@@ -390,7 +427,7 @@ bool ParseGlyphPath (const char *d, const BBox *pBox, const float multiply, Glyp
             }
             break;
 
-        case 'h':
+        case 'h': // horizontal lineto x+
 
             while ((nd = SVGParsePathFloats (1, d, f)))
             {
@@ -409,7 +446,7 @@ bool ParseGlyphPath (const char *d, const BBox *pBox, const float multiply, Glyp
             }
             break;
 
-        case 'v':
+        case 'v': // vertical lineto y+
 
             while ((nd = SVGParsePathFloats (1, d, f)))
             {
@@ -428,7 +465,7 @@ bool ParseGlyphPath (const char *d, const BBox *pBox, const float multiply, Glyp
             }
             break;
 
-        case 'c':
+        case 'c': // curveto (x1 y1 x2 y2 x y)+
 
             while ((nd = SVGParsePathFloats (6, d, f)))
             {
@@ -451,7 +488,7 @@ bool ParseGlyphPath (const char *d, const BBox *pBox, const float multiply, Glyp
             }
             break;
 
-        case 's':
+        case 's': // shorthand/smooth curveto (x2 y2 x y)+
 
             while ((nd = SVGParsePathFloats (4, d, f)))
             {
@@ -482,7 +519,7 @@ bool ParseGlyphPath (const char *d, const BBox *pBox, const float multiply, Glyp
             }
             break;
 
-        case 'q':
+        case 'q': // quadratic Bezier curveto (x1 y1 x y)+
 
             while ((nd = SVGParsePathFloats (4, d, f)))
             {
@@ -498,6 +535,8 @@ bool ParseGlyphPath (const char *d, const BBox *pBox, const float multiply, Glyp
                     x += f[2]; y += f[3];
                 }
 
+                // Cairo doesn't do quadratic, so fake it:
+
                 qx1 = x1; qy1 = y1; qx2 = x2; qy2 = y2;
                 Quadratic2Bezier (&qx1, &qy1, &qx2, &qy2, x, y);
                 cairo_curve_to (cr, qx1, qy1, qx2, qy2, x, y);
@@ -506,7 +545,7 @@ bool ParseGlyphPath (const char *d, const BBox *pBox, const float multiply, Glyp
             }
             break;
 
-        case 't':
+        case 't': // Shorthand/smooth quadratic Bézier curveto (x y)+
 
             while ((nd = SVGParsePathFloats (2, d, f)))
             {
@@ -529,6 +568,8 @@ bool ParseGlyphPath (const char *d, const BBox *pBox, const float multiply, Glyp
                     x += f[0]; y += f[1];
                 }
 
+                // Cairo doesn't do quadratic, so fake it:
+
                 qx1 = x1; qy1 = y1; qx2 = x2; qy2 = y2;
                 Quadratic2Bezier (&qx1, &qy1, &qx2, &qy2, x, y);
                 cairo_curve_to(cr, qx1, qy1, qx2, qy2, x, y);
@@ -537,7 +578,7 @@ bool ParseGlyphPath (const char *d, const BBox *pBox, const float multiply, Glyp
             }
             break;
 
-        case 'a':
+        case 'a': // elliptical arc (rx ry x-axis-rotation large-arc-flag sweep-flag x y)+
 
             while (isspace(*d))
                 d++;
@@ -629,7 +670,7 @@ bool ParseGlyphPath (const char *d, const BBox *pBox, const float multiply, Glyp
 
     // Convert the cairo surface to a GL texture:
 
-    bool success = Cairo2GLTex(surface, &pGlyph->tex);
+    bool success = Cairo2GLTex (surface, &pGlyph->tex);
 
     // Don't need this anymore:
     cairo_surface_destroy (surface);
@@ -641,6 +682,14 @@ bool ParseGlyphPath (const char *d, const BBox *pBox, const float multiply, Glyp
     return success;
 }
 
+/**
+ * The header contains important settings
+ * :param pFnt: xml font tag
+ * :param size: desired font size
+ * :param pFont: font object to set data to
+ * :param pMultiply: output value to multiply all the font's dimensions with
+ * :returns: true on success, false when data is missing
+ */
 bool ParseSvgFontHeader(const xmlNodePtr pFnt, const int size, Font *pFont, float *pMultiply)
 {
     xmlChar *pAttrib;
@@ -663,6 +712,8 @@ bool ParseSvgFontHeader(const xmlNodePtr pFnt, const int size, Font *pFont, floa
     pAttrib = xmlGetProp(pFace, (const xmlChar *)"units-per-em");
     if (!pAttrib)
     {
+        // other size specifications are not implemented here !
+
         SetError ("units-per-em is not set on font-face tag, it\'s required");
         return false;
     }
@@ -674,6 +725,8 @@ bool ParseSvgFontHeader(const xmlNodePtr pFnt, const int size, Font *pFont, floa
     pAttrib = xmlGetProp(pFace, (const xmlChar *)"bbox");
     if (!pAttrib)
     {
+        // other size specifications are not implemented here !
+
         SetError ("bbox is not set on font-face tag, it\'s required");
         return false;
     }
@@ -690,6 +743,11 @@ bool ParseSvgFontHeader(const xmlNodePtr pFnt, const int size, Font *pFont, floa
     pFont->bbox.bottom *= *pMultiply;
     pFont->bbox.right *= *pMultiply;
     pFont->bbox.top *= *pMultiply;
+
+    /*
+        horiz-adv-x, horiz-origin-x & horiz-origin-y are optional.
+        If not set, they are presumed 0.
+     */
 
     pAttrib = xmlGetProp(pFnt, (const xmlChar *)"horiz-adv-x");
     if (pAttrib)
@@ -723,9 +781,10 @@ bool ParseSvgFontHeader(const xmlNodePtr pFnt, const int size, Font *pFont, floa
 
 bool ParseSVGFont (const xmlDocPtr pDoc, const int size, Font *pFont)
 {
+    // The root tag of the xml document is svg:
     bool success;
     xmlNodePtr pRoot = xmlDocGetRootElement(pDoc), pList, pTag;
-    if(!pRoot) {
+    if (!pRoot) {
 
         SetError ("no root element in svg doc");
         return false;
@@ -737,7 +796,8 @@ bool ParseSVGFont (const xmlDocPtr pDoc, const int size, Font *pFont)
         return false;
     }
 
-    // Find the defs, containing the font
+    // In svg, fonts are found in the defs section.
+
     xmlNode *pDefs = NULL,
             *pFnt = NULL,
             *pChild = pRoot->children,
@@ -758,6 +818,8 @@ bool ParseSVGFont (const xmlDocPtr pDoc, const int size, Font *pFont)
         return false;
     }
 
+    // Pick the first font tag we see:
+
     pChild = pDefs->children;
     while (pChild) {
         if (StrCaseCompare((const char *) pChild->name, "font") == 0) {
@@ -774,14 +836,16 @@ bool ParseSVGFont (const xmlDocPtr pDoc, const int size, Font *pFont)
         return false;
     }
 
+    // Get data from the font header:
     float multiply;
     if (!ParseSvgFontHeader(pFnt, size, pFont, &multiply))
         return false;
 
-    pFont->size = size;
+    pFont->size = size; // size determines multiply, thus do not multiply size.
 
     std::map<std::string, unicode_char> glyph_name_lookup;
 
+    // iterate over glyph tags
     for (pChild = pFnt->children; pChild; pChild = pChild->next)
     {
         if (StrCaseCompare((const char *) pChild->name, "glyph") == 0)
@@ -798,7 +862,7 @@ bool ParseSVGFont (const xmlDocPtr pDoc, const int size, Font *pFont)
                 continue;
             }
 
-            if (!ParseHtmlUnicode((const char *)pAttrib, &ch))
+            if (!ParseXMLUnicode((const char *)pAttrib, &ch))
             {
                 SetError ("failed to interpret unicode id: %s", (const char *)pAttrib);
                 xmlFree (pAttrib);
@@ -809,34 +873,39 @@ bool ParseSVGFont (const xmlDocPtr pDoc, const int size, Font *pFont)
             pAttrib = xmlGetProp(pChild, (const xmlChar *)"glyph-name");
             if (pAttrib)
             {
+                /*
+                    In some fonts, glyphs are given names to identify them with.
+                    These names need to be remembered during the parsing process.
+                 */
+
                 std::string name = std::string((const char *)pAttrib);
                 xmlFree (pAttrib);
 
-                glyph_name_lookup[name] = ch;
+                glyph_name_lookup [name] = ch;
             }
-
-            pFont->glyphs.end();
-
-            pFont->glyphs.find(ch);
 
             if (pFont->glyphs.find(ch) != pFont->glyphs.end())
             {
+                // means the table already has an entry for this unicode character.
+
                 SetError ("error: duplicate unicode id 0x%X", ch);
                 return false;
             }
 
-            pFont->glyphs[ch] = Glyph();
-            pFont->glyphs[ch].ch = ch;
+            // Add new entry to glyphs table
+            pFont->glyphs [ch] = Glyph();
+            pFont->glyphs [ch].ch = ch;
 
-            pAttrib = xmlGetProp(pChild, (const xmlChar *)"d");
+            // Get path data and generate a glyph texture from it:
+            pAttrib = xmlGetProp (pChild, (const xmlChar *)"d");
 
             if (pAttrib)
             {
                 success = ParseGlyphPath ((const char *)pAttrib, &pFont->bbox, multiply, &pFont->glyphs[ch]);
             }
-            else// path may be an empty string, whitespace for example
+            else // path may be an empty string, whitespace for example
             {
-                pFont->glyphs[ch].tex = NULL;
+                pFont->glyphs [ch].tex = NULL;
                 success = true;
             }
             xmlFree (pAttrib);
@@ -847,12 +916,17 @@ bool ParseSVGFont (const xmlDocPtr pDoc, const int size, Font *pFont)
                 return false;
             }
 
+            /*
+                horiz-adv-x, horiz-origin-x & horiz-origin-y are optional,
+                if not present, use the font's default setting.
+             */
+
             pAttrib = xmlGetProp(pChild, (const xmlChar *)"horiz-adv-x");
             if (pAttrib)
 
-                pFont->glyphs[ch].horiz_adv_x = atoi ((const char *)pAttrib) * multiply;
+                pFont->glyphs [ch].horiz_adv_x = atoi ((const char *)pAttrib) * multiply;
             else
-                pFont->glyphs[ch].horiz_adv_x = -1.0f;
+                pFont->glyphs [ch].horiz_adv_x = -1.0f;
 
             xmlFree (pAttrib);
 
@@ -876,7 +950,7 @@ bool ParseSVGFont (const xmlDocPtr pDoc, const int size, Font *pFont)
         }
     }
 
-    // Now look for kerning data
+    // Now look for horizontal kerning data, iterate over hkern tags:
     for (pChild = pFnt->children; pChild; pChild = pChild->next)
     {
         if (StrCaseCompare((const char *) pChild->name, "hkern") == 0)
@@ -885,6 +959,7 @@ bool ParseSVGFont (const xmlDocPtr pDoc, const int size, Font *pFont)
             std::list<std::string> g1, g2, su1, su2;
             std::list<unicode_char> u1, u2;
 
+            // Get kern value first:
             pAttrib = xmlGetProp(pChild, (const xmlChar *)"k");
             if (!pAttrib)
             {
@@ -893,6 +968,15 @@ bool ParseSVGFont (const xmlDocPtr pDoc, const int size, Font *pFont)
             }
             float k = atoi ((const char *)pAttrib) * multiply;
             xmlFree (pAttrib);
+
+            /*
+                Now determine the kern pair. In svg a kern pair can
+                be a many-to-many, but we store them as
+                one-to-one glyph kern pairs.
+
+                u1 & u2 specify unicode references, that need to be parsed.
+                g1 & g2 specify glyph names, that need to be looked up.
+             */
 
             pAttrib = xmlGetProp(pChild, (const xmlChar *)"g1");
             if (pAttrib)
@@ -926,6 +1010,9 @@ bool ParseSVGFont (const xmlDocPtr pDoc, const int size, Font *pFont)
                 return false;
             }
 
+            // Combine g1 & su1 to make u1
+            // Combine g2 & su2 to make u2
+
             for (std::list<std::string>::const_iterator it = g1.begin(); it != g1.end(); it++)
             {
                 std::string name = *it;
@@ -951,7 +1038,7 @@ bool ParseSVGFont (const xmlDocPtr pDoc, const int size, Font *pFont)
                 std::string s = *it;
                 unicode_char c;
 
-                if (!ParseHtmlUnicode(s.c_str(), &c))
+                if (!ParseXMLUnicode(s.c_str(), &c))
                 {
                     SetError ("unparsable unicode char: %s", s.c_str());
                     return false;
@@ -963,13 +1050,15 @@ bool ParseSVGFont (const xmlDocPtr pDoc, const int size, Font *pFont)
                 std::string s = *it;
                 unicode_char c;
 
-                if (!ParseHtmlUnicode(s.c_str(), &c))
+                if (!ParseXMLUnicode(s.c_str(), &c))
                 {
                     SetError ("unparsable unicode char: %s", s.c_str());
                     return false;
                 }
                 u2.push_back(c);
             }
+
+            // Add the combinations from u1 and u2 to the kern table
 
             for (std::list<unicode_char>::const_iterator it = u1.begin(); it != u1.end(); it++)
             {
@@ -990,9 +1079,13 @@ bool ParseSVGFont (const xmlDocPtr pDoc, const int size, Font *pFont)
         }
     }
 
+    // At this point, all went well.
     return true;
 }
 
+/**
+ * Renders one glyph at x,y
+ */
 void glRenderGlyph (const Font *pFont, const Glyph *pGlyph, const GLfloat x, const GLfloat y)
 {
     const BBox *pBox = &pFont->bbox;
@@ -1003,6 +1096,7 @@ void glRenderGlyph (const Font *pFont, const Glyph *pGlyph, const GLfloat x, con
                   texcoord_fw = GLfloat (pGlyph->tex_w) / w,
                   texcoord_fh = GLfloat (pGlyph->tex_h) / h;
 
+    // Render the glyph texture to a bbox-sized quad at x,y:
     glBindTexture(GL_TEXTURE_2D, pGlyph->tex);
 
     glBegin(GL_QUADS);
@@ -1021,6 +1115,9 @@ void glRenderGlyph (const Font *pFont, const Glyph *pGlyph, const GLfloat x, con
 
     glEnd();
 }
+/**
+ * looks up the kern value for two characters: prev_c and c
+ */
 float GetHKern (const Font *pFont, const unicode_char prev_c, const unicode_char c)
 {
     if (prev_c && pFont->hKernTable.find(prev_c) != pFont->hKernTable.end())
@@ -1033,6 +1130,9 @@ float GetHKern (const Font *pFont, const unicode_char prev_c, const unicode_char
     }
     return 0.0f;
 }
+/**
+ * Looks up the horizontal advance value for a glyph.
+ */
 float GetHAdv (const Font *pFont, const Glyph *pGlyph)
 {
     if (pGlyph && pGlyph->horiz_adv_x > 0)
@@ -1041,6 +1141,9 @@ float GetHAdv (const Font *pFont, const Glyph *pGlyph)
     else
         return pFont->horiz_adv_x; // default value
 }
+/**
+ * Gets the width of the first word in pUTF8.
+ */
 float NextWordWidth (const Font *pFont, const char *pUTF8, unicode_char prev_c)
 {
     float w = 0.0f;
@@ -1103,6 +1206,10 @@ float GetLineSpacing (const Font *pFont)
 {
     return pFont->bbox.top - pFont->bbox.bottom;
 }
+
+/**
+ * returns: true if the next word exceeds maxWidth when started at current_x, false otherwise.
+ */
 bool NeedNewLine (const Font *pFont, const unicode_char prev_c, const char *pUTF8, const float current_x, const float maxWidth)
 {
     unicode_char c;
@@ -1135,10 +1242,13 @@ bool NeedNewLine (const Font *pFont, const unicode_char prev_c, const char *pUTF
 
     return false;
 }
+/**
+ * consumes characters from pUTF8 that shouldn't be taken to the next line
+ * :returns: pointer to the next line
+ * :param n_removed: optional, tells how many characters were removed.
+ */
 const char *CleanLineEnd (const char *pUTF8, int *n_removed = NULL)
 {
-    // consumes characters that shouldn't be taken to the next line
-
     unicode_char c;
     const char *nUTF8;
 
@@ -1170,6 +1280,9 @@ const char *CleanLineEnd (const char *pUTF8, int *n_removed = NULL)
         }
     }
 }
+/*
+ * Looks up the origin for a glyph.
+ */
 void GetGlyphOrigin (const Font *pFont, const Glyph *pGlyph, float &ori_x, float &ori_y)
 {
     ori_x = pFont->horiz_origin_x;
@@ -1180,6 +1293,11 @@ void GetGlyphOrigin (const Font *pFont, const Glyph *pGlyph, float &ori_x, float
     if (pGlyph && pGlyph->horiz_origin_y > 0)
         ori_y = pGlyph->horiz_origin_y;
 }
+/**
+ * Computes the width of the next line at pUTF8.
+ * (how many glyphs fit in)
+ * It can never be longer than maxLineWidth.
+ */
 float NextLineWidth (const Font *pFont, const char *pUTF8, const float maxLineWidth)
 {
     float x = 0.0f, w = 0.0f;
@@ -1215,12 +1333,25 @@ float NextLineWidth (const Font *pFont, const char *pUTF8, const float maxLineWi
 
     return w;
 }
-/*
+/**
+ * ThroughTextGlyphFuncs are callbacks that will be called for each glyph
+ * that ThroughText encounters on its pass through the text.
+ * 
  * A ThroughTextGlyphFunc should return true if it wants the next glyph.
  * Glyph pointer is NULL for the terminating null character!
+ *
+ * x,y are the position where the glyph's origin should be.
+ * string_pos is the index of the character, starting from 0
+ * the last argument is the object inserted as pObject in ThroughText.
  */
 typedef bool (*ThroughTextGlyphFunc)(const Font *, const Glyph*, const float x, const float y, const int string_pos, void*);
 
+/*
+ * ThroughText passes through the given utf8 string with given text formatting.
+ * It calls the given ThroughTextGlyphFunc for every glyph it encounters.
+ * pObject can be any object that must be passed on to the ThroughTextGlyphFunc
+ * in each call.
+ */
 void ThroughText (const Font *pFont, const char *pUTF8,
                   ThroughTextGlyphFunc GlyphFunc, void *pObject,
                   const int align, float maxWidth)
@@ -1230,12 +1361,17 @@ void ThroughText (const Font *pFont, const char *pUTF8,
     float x = 0.0f, y = 0.0f,
           lineWidth = NextLineWidth (pFont, pUTF8, maxWidth),
           glyph_x;
-    unicode_char c = NULL, prev_c = NULL;
+
+    unicode_char c = NULL,
+                 prev_c = NULL;
+
     const Glyph *pGlyph;
+
     while (*pUTF8)
     {
         prev_c = c;
 
+        // Before moving on to the next glyph, see if we need to start a new line
         if (NeedNewLine (pFont, prev_c, pUTF8, x, maxWidth))
         {
             // start new line
@@ -1250,6 +1386,7 @@ void ThroughText (const Font *pFont, const char *pUTF8,
             continue;
         }
 
+        // Get next utf8 char as c
         pUTF8 = utf8_next (pUTF8, &c);
 
         if (pFont->glyphs.find(c) == pFont->glyphs.end())
@@ -1258,35 +1395,48 @@ void ThroughText (const Font *pFont, const char *pUTF8,
         }
         pGlyph = &pFont->glyphs.at (c);
 
+        // Look up horizontal kern value:
         if (x > 0.0f)
             x -= GetHKern (pFont, prev_c, c);
 
+        // move the glyph to the left if alignment is mid or right
         glyph_x = x;
         if (halign == TEXTALIGN_MID)
+
             glyph_x = x - lineWidth / 2;
+
         else if (halign == TEXTALIGN_RIGHT)
+
             glyph_x = x - lineWidth;
 
+        // Call the given ThroughTextGlyphFunc and break out if it returns false
         if (!GlyphFunc (pFont, pGlyph, glyph_x, y, i, pObject))
             return;
 
+        // move on to the x after the glyph and update the index:
         x += GetHAdv (pFont, pGlyph);
         i ++;
     }
 
-    // Call GlyphFunc for the terminating null
+    // move the glyph to the left if alignment is mid or right
     glyph_x = x;
     if (halign == TEXTALIGN_MID)
+
         glyph_x = x - lineWidth / 2;
+
     else if (halign == TEXTALIGN_RIGHT)
+
         glyph_x = x - lineWidth;
 
+    // Call GlyphFunc for the terminating null:
     GlyphFunc (pFont, NULL, glyph_x, y, i, pObject);
 }
 bool glRenderTextCallBack (const Font *pFont, const Glyph *pGlyph, const float x, const float y, const int string_pos, void *p)
 {
     if (!pGlyph)
         return true;
+
+    // Render the glyph with its origin at the given x,y
 
     float ori_x, ori_y;
     GetGlyphOrigin (pFont, pGlyph, ori_x, ori_y);
@@ -1315,7 +1465,7 @@ bool glRenderTextAsRectsCallBack (const Font *pFont, const Glyph *pGlyph, const 
     TextRectObject *pO = (TextRectObject *)p;
     if (string_pos < pO->from)
     {
-        return true; // no rects yet
+        return true; // no rects yet, wait till after 'from'
     }
 
     float ori_x, ori_y;
@@ -1326,14 +1476,19 @@ bool glRenderTextAsRectsCallBack (const Font *pFont, const Glyph *pGlyph, const 
 
     bool end_render = string_pos >= pO->to,
          first_glyph = string_pos <= pO->from,
+
+         // If the y value has changed, means a new line started
          new_line = abs ((y - ori_y) - pO->current_y) >= h,
 
+         // A rect ends when we've passed 'to' or a new line is started
          end_prev_rect = end_render || new_line,
+
+         // A rect starts when we're at the first glyph or a new line is started
          start_new_rect = new_line || first_glyph;
 
     if (end_prev_rect)
     {
-        //printf ("end at %d\n", string_pos);
+        // Render a quad from start to previous glyph
 
         GLfloat x1, y1, x2, y2;
 
@@ -1351,7 +1506,7 @@ bool glRenderTextAsRectsCallBack (const Font *pFont, const Glyph *pGlyph, const 
     }
     if (start_new_rect)
     {
-        //printf ("start at %d\n", string_pos);
+        // Remember the start x,y
 
         pO->start_x = x - ori_x;
         pO->current_y = y - ori_y;
@@ -1360,6 +1515,7 @@ bool glRenderTextAsRectsCallBack (const Font *pFont, const Glyph *pGlyph, const 
     if (end_render)
         return false;
 
+    // Remember the ending x of the last rect-included glyph
     pO->end_x = x - ori_x + w;
 
     return true;
@@ -1394,18 +1550,30 @@ bool WhichGlyphAtCallBack (const Font *pFont, const Glyph *pGlyph, const float x
 {
     GlyphAtObject *pO = (GlyphAtObject *)p;
 
-    float ori_x, ori_y, h_adv;
+    // Calculate glyph bounding box:
+    float ori_x,
+          ori_y,
+          h_adv;
+
     GetGlyphOrigin (pFont, pGlyph, ori_x, ori_y);
 
     h_adv = GetHAdv (pFont, pGlyph);
 
-    float x1 = x - ori_x, x2 = x1 + h_adv,
-          y1 = y - ori_y, y2 = y1 + GetLineSpacing (pFont);
+    float x1 = x - ori_x,
+          x2 = x1 + h_adv,
+          y1 = y - ori_y,
+          y2 = y1 + GetLineSpacing (pFont);
 
-    if (pO->py > y1 && pO->py < y2)
+    // See if px,py hits the bounding box:
+
+    if (pO->py < y1)
     {
-        //printf ("%d (%f) on line between %f and %f\n", string_pos, pO->py, y1, y2);
+        // point is above this line, we will not encounter it anymore in the upcoming lines
 
+        return false;
+    }
+    else if (pO->py > y1 && pO->py < y2)
+    {
         // point is on this line
 
         if (pO->px >= x1 && pO->px < x2) // point is inside the glyph's box
@@ -1428,12 +1596,16 @@ bool WhichGlyphAtCallBack (const Font *pFont, const Glyph *pGlyph, const float x
         }
     }
 
-    return (pO->pos < 0); // as long as pos id -1, keep checking the next glyph
+    return (pO->pos < 0); // as long as index is -1, keep checking the next glyph
 }
 int WhichGlyphAt (const Font *pFont, const char *pUTF8,
                   const float px, const float py,
                   const int align, float maxWidth)
 {
+    /*
+        Important! Index positions must be set to a negative number at start.
+        Negative is interpreted as 'unset'.
+     */
     GlyphAtObject o;
     o.pos = -1;
     o.leftmost_pos = -1;
@@ -1445,7 +1617,7 @@ int WhichGlyphAt (const Font *pFont, const char *pUTF8,
                  WhichGlyphAtCallBack, &o,
                  align, maxWidth);
 
-    if (o.pos < 0) // no exact match, but maybe a very close one
+    if (o.pos < 0) // no exact match, but maybe the point is on the same line
     {
         if (o.leftmost_pos >= 0)
 
@@ -1462,12 +1634,13 @@ bool CoordsOfGlyphCallBack (const Font *pFont, const Glyph *pGlyph, const float 
 {
     GlyphAtObject *pO = (GlyphAtObject *)p;
 
-    if (pO->pos == string_pos)
+    if (pO->pos == string_pos) // is this the glyph we were looking for?
     {
         float ori_x,
               ori_y;
         GetGlyphOrigin (pFont, pGlyph, ori_x, ori_y);
 
+        // Return its position
         pO->px = x - ori_x;
         pO->py = y - ori_y;
 
@@ -1481,6 +1654,8 @@ void CoordsOfGlyph (const Font *pFont, const char *pUTF8, const int pos,
 {
     GlyphAtObject o;
     o.pos = pos;
+
+    // Default returned coords:
     o.px = 0;
     o.py = 0;
 
@@ -1499,6 +1674,7 @@ bool DimensionsOfTextCallBack (const Font *pFont, const Glyph *pGlyph, const flo
 {
     DimensionsTracker *pT = (DimensionsTracker *)p;
 
+    // Calculate glyph bounding box:
     float ori_x, ori_y, h_adv;
     GetGlyphOrigin (pFont, pGlyph, ori_x, ori_y);
 
@@ -1507,6 +1683,7 @@ bool DimensionsOfTextCallBack (const Font *pFont, const Glyph *pGlyph, const flo
     float x1 = x - ori_x, x2 = x1 + h_adv,
           y1 = y - ori_y, y2 = y1 + GetLineSpacing (pFont);
 
+    // Expand text bounding box with glyph's bounding box:
     pT->minX = std::min (x1, pT->minX);
     pT->minY = std::min (y1, pT->minY);
     pT->maxX = std::max (x2, pT->maxX);
@@ -1518,12 +1695,18 @@ void DimensionsOfText (const Font *pFont, const char *pUTF8,
                        float &outX1, float &outY1, float &outX2, float &outY2,
                        const int align, float maxWidth)
 {
+    // If the font has no glyphs, no text can exist:
     if (pFont->glyphs.size() <= 0)
     {
         outX1 = outY1 = outX2 = outY2 = 0.0;
         return;
     }
 
+    /*
+        At start, set the bounding box minima to unrealistically high numbers
+        and the maxima to unrealistically negative numbers. That way, we
+        know for sure that they'll be overruled by the glyphs in the text.
+     */
     DimensionsTracker t;
     t.minX = t.minY = 1.0e+15f;
     t.maxX = t.maxY = -1.0e+15f;

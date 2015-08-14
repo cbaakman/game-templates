@@ -26,6 +26,7 @@
 
 #define ERRSTR_LEN 512
 
+// String to store the error in:
 char error [ERRSTR_LEN] = "";
 
 const char *GetError ()
@@ -37,11 +38,13 @@ void SetError (const char* format, ...)
     // use a temporary buffer, because 'error' might be one of the args
     char tmp [ERRSTR_LEN];
 
+    // Insert args:
     va_list args; va_start (args, format);
 
     vsprintf (tmp, format, args);
 
     va_end (args);
 
+    // copy from temporary buffer:
     strcpy (error, tmp);
 }

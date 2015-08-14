@@ -26,6 +26,10 @@
 
 #include <SDL2/SDL.h>
 
+/**
+ * Gets the contents of a file from an archive.
+ * It's read only.
+ */
 SDL_RWops *SDL_RWFromZipArchive (const char *archive_path, const char *entry_path);
 
 #endif // IO_H

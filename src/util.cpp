@@ -89,16 +89,15 @@ char GetKeyChar (const SDL_KeyboardEvent *event)
     else if (sym == SDLK_RETURN)
         return '\n';
 
-    const char *name = SDL_GetKeyName(sym);
+    const char *name = SDL_GetKeyName (sym);
     if (strlen (name) != 1)
         return NULL;
 
-    char c = name[0];
+    char c = name [0];
 
     if (mod & KMOD_CAPS)
     {
-        // caps lock is on
-
+        // caps lock is on, it converts letters to uppercase:
         if (isalpha (c))
             c = toupper (c);
     }
@@ -106,9 +105,11 @@ char GetKeyChar (const SDL_KeyboardEvent *event)
     {
         // shift is down
 
+        // shift converts letters to uppercase:
         if (isalpha (c))
             c = toupper (c);
 
+        // shift also makes the following conversions:
         else if (c == '0')
             return ')';
         else if (c == '1')
@@ -159,11 +160,11 @@ char GetKeyChar (const SDL_KeyboardEvent *event)
 
     return c;
 }
-void Zero(void *p, size_t size)
+void Zero (void *p, size_t size)
 {
-    char *s = (char*)p;
-    for(size_t i = 0; i < size; i++)
-        s[i] = 0;
+    char *s = (char *)p;
+    for (size_t i = 0; i < size; i++)
+        s [i] = 0;
 }
 // Make these inline so tha console applications can also include util.cpp
 void glColorHSV( float h, float s, float v )
@@ -189,10 +190,10 @@ void glColorHSV( float h, float s, float v )
          case 5: glColor3f(v, p, q);
     }
 }
-bool CheckGLOK(const char *doing)
+bool CheckGLOK (const char *doing)
 {
     GLenum status = glGetError();
-    if(status == GL_NO_ERROR)
+    if (status == GL_NO_ERROR)
         return true;
 
     char errorString [260];

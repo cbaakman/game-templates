@@ -24,6 +24,12 @@
 #include "mesh.h"
 #include "../texture.h"
 
+/*
+    Demonstrates:
+    - toon shader
+    - black lines around meshes
+
+ */
 class ToonScene : public App::Scene
 {
 private:

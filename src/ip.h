@@ -25,20 +25,26 @@
 
 #include<SDL2/SDL_net.h>
 
-inline void ip2String(const IPaddress& address,char* out)
+/*
+    IP addres includes a port number.
+    Syntax:
+        xxx.xxx.xxx.xxx:xxxxx
+ */
+
+inline void ip2String (const IPaddress& address, char* out)
 {
-    Uint8*bytes=(Uint8*)&address.host;
-    sprintf(out,"%u.%u.%u.%u:%u",
+    Uint8 *bytes = (Uint8 *)&address.host;
+    sprintf (out, "%u.%u.%u.%u:%u",
             (unsigned int)bytes[0],
             (unsigned int)bytes[1],
             (unsigned int)bytes[2],
             (unsigned int)bytes[3],
             (unsigned int)address.port);
 }
-inline void string2IP(const char* str, IPaddress& out)
+inline void string2IP (const char* str, IPaddress& out)
 {
-    Uint8*bytes=(Uint8*)&out.host;
-    sscanf(str,"%u.%u.%u.%u:%u",
+    Uint8 *bytes = (Uint8 *)&out.host;
+    sscanf (str, "%u.%u.%u.%u:%u",
            (unsigned int*)&bytes[0],
            (unsigned int*)&bytes[1],
            (unsigned int*)&bytes[2],

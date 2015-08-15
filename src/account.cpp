@@ -26,11 +26,17 @@
 
 #include "account.h"
 #include "str.h"
+#include "err.h"
 #include <errno.h>
 
 #define HASHSTRING_LENGTH 20
 void getHash(const char* username, const char* password, unsigned char* hash)
 {
+    /*
+        This function is used for checking passwords.
+        If it changes, all account files must be created anew.
+     */
+
     SHA_CTX ctx;
     SHA1_Init(&ctx);
     SHA1_Update(&ctx,(void*)username,strlen(username));
@@ -41,14 +47,9 @@ void getHash(const char* username, const char* password, unsigned char* hash)
 
 void AccountFileName (const char *directory, const char *username, char *out)
 {
+    // <username>.account
+
     sprintf(out,"%s%c%s.account", directory, PATH_SEPARATOR, username);
-}
-
-std::string accountError;
-
-const char *GetAccountError ()
-{
-    return accountError.c_str();
 }
 
 #define LINEID_ACCOUNT "ACCOUNT"
@@ -59,30 +60,40 @@ bool MakeAccount (const char* dirPath, const char* username, const char* passwor
             _password[PASSWORD_MAXLENGTH];
     unsigned char hash[HASHSTRING_LENGTH];
 
+    /*
+        username is case insensitive, thus always converted to lowercase
+        password is case sensitive
+     */
     int i;
-    for(i=0;username[i];i++)
+    for (i=0;username[i];i++)
         _username[i]=tolower(username[i]);
     _username[i]=NULL;
-    for(i=0;password[i];i++)
-        _password[i]=tolower(password[i]);
-    _password[i]=NULL;
 
+    strcpy (_password, password);
+
+    // Open the account file
     AccountFileName (dirPath, _username, filepath);
 
-    FILE* f=fopen (filepath, "wb");
-    if(!f)
+    FILE* f = fopen (filepath, "wb");
+    if (!f)
     {
-        accountError = std::string("cannot open output file ") + filepath + ": " + strerror(errno);
+        std::string _errorstring = std::string ("cannot open output file ") + filepath + ": " + strerror (errno);
+        SetError (_errorstring.c_str ());
         return false;
     }
 
-    getHash(_username, _password, hash);
-    fprintf(f,"%s %s ",LINEID_ACCOUNT,_username);
+    /*
+        Write a single line, including
+        the username and password hash.
+     */
+
+    getHash (_username, _password, hash);
+    fprintf (f, "%s %s ", LINEID_ACCOUNT, _username);
 
     // write each hash byte
-    for(i=0; i<HASHSTRING_LENGTH; i++)
+    for (i=0; i<HASHSTRING_LENGTH; i++)
     {
-        fprintf(f,"%.2X",hash[i]);
+        fprintf (f, "%.2X", hash[i]);
     }
 
     fclose(f);
@@ -91,6 +102,10 @@ bool MakeAccount (const char* dirPath, const char* username, const char* passwor
 }
 void delAccount(const char* dirPath, const char* username)
 {
+    /*
+        username is case insensitive, thus always converted to lowercase
+     */
+
     char    filepath[FILENAME_MAX],
             _username[USERNAME_MAXLENGTH];
     int i;
@@ -98,9 +113,11 @@ void delAccount(const char* dirPath, const char* username)
         _username[i]=tolower(username[i]);
     _username[i]=NULL;
 
+    // Remove the file, associated with this username
+
     AccountFileName (dirPath, _username, filepath);
 
-    remove(filepath);
+    remove (filepath);
 }
 bool authenticate(const char* dirPath, const char* username, const char* password)
 {
@@ -113,50 +130,60 @@ bool authenticate(const char* dirPath, const char* username, const char* passwor
     unsigned char b;
     unsigned char hash [HASHSTRING_LENGTH];
 
+    /*
+        username is case insensitive, thus always converted to lowercase
+        password is case sensitive
+     */
     int i;
-
-    for(i=0;username[i] && i<(USERNAME_MAXLENGTH-1);i++)
-        _username[i]=tolower(username[i]);
+    for (i = 0; username[i] && i < (USERNAME_MAXLENGTH - 1); i++)
+        _username[i] = tolower (username[i]);
     _username[i]=NULL;
 
-    for(i=0;password[i] && i<(PASSWORD_MAXLENGTH-1);i++)
-        _password[i]=tolower(password[i]);
-    _password[i]=NULL;
+    strcpy (_password, password);
 
-    getHash(_username, _password, hash);
+    getHash (_username, _password, hash);
 
     AccountFileName (dirPath, _username, filepath);
 
-    FILE* f=fopen(filepath,"rb");
-    if(!f) // the user probably doesn't exist
+    FILE* f = fopen (filepath, "rb");
+    if (!f) // the user probably doesn't exist
     {
         return false;
     }
 
-    while(!feof(f))
+    while (!feof(f))
     {
-        fgets(line,lineLength,f);
-        if(strncmp(LINEID_ACCOUNT,line,strlen(LINEID_ACCOUNT))==0)
+        fgets (line, lineLength, f);
+
+        // Check for the recognition bytes at the beginning of the file:
+        if (strncmp (LINEID_ACCOUNT, line, strlen (LINEID_ACCOUNT)) == 0)
         {
-            int i=0,n,j;
-            while(line[i] && !isspace(line[i])) i++;
-            while(line[i] && isspace(line[i])) i++;
-            n=i;
-            while(line[n] && !isspace(line[n])) n++;
+            int i = 0, n, j;
 
-            if(n==i)
+            // Read past the recognition bytes and the spaces after it.
+            while (line[i] && !isspace (line[i])) i++;
+            while (line[i] && isspace (line[i])) i++;
+
+            // Read all the non-whitespace characters, presumed to be username
+            n = i;
+            while (line[n] && !isspace (line[n])) n++;
+
+            if (n == i) // no more non-whitespace characters found
                 return false;
 
-            if(strncmp(_username,line + i, n - i) != 0)
+            // Verify the username in the file:
+            if (strncmp (_username, line + i, n - i) != 0)
                 return false;
 
-            i=n;
-            while(line[i] && isspace(line[i])) i++;
+            // Read the spaces past the username
+            i = n;
+            while (line[i] && isspace (line [i])) i++;
 
             // compare each hash byte:
-            for(j=0;j<HASHSTRING_LENGTH;j++)
+            for (j = 0; j < HASHSTRING_LENGTH; j++)
             {
-                if(sscanf(line + i + j * 2, "%2X", &b) != 1)
+                // Read in the hash byte:
+                if (sscanf(line + i + j * 2, "%2X", &b) != 1)
                 {
                     fprintf (stderr, "%s: cannot read byte %d of hash\n", filepath, j);
                     return false;
@@ -164,6 +191,8 @@ bool authenticate(const char* dirPath, const char* username, const char* passwor
 
                 if(b != hash[j])
                 {
+                    // mismatch in hash
+
                     return false;
                 }
             }

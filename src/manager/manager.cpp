@@ -29,6 +29,7 @@
 #include <string>
 #include <curses.h>
 #include "../str.h"
+#include "../err.h"
 
 void PromptUsername (char *username, const int maxLength)
 {
@@ -40,6 +41,12 @@ void PromptUsername (char *username, const int maxLength)
 }
 void PromptPassword (char *password, const int maxLength)
 {
+    /*
+        Password prompt should be masked input: *******
+
+        That's the reason why ncurses is used.
+     */
+
     int i = 0;
     unsigned char ch = 0;
 
@@ -100,7 +107,8 @@ void OnMakeAccount (const std::string &exe_dir)
             }
         }
     }
-    while(usernameError);
+    // Is username correct syntax? Else reloop.
+    while (usernameError);
 
     PromptPassword (password, PASSWORD_MAXLENGTH);
 
@@ -111,21 +119,26 @@ void OnMakeAccount (const std::string &exe_dir)
     }
     else
     {
-        printw ("%s\n", GetAccountError ());
+        printw ("%s\n", GetError ());
     }
 }
 bool OnCommand(const char* cmd, const std::string &exe_dir)
 {
+    // Execute command 'cmd', given by user
+
     if (strcmp (cmd, "quit") == 0)
     {
+        // stop looping
         return false;
     }
     else if (strcmp (cmd, "make-account")==0)
     {
         OnMakeAccount (exe_dir);
     }
-    else if (emptyline (cmd) || strcmp (cmd,"help") == 0)
+    else if (emptyline (cmd) || strcmp (cmd, "help") == 0)
     {
+        // If an empty line was entered, print help:
+
         printw ("quit: exit application\n");
         printw ("make-account: create new account file\n");
         printw ("help: print this info\n");
@@ -151,12 +164,14 @@ int main (int argc, char** argv)
     bool running = true;
     while (running)
     {
+        // print commandline prompt:
         printw ("manager>");
 
+        // Get the command and remove trailing whitespaces:
         getnstr (cmd, cmdlen);
         stripr (cmd);
 
-        // take input commands
+        // execute command
         running = OnCommand(cmd, exe_dir);
     }
 

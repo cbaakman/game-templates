@@ -24,10 +24,17 @@
 #define USERNAME_MAXLENGTH 14
 #define PASSWORD_MAXLENGTH 18
 
+/*
+    For using these functions in an application,
+    it's necessary that dirPath points to a valid
+    directory where account files are to be stored.
+ */
+
+/**
+ * :returns: true on success, false otherwise.
+ */
 bool MakeAccount (const char* dirPath, const char* username, const char* password);
 void delAccount (const char* dirPath, const char* username);
 bool authenticate (const char* dirPath, const char* username, const char* password);
-
-const char *GetAccountError ();
 
 #endif // ACCOUNT_H

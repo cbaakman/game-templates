@@ -24,6 +24,12 @@
 #include <string>
 #include <list>
 
+/*
+    Here, the PATH_SEPARATOR macro is used
+    to join paths. Could also use boost for this:
+
+    http://www.boost.org/doc/libs/1_53_0/libs/filesystem/doc/reference.html
+ */
 #ifdef _WIN32
     #define PATH_SEPARATOR '\\'
 #else
@@ -32,14 +38,35 @@
 
 bool isnewline (const int c);
 bool emptyline (const char *line);
+
+/**
+ * Places a NULL character so that trailing whitespaces
+ * are removed.
+ */
 void stripr (char *s);
 
-const char *ParseFloat(const char *in, float *out); // not locale dependent
+/**
+ * atof and scanf are locale dependent. ParseFloat isn't,
+ * decimals always assumed to have dots here, never commas.
+ *
+ * :returns: the string after the parsed number on success,
+ *           NULL on failure.
+ */
+const char *ParseFloat(const char *in, float *out);
 
+/**
+ * Like strcmp, but ignores case.
+ */
 int StrCaseCompare(const char *s1, const char *s2);
 
+/**
+ * splits a string by given character.
+ */
 void split (const char *s, const char by, std::list<std::string> &out);
 
+/**
+ * Gives the start and end position of the word at pos in the string.
+ */
 void WordAt (const char *s, const int pos, int &start, int &end);
 
 #endif // STR_H

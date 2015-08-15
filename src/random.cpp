@@ -33,5 +33,7 @@ float RandomFloat(float _min, float _max)
     int n = 10000;
     float f = float(rand() % n) / n;
 
+    // f is a random number between 0.0f and 1.0f
+
     return _min + f * (_max - _min);
 }

@@ -49,10 +49,11 @@ bool ToonScene::Init ()
     bool success;
     xmlDocPtr pDoc;
 
+    // Load head mesh:
     f = SDL_RWFromZipArchive (resPath.c_str(), "head.xml");
     if (!f)
         return false;
-    pDoc = ParseXML(f);
+    pDoc = ParseXML (f);
     f->close(f);
 
     if (!pDoc)
@@ -61,7 +62,8 @@ bool ToonScene::Init ()
         return false;
     }
 
-    success = ParseMesh(pDoc, &meshDataHead);
+    // Convert xml to mesh:
+    success = ParseMesh (pDoc, &meshDataHead);
     xmlFreeDoc (pDoc);
 
     if (!success)
@@ -70,6 +72,7 @@ bool ToonScene::Init ()
         return false;
     }
 
+    // Load background image:
     f = SDL_RWFromZipArchive (resPath.c_str(), "toonbg.png");
     if (!f)
         return false;
@@ -82,6 +85,7 @@ bool ToonScene::Init ()
         return false;
     }
 
+    // Load the vertex shader source:
     f = SDL_RWFromZipArchive (resPath.c_str(), "shaders/toon.vsh");
     if (!f)
         return false;
@@ -95,6 +99,7 @@ bool ToonScene::Init ()
         return false;
     }
 
+    // Load the fragment shader source:
     f = SDL_RWFromZipArchive (resPath.c_str(), "shaders/toon.fsh");
     if (!f)
         return false;
@@ -107,6 +112,7 @@ bool ToonScene::Init ()
         return false;
     }
 
+    // Create shader from sources:
     shaderProgram = CreateShaderProgram (sourceV, sourceF);
     if (!shaderProgram)
     {
@@ -118,6 +124,11 @@ bool ToonScene::Init ()
 }
 void RenderUnAnimatedSubsetExtension (const MeshData *pMeshData, std::string id, const GLfloat howmuch)
 {
+    /*
+        Almost the same as a normal mesh rendering,
+        except that the vertices are moved along their normals.
+     */
+
     if(pMeshData->subsets.find(id) == pMeshData->subsets.end())
     {
         SetError ("cannot render %s, no such subset", id.c_str());
@@ -129,7 +140,7 @@ void RenderUnAnimatedSubsetExtension (const MeshData *pMeshData, std::string id,
     const vec3 *n;
     vec3 p;
 
-    for (std::list<PMeshQuad>::const_iterator it = pSubset->quads.begin(); it != pSubset->quads.end(); it++)
+    for (std::list <PMeshQuad>::const_iterator it = pSubset->quads.begin(); it != pSubset->quads.end(); it++)
     {
         glBegin(GL_QUADS);
 
@@ -149,7 +160,7 @@ void RenderUnAnimatedSubsetExtension (const MeshData *pMeshData, std::string id,
     }
 
     glBegin(GL_TRIANGLES);
-    for (std::list<PMeshTriangle>::const_iterator it = pSubset->triangles.begin(); it != pSubset->triangles.end(); it++)
+    for (std::list <PMeshTriangle>::const_iterator it = pSubset->triangles.begin(); it != pSubset->triangles.end(); it++)
     {
         PMeshTriangle pTri = *it;
         for (size_t j = 0; j < 3; j++)

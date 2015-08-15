@@ -170,6 +170,9 @@ inline matrix4 matID()
 
     return m;
 }
+/*
+    Careful, Matrices with determinant 0 are not invertible!
+ */
 inline matrix4 matInverse(const matrix4 &m)
 {
     float
@@ -229,6 +232,7 @@ inline matrix4 matInverse(const matrix4 &m)
 
     return kInv;
 }
+// The transpose is flipped along the diagonal
 inline matrix4 matTranspose (const matrix4 &m)
 {
     matrix4 t;
@@ -240,7 +244,7 @@ inline matrix4 matTranspose (const matrix4 &m)
 
     return t;
 }
-inline matrix4 matRotX( const float angle )// radians
+inline matrix4 matRotX( const float angle ) // radians
 {
     matrix4 m;
     const float c=cos(angle);
@@ -253,7 +257,7 @@ inline matrix4 matRotX( const float angle )// radians
 
     return m;
 }
-inline matrix4 matRotY( const float angle )// radians
+inline matrix4 matRotY( const float angle ) // radians
 {
     matrix4 m;
     const float c=cos(angle);
@@ -266,7 +270,7 @@ inline matrix4 matRotY( const float angle )// radians
 
     return m;
 }
-inline matrix4 matRotZ( const float angle )// radians
+inline matrix4 matRotZ( const float angle ) // radians
 {
     matrix4 m;
     const float c=cos(angle);
@@ -279,7 +283,7 @@ inline matrix4 matRotZ( const float angle )// radians
 
     return m;
 }
-inline matrix4 matQuat(const Quaternion &q)
+inline matrix4 matQuat (const Quaternion &q) // also a rotation matrix
 {
     float f = 2.0f / q.Length();
 
@@ -295,7 +299,7 @@ inline matrix4 matQuat(const Quaternion &q)
 
     return m;
 }
-inline matrix4 matRotAxis(const vec3& axis, float angle)// radians
+inline matrix4 matRotAxis (const vec3& axis, float angle) // radians
 {
     matrix4 m;
     vec3 a=axis.Unit();
@@ -316,7 +320,7 @@ inline matrix4 matRotAxis(const vec3& axis, float angle)// radians
 
     return m;
 }
-inline matrix4 matScale(const float x,const float y,const float z)
+inline matrix4 matScale (const float x, const float y, const float z)
 {
     matrix4 m;
 
@@ -327,7 +331,7 @@ inline matrix4 matScale(const float x,const float y,const float z)
 
     return m;
 }
-inline matrix4 matTranslation( const float x, const float y, const float z )
+inline matrix4 matTranslation (const float x, const float y, const float z)
 {
     matrix4 m;
 
@@ -338,7 +342,7 @@ inline matrix4 matTranslation( const float x, const float y, const float z )
 
     return m;
 }
-inline matrix4 matTranslation( const vec3& v )
+inline matrix4 matTranslation (const vec3& v)
 {
     matrix4 m;
 
@@ -349,8 +353,12 @@ inline matrix4 matTranslation( const vec3& v )
 
     return m;
 }
-inline matrix4 matLookAt( const vec3& eye, const vec3& lookat, const vec3& up )
+inline matrix4 matLookAt (const vec3& eye, const vec3& lookat, const vec3& up)
 {
+    /*
+        Useful for camera positions.
+     */
+
     vec3 _right, _up, _forward;
     matrix4 m;
 
@@ -366,8 +374,11 @@ inline matrix4 matLookAt( const vec3& eye, const vec3& lookat, const vec3& up )
     return m;
 
 }
-// "matSkew" requires a plane normal and plane d input.
-inline matrix4 matSkew( const vec3 n/*normalized*/, float d )
+/*
+    "matSkew" requires a plane normal and plane d input.
+    The normal (n) is assumed to have length 1.0
+ */
+inline matrix4 matSkew (const vec3 n, float d)
 {
     matrix4 m;
     // distance=p*n+d
@@ -394,7 +405,9 @@ inline matrix4 matSkew( const vec3 n/*normalized*/, float d )
 
     return m;
 }
-inline matrix4 matPerspec(float view_angle,float aspect_ratio,float near_viewdist,float far_viewdist)
+
+// Perspective projection matrix. Z-axis points into the screen.
+inline matrix4 matPerspec (float view_angle, float aspect_ratio, float near_viewdist, float far_viewdist)
 {
     float a=0.5f*view_angle;
     float f=1.0f/tan(a);
@@ -411,7 +424,8 @@ inline matrix4 matPerspec(float view_angle,float aspect_ratio,float near_viewdis
 
     return m;
 }
-inline matrix4 matOrtho(float leftX, float rightX, float upY, float downY, float nearZ, float farZ)
+// Orthographic projection matrix. Arguments define screen boundaries.
+inline matrix4 matOrtho (float leftX, float rightX, float upY, float downY, float nearZ, float farZ)
 {
     float Xdiff = rightX - leftX,
           Ydiff = upY - downY,

@@ -26,6 +26,12 @@
 
 #include <string>
 
+/**
+ * Creates a shader program from source.
+ * :param sourceVertex: source of the vertex shader
+ * :param sourceFragment: source of the fragment shader
+ * :returns: OpenGL handle to the shader program, or 0 on error
+ */
 GLuint CreateShaderProgram (const std::string& sourceVertex, const std::string& sourceFragment);
 
 #endif // SHADER_H

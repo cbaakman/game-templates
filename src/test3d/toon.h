@@ -37,14 +37,17 @@ private:
     // camera angles
     GLfloat angleY, angleX, distCamera;
 
+    // Background texture:
     Texture texBG;
 
+    // Head mesh
     MeshData meshDataHead;
 
+    // Handle to toon shader
     GLuint shaderProgram;
 public:
 
-    ToonScene (App*);
+    ToonScene (App *);
     ~ToonScene ();
 
     bool Init (void);

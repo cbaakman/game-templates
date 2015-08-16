@@ -24,6 +24,11 @@
 #include "err.h"
 #include "shader.h"
 
+/**
+ * Compile either the source of a vertex or fragment shader.
+ * :param type: either GL_VERTEX_SHADER or GL_FRAGMENT_SHADER
+ * :returns: OpenGL handle to shader, or 0 on error
+ */
 GLuint CreateShader(const std::string& source, int type)
 {
     if(type != GL_VERTEX_SHADER && type != GL_FRAGMENT_SHADER)
@@ -32,25 +37,28 @@ GLuint CreateShader(const std::string& source, int type)
         return 0;
     }
 
-    GLint result = GL_FALSE;
+    GLint result;
     int logLength;
     GLuint shader = glCreateShader(type);
 
+    // Compile
     const char *src_ptr = source.c_str();
-    glShaderSource(shader, 1, &src_ptr, NULL);
-    glCompileShader(shader);
+    glShaderSource (shader, 1, &src_ptr, NULL);
+    glCompileShader (shader);
 
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &result);
+    glGetShaderiv (shader, GL_COMPILE_STATUS, &result);
     if(result!=GL_TRUE)
     {
+        // Error occurred, get compile log:
+
         glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &logLength);
 
         char *errorString = new char[logLength];
         glGetShaderInfoLog(shader, logLength, NULL, errorString);
         SetError ("Error compiling shader: %s", errorString);
-        delete[] errorString;
+        delete [] errorString;
 
-        glDeleteShader(shader);
+        glDeleteShader (shader);
         return 0;
     }
 
@@ -63,33 +71,40 @@ GLuint CreateShaderProgram(const std::string& sourceVertex, const std::string& s
     int logLength;
     GLuint program=0, vertexShader, fragmentShader;
 
-    vertexShader = CreateShader(sourceVertex, GL_VERTEX_SHADER);
-    fragmentShader = CreateShader(sourceFragment, GL_FRAGMENT_SHADER);
+    // Compile the sources:
+    vertexShader = CreateShader (sourceVertex, GL_VERTEX_SHADER);
+    fragmentShader = CreateShader (sourceFragment, GL_FRAGMENT_SHADER);
 
-    if(vertexShader && fragmentShader)
+    if (vertexShader && fragmentShader)
     {
+        // Combine the compiled shaders into a program:
         program = glCreateProgram();
-        glAttachShader(program, vertexShader);
-        glAttachShader(program, fragmentShader);
-        glLinkProgram(program);
+        glAttachShader (program, vertexShader);
+        glAttachShader (program, fragmentShader);
+        glLinkProgram (program);
 
-        glGetProgramiv(program, GL_LINK_STATUS, &result);
-        if(result!=GL_TRUE)
+        glGetProgramiv (program, GL_LINK_STATUS, &result);
+        if (result != GL_TRUE)
         {
+            // Error occurred, get log:
+
             glGetProgramiv(program, GL_INFO_LOG_LENGTH, &logLength);
 
-            char *errorString = new char[logLength];
-            glGetProgramInfoLog(program, logLength, NULL, errorString);
+            char *errorString = new char [logLength];
+            glGetProgramInfoLog (program, logLength, NULL, errorString);
             SetError ("Error linking shader program: %s", errorString);
-            delete[] errorString;
+            delete [] errorString;
 
-            glDeleteProgram(program);
+            glDeleteShader (vertexShader);
+            glDeleteShader (fragmentShader);
+            glDeleteProgram (program);
             return 0;
         }
     }
 
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
+    // Not needed anymore at this point:
+    glDeleteShader (vertexShader);
+    glDeleteShader (fragmentShader);
 
     return program;
 }

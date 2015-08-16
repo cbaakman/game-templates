@@ -24,6 +24,7 @@
 #include "../xml.h"
 #include "../err.h"
 
+// Color for the help text in each of the scenes (RGB):
 const GLfloat textColors [][3] = {{1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}};
 
 HubScene::HubScene (App *pApp) : Scene (pApp),
@@ -56,6 +57,7 @@ HubScene::HubScene (App *pApp) : Scene (pApp),
 
     pToonScene = new ToonScene (pApp);
 
+    // Start with this scene:
     pCurrent = pShadowScene;
     help = 0;
 }
@@ -83,8 +85,9 @@ bool HubScene::Init ()
     if (!fontInput) // file or archive missing
         return false;
 
-    xmlDocPtr pDoc = ParseXML(fontInput);
-    fontInput->close(fontInput);
+    // Parse the svg as xml document:
+    xmlDocPtr pDoc = ParseXML (fontInput);
+    fontInput->close (fontInput);
 
     if (!pDoc)
     {
@@ -92,6 +95,7 @@ bool HubScene::Init ()
         return false;
     }
 
+    // Convert xml to font object:
     success = ParseSVGFont (pDoc, 16, &font);
     xmlFreeDoc (pDoc);
 
@@ -105,10 +109,16 @@ bool HubScene::Init ()
 }
 void HubScene::Update (float dt)
 {
+    // Update current scene:
     pCurrent -> Update (dt);
 
-    const Uint8 *state = SDL_GetKeyboardState(NULL);
-    if (state[SDL_SCANCODE_H])
+    /*
+        Update help text alpha.
+        If the key is down alpha must be 1.0,
+        else decrease gradually.
+     */
+    const Uint8 *state = SDL_GetKeyboardState (NULL);
+    if (state [SDL_SCANCODE_H])
     {
         alphaH = 1.0f;
     }
@@ -120,8 +130,9 @@ void HubScene::Render ()
     int w, h;
     SDL_GL_GetDrawableSize (pApp->GetMainWindow (), &w, &h);
 
-    glViewport(0, 0, w, h);
+    glViewport (0, 0, w, h);
 
+    // Render current scene:
     pCurrent -> Render ();
 
     // Render the text:
@@ -132,7 +143,10 @@ void HubScene::Render ()
     glEnable (GL_BLEND);
     glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-
+    /*
+        Screen is a w x h rectangle.
+        Positive y means down.
+     */
     glMatrixMode(GL_PROJECTION);
     matrix4 matScreen = matOrtho(0.0f, w, 0.0f, h, -1.0f, 1.0f);
     glLoadMatrixf (matScreen.m);
@@ -140,6 +154,11 @@ void HubScene::Render ()
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
     glMultMatrixf (matTranslation(10.0f, 10.0f, 0.0f).m);
+
+    /*
+        When the help key is down (alpha = 1.0), help is shown.
+        When alpha goes down to 0.0, "Press 'h' for help shows up"
+     */
 
     GLfloat maxWidth = w - 20.0f;
     glColor4f (textColors [help][0], textColors [help][1], textColors [help][2], 1.0f - alphaH);
@@ -152,6 +171,7 @@ void HubScene::OnEvent(const SDL_Event *event)
 {
     Scene :: OnEvent (event);
 
+    // pass on event to current scene:
     pCurrent -> OnEvent (event);
 }
 void HubScene::OnKeyPress (const SDL_KeyboardEvent *event)
@@ -160,6 +180,8 @@ void HubScene::OnKeyPress (const SDL_KeyboardEvent *event)
     {
         if(event->keysym.sym == SDLK_ESCAPE)
             pApp->ShutDown();
+
+        // These keys switch between scenes:
 
         if(event->keysym.sym == SDLK_F1)
         {

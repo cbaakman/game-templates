@@ -23,25 +23,42 @@
 #include <stdio.h>
 #include "../util.h"
 
+/**
+ * Returns the absolute value: negative becomes positive,
+ * positive stays positive.
+ */
 template <class Number>
-Number abs(Number n)
+Number abs (Number n)
 {
     if (n < 0)
         return -n;
     else
         return n;
 }
-int LineSphereIntersections(const vec3& p1, const vec3& p12, const vec3& center, float radius, double *t1, double *t2)
+/**
+ * Calculates the intersection points between
+ * a sphere (center, radius) and a line (p1, p12)
+ *
+ * t1 and t2 will be set so that:
+ *  intersection1 = p1 + t1 * p12
+ *  intersection2 = p1 + t2 * p12
+ *
+ * :returns: the number of intersection points (0, 1 or 2)
+ */
+int LineSphereIntersections (const vec3& p1, const vec3& p12,
+                             const vec3& center, float radius,
+
+                             double *t1, double *t2)
 {
-    double a = Dot(p12, p12);        // a is always positive
-    double b = 2.0 * Dot(p12, p1 - center);
-    double c = Dot(center,center) + Dot(p1,p1) - 2.0 * Dot(center, p1) - radius * radius;
-    double diskriminant = b * b - 4.0 * a * c;
+    double a = Dot (p12, p12), // a is always positive
+           b = 2.0 * Dot(p12, p1 - center),
+           c = Dot (center, center) + Dot (p1, p1) - 2.0 * Dot (center, p1) - radius * radius,
+           diskriminant = b * b - 4.0 * a * c;
 
     if (diskriminant < 0 || a == 0)
     {
-        *t1=0;
-        *t2=0;
+        *t1 = 0;
+        *t2 = 0;
         return 0;
     }
     if (diskriminant == 0)
@@ -49,31 +66,48 @@ int LineSphereIntersections(const vec3& p1, const vec3& p12, const vec3& center,
         *t2 = *t1 = (-b / (2.0 * a));
         return 1;
     }
-    double sqrt_diskriminant = sqrt(diskriminant);
+    double sqrt_diskriminant = sqrt (diskriminant);
     *t1 = ((-b + sqrt_diskriminant) / (2.0 * a));
     *t2 = ((-b - sqrt_diskriminant) / (2.0 * a));
+
     // because a is always positive, t1 > t2
     return 2;
 }
+/**
+ * Calculates intersection point between a line (p1, p12) and a plane
+ * (there's always one, unless the line is parallel to the plane)
+ *
+ * The return value is set so that:
+ *  intersection = p1 + return_value * p12
+ */
 float LinePlaneIntersectionDirParameter(const vec3& p1, const vec3& p12, const Plane &plane)
 {
     vec3 p12_norm = p12.Unit();
-    float distance_plane_p1 = DistanceFromPlane(p1, plane);
-    float divisor = Dot(plane.n, p12_norm);
+
+    float distance_plane_p1 = DistanceFromPlane (p1, plane);
+    float divisor = Dot (plane.n, p12_norm);
+
     if (divisor == 0.0f)
-        return 0.0f; // line lies on plane
+        return 0.0f; // line is parallel to plane
+
     float t = -distance_plane_p1 / divisor;
     return t / p12.Length(); // at p1 t=0, at p2 t=1.0f
 }
-vec3 LinePlaneIntersectionDir(const vec3& p1,const vec3& p12, const Plane &plane)
+/**
+ * Calculates intersection point between a line (p1, p12) and a plane
+ * (there's always one, unless the line is parallel to the plane)
+ *
+ * :returns: intersection point
+ */
+vec3 LinePlaneIntersectionDir (const vec3& p1, const vec3& p12, const Plane &plane)
 {
     vec3 p12_norm = p12.Unit();
 
-    float distance_plane_p1 = DistanceFromPlane(p1, plane);
-    float divisor = Dot(plane.n, p12_norm);
+    float distance_plane_p1 = DistanceFromPlane (p1, plane);
+    float divisor = Dot (plane.n, p12_norm);
 
     if(divisor == 0.0f)
-        return p1; // line lies on plane
+        return p1; // line parallel to plane
 
     float t = -distance_plane_p1 / divisor;
 
@@ -81,7 +115,9 @@ vec3 LinePlaneIntersectionDir(const vec3& p1,const vec3& p12, const Plane &plane
 
     return result;
 }
+
 SphereCollider :: SphereCollider (const vec3 &c, const float r) : relativeCenter(c), radius(r) {}
+
 bool SphereCollider :: HitsTriangle (const Triangle &tri, const vec3 &startP, const vec3 &movement,
                         vec3 &outClosestPointOnSphere, vec3 &outContactPointSphereToTriangle, vec3 &outContactNormal)
 {
@@ -105,7 +141,7 @@ bool SphereCollider :: HitsTriangle (const Triangle &tri, const vec3 &startP, co
 
     else // at p1, the sphere is still far enough from the plane
     {
-        if (Dot(movement, (center - closestPointOnSphere)) > -0.000001f * radius)
+        if (Dot (movement, (center - closestPointOnSphere)) > -0.000001f * radius)
             // Movement is away from plane
             return false;
 
@@ -128,26 +164,30 @@ bool SphereCollider :: HitsTriangle (const Triangle &tri, const vec3 &startP, co
     {
         // See if the sphere hits the edge during movement
 
-        vec3    tri_c12 = ClosestPointOnLine(tri.p[0], tri.p[1], contactPointSphereToPlane),
-                tri_c23 = ClosestPointOnLine(tri.p[1], tri.p[2], contactPointSphereToPlane),
-                tri_c13 = ClosestPointOnLine(tri.p[0], tri.p[2], contactPointSphereToPlane);
-        float    dist_c12 = (tri_c12 - contactPointSphereToPlane).Length2(),
+        vec3    tri_c12 = ClosestPointOnLine (tri.p[0], tri.p[1], contactPointSphereToPlane),
+                tri_c23 = ClosestPointOnLine (tri.p[1], tri.p[2], contactPointSphereToPlane),
+                tri_c13 = ClosestPointOnLine (tri.p[0], tri.p[2], contactPointSphereToPlane);
+        float   dist_c12 = (tri_c12 - contactPointSphereToPlane).Length2(),
                 dist_c23 = (tri_c23 - contactPointSphereToPlane).Length2(),
                 dist_c13 = (tri_c13 - contactPointSphereToPlane).Length2();
 
-        if(dist_c12 < dist_c13)
+        if (dist_c12 < dist_c13)
         {
-            if(dist_c12 < dist_c23) contactPointSphereToTriangle = tri_c12;
-            else                    contactPointSphereToTriangle = tri_c23;
+            if (dist_c12 < dist_c23)
+                contactPointSphereToTriangle = tri_c12;
+            else
+                contactPointSphereToTriangle = tri_c23;
         }
         else
         {
-            if(dist_c13 < dist_c23) contactPointSphereToTriangle = tri_c13;
-            else                    contactPointSphereToTriangle = tri_c23;
+            if(dist_c13 < dist_c23)
+                contactPointSphereToTriangle = tri_c13;
+            else
+                contactPointSphereToTriangle = tri_c23;
         }
 
         double t1, t2;
-        if(LineSphereIntersections(contactPointSphereToTriangle, movement, center, radius, &t1, &t2))
+        if (LineSphereIntersections (contactPointSphereToTriangle, movement, center, radius, &t1, &t2))
         {
             if(t1 <= 0 && t2 < 0)
             {
@@ -182,10 +222,10 @@ bool FeetCollider :: HitsTriangle (const Triangle &tri, const vec3 &p, const vec
 {
     const Plane plane = tri.GetPlane();
 
-    if (abs (Dot(plane.n, -toFeet)) < 0.0001f)
+    if (abs (Dot (plane.n, -toFeet)) < 0.0001f)
         return false; // plane is parallel to feet direction
 
-    vec3 pOnGroundUnderP = LinePlaneIntersectionDir(p, toFeet, plane),
+    vec3 pOnGroundUnderP = LinePlaneIntersectionDir (p, toFeet, plane),
          feet_start = p + toFeet,
          contactPointFeetToPlane;
 
@@ -210,7 +250,7 @@ bool FeetCollider :: HitsTriangle (const Triangle &tri, const vec3 &p, const vec
             contactPointFeetToPlane = feet_start + t * movement;
     }
 
-    if (!PointInsideTriangle(tri, contactPointFeetToPlane))
+    if (!PointInsideTriangle (tri, contactPointFeetToPlane))
     {
         return false;
     }
@@ -219,6 +259,7 @@ bool FeetCollider :: HitsTriangle (const Triangle &tri, const vec3 &p, const vec
     closestPointOnFeet = feet_start;
     outContactPoint = contactPointFeetToPlane;
     outContactNormal = plane.n;
+
     return true;
 }
 #define COLLISION_MAXITERATION 10
@@ -251,6 +292,7 @@ vec3 CollisionMove (const vec3& p1, const vec3& p2,
 
         bool pushingSomething = false;
 
+        // Iterate over every triangle and every collider to detect hits:
         for(int i = 0; i < n_triangles; i++)
         {
             for (int c = 0; c < n_colliders; c++)
@@ -260,9 +302,13 @@ vec3 CollisionMove (const vec3& p1, const vec3& p2,
                 if (pCollider->HitsTriangle (triangles [i], current_p, targetMovement,
                         testClosestPointOnObject, testContactPoint, testNormal))
                 {
+                    // Collider hit a triangle
+
                     dist2 = (testContactPoint - testClosestPointOnObject).Length2();
                     if (dist2 < smallestDist)
                     {
+                        // The closest hit on the path gets priority
+
                         smallestDist = dist2;
 
                         contactPoint = testContactPoint;
@@ -296,14 +342,21 @@ vec3 CollisionMove (const vec3& p1, const vec3& p2,
             targetMovement = pushingMovement;
 
             j++;
+
+            /*
+                We moved up to the wall and adjusted our movement,
+                but we might encounter a new wall while moving along this one.
+                Do another iteration to find out..
+             */
         }
-        else
+        else // unhindered movement
         {
             current_p += targetMovement;
 
             return current_p;
         }
     }
+    // Don't go on iterating forever in corners!
     while ((targetMovement.Length2() > 1.0e-8f) && j < COLLISION_MAXITERATION);
 
     return current_p;
@@ -344,6 +397,8 @@ bool TestOnGround (const vec3& p,
             if (pCollider->HitsTriangle (triangles [i], p, -up,
                     testClosestPointOnObject, testContactPoint, testNormal))
             {
+                // Collider hits floor when moved down, now see if the floor's close enough:
+
                 fakePlane.n = testNormal;
                 fakePlane.d = -Dot (fakePlane.n, testContactPoint);
 
@@ -399,8 +454,11 @@ vec3 PutOnGround (const vec3& p,
             if (pCollider->HitsTriangle (triangles [i], p, -smallest * up,
                     testClosestPointOnObject, testContactPoint, testNormal))
             {
+                // Collider hits floor when moved down, now see if the floor's close enough:
+
                 movement = testContactPoint - testClosestPointOnObject;
                 dist2 = movement.Length2();
+
                 if (dist2 < smallest)
                 {
                     smallest = dist2;
@@ -452,9 +510,13 @@ vec3 CollisionWalk (const vec3& p1, const vec3& p2,
                 if (pCollider->HitsTriangle (triangles [i], current_p, targetMovement,
                         testClosestPointOnObject, testContactPoint, testNormal))
                 {
+                    // The collider hit the triangle on the way.
+
                     dist2 = (testContactPoint - testClosestPointOnObject).Length2();
                     if (dist2 < smallestDist)
                     {
+                        // The closest hit gets priority:
+
                         smallestDist = dist2;
 
                         contactPoint = testContactPoint;
@@ -508,13 +570,24 @@ vec3 CollisionWalk (const vec3& p1, const vec3& p2,
             targetMovement = pushingMovement;
 
             j++;
+
+            /*
+                We moved up to the wall and adjusted our movement,
+                but we might encounter a new wall while moving along this one.
+                Do another iteration to find out..
+             */
         }
-        else
+        else // unhindered movement
         {
             current_p += targetMovement;
 
             // Put it back on the ground, if any
             ground_p = PutOnGround (current_p, colliders, n_colliders, triangles, n_triangles, min_cosine, up);
+
+            /*
+                Distance to unground position must not be too large.
+                Take target movement as benchmark.
+             */
             if ((ground_p - current_p).Length2() < targetMovement.Length2())
             {
                 return ground_p;
@@ -523,6 +596,7 @@ vec3 CollisionWalk (const vec3& p1, const vec3& p2,
             return current_p;
         }
     }
+    // Don't go on iterating forever in corners!
     while ((targetMovement.Length2() > 1.0e-8f) && j < COLLISION_MAXITERATION);
 
     return current_p;
@@ -534,301 +608,20 @@ vec3 CollisionTraceBeam(const vec3 &p1, const vec3 &p2, const Triangle *triangle
         return p1; // otherwise we might get unexpected results
 
     vec3 p12 = p2 - p1, isect = p2, newisect;
+
+    // For every triangle, see if the beam goes through:
     for(int i = 0; i < n_triangles; i++)
     {
-        newisect = LinePlaneIntersectionDir(p1, p12, triangles[i].GetPlane());
+        newisect = LinePlaneIntersectionDir (p1, p12, triangles[i].GetPlane());
 
-        if (!PointInsideTriangle(triangles[i], newisect))
+        if (!PointInsideTriangle (triangles[i], newisect))
             continue;
 
         vec3 delta = newisect - p1;
 
-        if( delta.Length2() < (p1 - isect).Length2() && Dot(delta, p12) > 0)
+        if (delta.Length2() < (p1 - isect).Length2() && Dot (delta, p12) > 0)
 
             isect = newisect;
     }
     return isect;
 }
-/* float GetGroundSlope (const vec3 &p1, const vec3 &p2, const Triangle *triangles, const int n_triangles)
-{
-    if(p1 == p2)
-        return 0;
-
-    float smallest = 1.0e+15f, dist2, slope;
-    Plane plane;
-    vec3 isect1, isect2, p12;
-    for(int i = 0; i < n_triangles; i++)
-    {
-        plane = triangles[i].GetPlane();
-
-        if (abs(Dot (plane.n, VEC_UP)) < 1.0e-8f)
-
-            // skip parallels
-            continue;
-
-        isect1 = LinePlaneIntersectionDir(p1, VEC_DOWN, plane);
-
-        dist2 = (isect1 - p1).Length2();
-        if (dist2 < smallest)
-        {
-            smallest = dist2;
-            isect2 = LinePlaneIntersectionDir(p2, VEC_DOWN, plane);
-
-            p12 = isect2 - isect1;
-            slope = p12.y / sqrt(sqr (p12.x) + sqr (p12.z));
-        }
-    }
-
-    return slope;
-}
-vec3 CollisionMoveFeet (const vec3& p1, const vec3& p2, const float height, const Triangle *triangles, const int n_triangles)
-{
-    vec3 feet_start = {p1.x, p1.y - height, p1.z},
-
-         pOnGroundUnderP1,
-         pContactPlane,
-
-         desiredMovement = p2 - p1,
-         allowedMovement = desiredMovement;
-
-    const vec3 requested_mv = desiredMovement;
-
-    Plane closestPlane;
-
-    int j = 0;
-    do
-    {
-        float smallestDist = 1.0e+15f,
-              start_above,
-              head_start_above,
-              dist2;
-        bool pushing = false;
-
-        for(int i = 0; i < n_triangles; i++)
-        {
-            const Triangle *tri = &triangles[i];
-            const Plane plane = tri->GetPlane();
-
-            if (abs (Dot(plane.n, VEC_UP)) < 0.0001f)
-                continue; // parallel to fall direction
-
-            pOnGroundUnderP1 = LinePlaneIntersectionDir(p1, VEC_DOWN, plane);
-
-            start_above = (feet_start - pOnGroundUnderP1).y;
-            head_start_above = start_above + height;
-
-            if (start_above < 0 && head_start_above > 0) // feet sticking through ground
-            {
-                pContactPlane = {feet_start.x, feet_start.y - start_above, feet_start.z};
-            }
-            else
-            {
-                vec3 projection = PlaneProjection(feet_start, plane);
-
-                if (Dot ((projection - feet_start), desiredMovement) < 0.0001f)
-                    continue; // not moving towards floor
-
-                float t = LinePlaneIntersectionDirParameter(feet_start, desiredMovement, plane);
-                if((t > 1.0f) || (t < 0))
-                    continue; // no contact on the way to p2
-                else
-                    pContactPlane = feet_start + t * desiredMovement;
-            }
-
-            if (!PointInsideTriangle(*tri, pContactPlane))
-                continue;
-
-            dist2 = (pContactPlane - feet_start).Length2();
-            if (dist2 < smallestDist)
-            {
-                smallestDist = dist2;
-                allowedMovement = pContactPlane - feet_start;
-                closestPlane = plane;
-            }
-            pushing = true;
-        }
-
-        if (pushing)
-        {
-            //plane projection of the movement:
-            vec3 delta = LinePlaneIntersectionDir(feet_start, desiredMovement, closestPlane) - feet_start;
-
-            if(Dot(requested_mv, delta) < 0)
-            {
-                delta = {0, 0, 0};
-            }
-
-            feet_start += allowedMovement + closestPlane.n * 1.0e-3f;
-            desiredMovement = delta;
-            allowedMovement = desiredMovement;
-
-            j++;
-        }
-        else
-        {
-            feet_start += allowedMovement;
-            return {feet_start.x, feet_start.y + height, feet_start.z};
-        }
-    }
-    while ((desiredMovement.Length2() > 1.0e-8f) && j < COLLISION_MAXITERATION);
-
-    return {feet_start.x, feet_start.y + height, feet_start.z};
-}
-vec3 CollisionMoveSphere (const vec3& _p1, const vec3& _p2, float radius, const Triangle *triangles, const int n_triangles)
-{
-    if(_p1==_p2)
-        return _p1;
-
-    vec3 p1 = _p1,
-        p2 = _p2,
-        p12 = p2 - p1;
-
-    const vec3 ori_p12 = p12;
-    unsigned int j = 0;
-    float radius2 = radius * radius;
-
-    vec3 newmove = p12,
-        newClosestPointOnSphere,
-        newContactPointSphereToTriangle;
-
-    do
-    {
-        float distanceCenterToTriangle=1.0e+15f;
-        bool pushing=false;
-        for(int i = 0; i < n_triangles; i++)
-        {
-            const Triangle *tri = &triangles[i];
-            const Plane plane = tri->GetPlane();
-
-            vec3 normal = plane.n,
-                p_move,
-                center = p1,
-                ClosestPointOnSphere;
-
-            float distanceCenterToPlane = DistanceFromPlane(center, plane);
-
-            if (distanceCenterToPlane > 0)
-                ClosestPointOnSphere = center - radius * normal;
-            else
-                ClosestPointOnSphere = center + radius * normal;
-
-            vec3 contactPointSphereToPlane;
-            if (fabs (distanceCenterToPlane) < radius * 0.9999f)
-
-                // sphere lies too close to plane
-                contactPointSphereToPlane = center - distanceCenterToPlane * normal;
-
-            else // at p1, the sphere is still far enough from the plane
-            {
-                if (Dot(p12, (center - ClosestPointOnSphere)) > -0.000001f * radius)
-                    // Movement is away from plane
-                    continue;
-
-                float t = LinePlaneIntersectionDirParameter (ClosestPointOnSphere, p12, plane);
-                if ((t > 1.0f) || (t < -radius/p12.Length()))
-
-                    // Movement doesn't reach plane
-                    continue;
-                else
-                    contactPointSphereToPlane = ClosestPointOnSphere + t * p12;
-            }
-
-            vec3 contactPointSphereToTriangle;
-            if (PointInsideTriangle (*tri, contactPointSphereToPlane))
-            {
-                // Then it's easy
-                contactPointSphereToTriangle = contactPointSphereToPlane;
-            }
-            else // hit point is outside triangle
-            {
-                // See if the sphere hits the edge during movement
-
-                vec3    tri_c12 = ClosestPointOnLine(tri->p[0], tri->p[1], contactPointSphereToPlane),
-                        tri_c23 = ClosestPointOnLine(tri->p[1], tri->p[2], contactPointSphereToPlane),
-                        tri_c13 = ClosestPointOnLine(tri->p[0], tri->p[2], contactPointSphereToPlane);
-                float   dist_c12 = (tri_c12 - contactPointSphereToPlane).Length2(),
-                        dist_c23 = (tri_c23 - contactPointSphereToPlane).Length2(),
-                        dist_c13 = (tri_c13 - contactPointSphereToPlane).Length2();
-
-                if(dist_c12 < dist_c13)
-                {
-                    if(dist_c12 < dist_c23) contactPointSphereToTriangle = tri_c12;
-                    else                    contactPointSphereToTriangle = tri_c23;
-                }
-                else
-                {
-                    if(dist_c13 < dist_c23) contactPointSphereToTriangle = tri_c13;
-                    else                    contactPointSphereToTriangle = tri_c23;
-                }
-
-                double t1, t2;
-                if(LineSphereIntersections(contactPointSphereToTriangle, p12, center, radius, &t1, &t2))
-                {
-                    if (t1 <= 0 && t2 < 0)
-                    {
-                        if (t1 < -1.0f)
-                            continue; // Too far away.
-
-                        ClosestPointOnSphere = t1 * p12 + contactPointSphereToTriangle;
-                    }
-                    else if(t1 > 0 && t2 < 0)
-                    {
-                        if (abs(t1) < abs(t2))  ClosestPointOnSphere = t1 * p12 + contactPointSphereToTriangle;
-                        else                    ClosestPointOnSphere = t2 * p12 + contactPointSphereToTriangle;
-                    }
-                    else // if(t1>0 && t2>0)
-                        continue; // Too far away.
-                }
-                else
-                    continue; // No intersections with this sphere.
-            }
-            p_move = contactPointSphereToTriangle - ClosestPointOnSphere;
-
-            // Pick the shortest possible moving distance of all triangles
-            float dist2 = (contactPointSphereToTriangle - center).Length2();
-            if(dist2 < distanceCenterToTriangle)
-            {
-                distanceCenterToTriangle = dist2;
-                newmove = p_move;
-                newClosestPointOnSphere = ClosestPointOnSphere;
-                newContactPointSphereToTriangle = contactPointSphereToTriangle;
-            }
-            pushing = true;
-        }
-
-        if (pushing) // movement needs to be adjusted
-        {
-            // Calculate a fictional plane
-            Plane plane;
-            plane.n = (p1 - newClosestPointOnSphere).Unit();
-            plane.d = -Dot(plane.n, newContactPointSphereToTriangle);
-
-            // plane projection of the movement:
-            vec3 delta = LinePlaneIntersectionDir( newClosestPointOnSphere + p12, plane.n, plane)- newContactPointSphereToTriangle;
-
-            if (Dot(ori_p12, delta) < 0) // moves in opposite direction, let's not!
-            {
-                delta = {0, 0, 0};
-            }
-
-            // Do the moving part that collision allows
-            p1 += newmove + 0.0001f * radius * plane.n;
-
-            // Reset our goal to what last plane's projection allows
-            p2 = p1 + delta;
-            p12 = p2 - p1;
-            newmove = p12;
-
-            // count the number of pushes
-            j++;
-        }
-        else
-        {
-            p1 += newmove;
-            return p1;
-        }
-    }
-    while((p12.Length2() > 1.0e-8f * radius2) && j < COLLISION_MAXITERATION);
-
-    return p1;
-} */

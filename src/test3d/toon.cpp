@@ -127,6 +127,7 @@ void RenderUnAnimatedSubsetExtension (const MeshData *pMeshData, std::string id,
     /*
         Almost the same as a normal mesh rendering,
         except that the vertices are moved along their normals.
+        This makes the rendered mesh a bit larger than the original.
      */
 
     if(pMeshData->subsets.find(id) == pMeshData->subsets.end())
@@ -140,10 +141,10 @@ void RenderUnAnimatedSubsetExtension (const MeshData *pMeshData, std::string id,
     const vec3 *n;
     vec3 p;
 
+    // Give OpenGL all quads:
+    glBegin(GL_QUADS);
     for (std::list <PMeshQuad>::const_iterator it = pSubset->quads.begin(); it != pSubset->quads.end(); it++)
     {
-        glBegin(GL_QUADS);
-
         PMeshQuad pQuad = *it;
         for (size_t j = 0; j < 4; j++)
         {
@@ -155,10 +156,10 @@ void RenderUnAnimatedSubsetExtension (const MeshData *pMeshData, std::string id,
             glNormal3f (n->x, n->y, n->z);
             glVertex3f (p.x, p.y, p.z);
         }
-
-        glEnd();
     }
+    glEnd();
 
+    // Give OpenGL all triangles:
     glBegin(GL_TRIANGLES);
     for (std::list <PMeshTriangle>::const_iterator it = pSubset->triangles.begin(); it != pSubset->triangles.end(); it++)
     {
@@ -189,7 +190,7 @@ void ToonScene::Render ()
     SDL_GL_GetDrawableSize (pApp->GetMainWindow (), &w, &h);
 
 
-    // Set the 3d projection matrix:
+    // Set orthographic projection matrix:
     glMatrixMode (GL_PROJECTION);
     matrix4 matScreen = matOrtho(-w / 2, w / 2, -h / 2, h / 2, -1.0f, 1.0f);
     glLoadMatrixf (matScreen.m);
@@ -233,7 +234,7 @@ void ToonScene::Render ()
     glClearStencil (0);
     glClear (GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-    // Set the 3d projection matrix:
+    // Set perspective 3d projection matrix:
     glMatrixMode (GL_PROJECTION);
     matrix4 matCamera = matPerspec(VIEW_ANGLE, (GLfloat) w / (GLfloat) h, NEAR_VIEW, FAR_VIEW);
     glLoadMatrixf(matCamera.m);
@@ -260,7 +261,7 @@ void ToonScene::Render ()
 
     glCullFace (GL_FRONT);
     glEnable (GL_DEPTH_TEST);
-    glDepthMask (GL_FALSE);
+    glDepthMask (GL_FALSE); // no depth values, we need to draw inside it.
     glStencilFunc (GL_ALWAYS, 1, STENCIL_MASK);
     glStencilOp (GL_KEEP, GL_KEEP, GL_REPLACE);
 
@@ -282,7 +283,7 @@ void ToonScene::Render ()
     glColor4fv (meshDataHead.subsets.at("0").diffuse);
     RenderUnAnimatedSubset (&meshDataHead, "0"); // head
 
-    /* The face is inside the head, but drawn over it */
+    // The face is inside the head, but drawn over it
     glDisable (GL_DEPTH_TEST);
 
     glColor4fv (meshDataHead.subsets.at("1").diffuse);
@@ -296,6 +297,7 @@ void ToonScene::Render ()
 
     glEnable (GL_DEPTH_TEST);
 
+    // Hair must be drawn over the face:
     glColor4fv (meshDataHead.subsets.at("2").diffuse);
     RenderUnAnimatedSubset (&meshDataHead, "2"); // hair
 

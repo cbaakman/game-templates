@@ -35,21 +35,21 @@ inline void ip2String (const IPaddress& address, char* out)
 {
     Uint8 *bytes = (Uint8 *)&address.host;
     sprintf (out, "%u.%u.%u.%u:%u",
-            (unsigned int)bytes[0],
-            (unsigned int)bytes[1],
-            (unsigned int)bytes[2],
-            (unsigned int)bytes[3],
-            (unsigned int)address.port);
+                (unsigned int)bytes [0],
+                (unsigned int)bytes [1],
+                (unsigned int)bytes [2],
+                (unsigned int)bytes [3],
+                (unsigned int)address.port);
 }
 inline void string2IP (const char* str, IPaddress& out)
 {
     Uint8 *bytes = (Uint8 *)&out.host;
     sscanf (str, "%u.%u.%u.%u:%u",
-           (unsigned int*)&bytes[0],
-           (unsigned int*)&bytes[1],
-           (unsigned int*)&bytes[2],
-           (unsigned int*)&bytes[3],
-           (unsigned int*)&out.port);
+               (unsigned int *)&bytes [0],
+               (unsigned int *)&bytes [1],
+               (unsigned int *)&bytes [2],
+               (unsigned int *)&bytes [3],
+               (unsigned int *)&out.port);
 }
 
 #endif

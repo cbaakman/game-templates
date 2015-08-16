@@ -27,36 +27,36 @@
 
 void GLErrorString(char *out, GLenum status)
 {
-    switch(status)
+    switch (status)
     {
     case GL_INVALID_ENUM:
-        strcpy(out, "GL_INVALID_ENUM");
+        strcpy (out, "GL_INVALID_ENUM");
         break;
     case GL_INVALID_VALUE:
-        strcpy(out, "GL_INVALID_VALUE");
+        strcpy (out, "GL_INVALID_VALUE");
         break;
     case GL_INVALID_OPERATION:
-        strcpy(out, "GL_INVALID_OPERATION");
+        strcpy (out, "GL_INVALID_OPERATION");
         break;
     case GL_INVALID_FRAMEBUFFER_OPERATION:
-        strcpy(out, "GL_INVALID_FRAMEBUFFER_OPERATION");
+        strcpy (out, "GL_INVALID_FRAMEBUFFER_OPERATION");
         break;
     case GL_OUT_OF_MEMORY:
-        strcpy(out, "GL_OUT_OF_MEMORY");
+        strcpy (out, "GL_OUT_OF_MEMORY");
         break;
     case GL_STACK_UNDERFLOW:
-        strcpy(out, "GL_STACK_UNDERFLOW");
+        strcpy (out, "GL_STACK_UNDERFLOW");
         break;
     case GL_STACK_OVERFLOW:
-        strcpy(out, "GL_STACK_OVERFLOW");
+        strcpy (out, "GL_STACK_OVERFLOW");
         break;
     default:
-        sprintf(out, "unknown error 0x%.8X", status);
+        sprintf (out, "unknown error 0x%.8X", status);
         break;
     }
 }
 
-bool ReadAll(SDL_RWops *io, std::string &out)
+bool ReadAll (SDL_RWops *io, std::string &out)
 {
     const size_t bufsize = 256;
     size_t n;

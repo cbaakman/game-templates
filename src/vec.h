@@ -34,8 +34,13 @@
 
 #define PI 3.1415926535897932384626433832795
 
+/*
+    vec3 is a vector of length 3, used for 3D space calculations.
+ */
+
 struct vec3
 {
+    // Coordinates: x, y, and z, or v[0], v[1] and v[2]
     union {
         struct {
             float x, y, z;
@@ -52,7 +57,10 @@ struct vec3
         z = v.z;
     }
 
-    // Length2 is computationally less expensive than Length
+    /*
+        Length2 is the squared length, it's
+        computationally less expensive than Length
+     */
     float    Length()    const    {return sqrt(x*x+y*y+z*z);}
     float    Length2()    const    {return (x*x+y*y+z*z);}
 
@@ -64,6 +72,11 @@ struct vec3
         if(l>0) return ((*this)/l);
         else return *this;
     }
+
+    /*
+        vec3 objects can be added on, subtracted and
+        multiplied/divided by a scalar.
+     */
 
     vec3        operator-  ()                    const { return vec3(-x,-y,-z);    }
     vec3        operator-  (const vec3 &v)        const { return vec3(x-v.x,y-v.y,z-v.z); }

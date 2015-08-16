@@ -27,19 +27,30 @@
 
 #include "../font.h"
 
+/*
+    The hub scene manager switching between scenes.
+    It's also responsible for showing help text.
+ */
 class HubScene : public App::Scene{
 
 private:
     WaterScene *pWaterScene;
     ShadowScene *pShadowScene;
     ToonScene *pToonScene;
+
+    // Currently rendered scene:
     Scene *pCurrent;
 
+    // Font for the help text shown:
     Font font;
 
+    // text alpha value
     GLfloat alphaH;
 
+    // current help string index:
     int help;
+
+    // help strings:
     std::string helpText [3];
 public:
     void OnEvent (const SDL_Event *event);

@@ -57,35 +57,40 @@ bool Server::Init()
     settingsPath = std::string(SDL_GetBasePath()) + SETTINGS_FILE;
     accountsPath = std::string(SDL_GetBasePath()) + ACCOUNT_DIR;
 
-    // load the settings from the config
+    // load the maxUsers setting from the config
     maxUsers = LoadSetting(settingsPath.c_str(), MAXLOGIN_SETTING);
-    if(maxUsers>0)
+    if (maxUsers > 0)
     {
-        users=new UserP[maxUsers];
-        for(Uint64 i=0; i<maxUsers; i++) users[i]=NULL;
+        // Allocate memory for users to log in:
+        users = new UserP [maxUsers];
+        for (Uint64 i = 0; i < maxUsers; i++)
+            users[i] = NULL;
     }
     else
     {
-        fprintf(stderr,"Max Login not found in %s\n", settingsPath.c_str());
+        fprintf (stderr, "Max Login not found in %s\n", settingsPath.c_str());
         return false;
     }
 
-    port = LoadSetting(settingsPath.c_str(), PORT_SETTING);
-    if(port<=0)
+    // Load the port number from config
+    port = LoadSetting (settingsPath.c_str(), PORT_SETTING);
+    if (port <= 0)
     {
-        fprintf(stderr,"Port not set in %s\n", settingsPath.c_str());
+        fprintf (stderr,"Port not set in %s\n", settingsPath.c_str());
         return false;
     }
 
+    // Init SDL_net
     if (SDLNet_Init() < 0)
     {
-        fprintf(stderr,"SDLNet_Init: %s\n", SDLNet_GetError());
+        fprintf (stderr,"SDLNet_Init: %s\n", SDLNet_GetError());
         return false;
     }
 
-    if (!(socket = SDLNet_UDP_Open(port)))
+    // Open a socket and listen at the configured port:
+    if (!(socket = SDLNet_UDP_Open (port)))
     {
-        fprintf(stderr,"SDLNet_UDP_Open: %s\n", SDLNet_GetError());
+        fprintf (stderr,"SDLNet_UDP_Open: %s\n", SDLNet_GetError());
         return false;
     }
 
@@ -93,19 +98,20 @@ bool Server::Init()
     loopThread = SDL_CreateThread (LoopThreadFunc, "server_request_handler_thread", (void *)this);
     if(!loopThread)
     {
-        fprintf(stderr,"Server loop thread not started\n");
+        fprintf (stderr,"Server loop thread not started\n");
         return false;
     }
 
     // Allocate packets of the size we need, one for incoming, one for outgoing
     if (!(udpPackets = SDLNet_AllocPacketV (2, PACKET_MAXSIZE)))
     {
-        fprintf(stderr, "SDLNet_AllocPacketV: %s\n", SDLNet_GetError());
+        fprintf (stderr, "SDLNet_AllocPacketV: %s\n", SDLNet_GetError());
         return false;
     }
     in = udpPackets [0];
     out = udpPackets [1];
 
+    // seed the random number generator:
     srand (time(0));
 
     done = false;
@@ -115,57 +121,58 @@ void Server::CleanUp()
 {
     if(udpPackets)
     {
-        SDLNet_FreePacketV(udpPackets);
-        udpPackets=NULL;
-        in=out=NULL;
+        SDLNet_FreePacketV (udpPackets);
+        udpPackets = NULL;
+        in = out = NULL;
     }
     if(socket)
     {
         SDLNet_UDP_Close(socket);
-        socket=NULL;
+        socket = NULL;
     }
 
-    // Tell the request handling thread that it should return
-    if(loopThread)
+    // Tell the request handling thread that it should return:
+    if (loopThread)
     {
-        SDL_DetachThread(loopThread);
-        loopThread=NULL;
+        SDL_DetachThread (loopThread);
+        loopThread = NULL;
     }
     done = true;
 
     SDLNet_Quit();
 
     // Clean up memory
-    for(Uint64 i=0; i<maxUsers; i++)
+    for(Uint64 i=0; i < maxUsers; i++)
         delete users[i];
     delete [] users; users=NULL;
-    maxUsers=0;
+    maxUsers = 0;
 }
 Server::UserP Server::AddUser()
 {
     for(Uint64 i = 0; i < maxUsers; i++)
     {
-        if(!users[i])
+        if (!users[i]) // found an empty sport for a new user
         {
             users[i] = new User;
             users[i]->accountName [0] = NULL;
             users[i]->ticksSinceLastContact = 0;
 
-            // Generate a RSA key to encrypt passwords in
+            // Generate a RSA key to encrypt login password in
             BIGNUM *bn = BN_new (); BN_set_word (bn, 65537);
             users[i]->key = RSA_new ();
-            bool keySuccess = RSA_generate_key_ex (users[i]->key, 1024,bn,NULL)
+            bool keySuccess = RSA_generate_key_ex (users[i]->key, 1024, bn, NULL)
                 && RSA_check_key (users[i]->key);
+
             BN_free (bn);
 
-            if(!keySuccess)
+            if (!keySuccess)
             {
-                RSA_free(users[i]->key);
+                RSA_free (users[i]->key);
                 delete users[i]; users[i]=NULL;
                 return NULL;
             }
 
-            return users[i];
+            return users [i];
         }
     }
 
@@ -176,20 +183,20 @@ Server::UserP Server::GetUser (const IPaddress& address)
     for(Uint64 i = 0; i < maxUsers; i++)
     {
         if (users[i]
-        && users[i]->address.host == address.host
-        && users[i]->address.port == address.port )
+            && users[i]->address.host == address.host
+            && users[i]->address.port == address.port)
         {
-            return users[i];
+            return users [i];
         }
     }
     return NULL;
 }
 Server::UserP Server::GetUser (const char* accountName)
 {
-    for(Uint64 i=0; i<maxUsers; i++)
+    for(Uint64 i = 0; i < maxUsers; i++)
     {
         if (users[i]
-        && strcmp(users[i]->accountName,accountName)==0 )
+            && strcmp (users[i]->accountName, accountName)==0 )
         {
             return users[i];
         }
@@ -207,10 +214,10 @@ bool Server::LoggedIn(Server::User* user)
 void Server::OnPlayerRemove (Server::User* user)
 {
     // Tell other players about this one's removal:
-    int len = USERNAME_MAXLENGTH+1;
-    Uint8*data=new Uint8[USERNAME_MAXLENGTH+1];
-    data[0]=NETSIG_DELPLAYER;
-    memcpy(data+1,user->accountName,USERNAME_MAXLENGTH);
+    int len = USERNAME_MAXLENGTH + 1;
+    Uint8*data = new Uint8 [USERNAME_MAXLENGTH + 1];
+    data [0] = NETSIG_DELPLAYER;
+    memcpy (data + 1,user->accountName, USERNAME_MAXLENGTH);
 
     // Send the message to all clients:
     for(Uint64 i=0; i<maxUsers; i++)
@@ -222,8 +229,10 @@ void Server::OnPlayerRemove (Server::User* user)
     }
     delete[] data;
 }
-void Server::TellAboutLogout(Server::User* to, const char* loggedOutUsername)
+void Server::TellAboutLogout (Server::User* to, const char* loggedOutUsername)
 {
+    // User 'to' will be told that 'loggedOutUsername' has logged out.
+
     int len = USERNAME_MAXLENGTH + 1;
     Uint8*data = new Uint8 [USERNAME_MAXLENGTH + 1];
     data[0] = NETSIG_DELPLAYER;
@@ -235,7 +244,7 @@ void Server::TellAboutLogout(Server::User* to, const char* loggedOutUsername)
 }
 void Server::TellUserAboutUser (Server::User* to, Server::User* about)
 {
-    // user 'about' has been added and user 'to' must know 
+    // user 'about' has been added and user 'to' must know
 
     int len = 1 + USERNAME_MAXLENGTH + sizeof(UserParams) + sizeof(UserState);
     Uint8* data = new Uint8[len];
@@ -494,6 +503,7 @@ void Server::OnAuthenticate(const IPaddress& clientAddress, LoginParams* params)
     {
         // This username is already logged in
 
+        // Tell the client that this user is already logged in:
         Uint8 response = NETSIG_ALREADYLOGGEDIN;
         SendToClient (clientAddress,&response,1);
 
@@ -503,10 +513,14 @@ void Server::OnAuthenticate(const IPaddress& clientAddress, LoginParams* params)
     }
     else
     {
-        UserP user = GetUser(clientAddress);
+        UserP user = GetUser (clientAddress);
         if (user && authenticate (accountsPath.c_str(), params->username, params->password))
         {
+            // username and password match
+
+            // register username with ip-address:
             strcpy (user->accountName, params->username);
+
             user->params.hue = rand() % 360; // give the user a random color
             user->state.pos.x=-1000;
             user->state.pos.y=-1000;
@@ -518,7 +532,7 @@ void Server::OnAuthenticate(const IPaddress& clientAddress, LoginParams* params)
             data [0] = NETSIG_LOGINSUCCESS;
             memcpy(data + 1, &user->params, sizeof(UserParams));
             memcpy(data + 1 + sizeof(UserParams), &user->state, sizeof(UserState));
-            SendToClient(clientAddress,data,len);
+            SendToClient (clientAddress,data,len);
             delete data;
 
             // Tell other users about this new user:
@@ -528,8 +542,8 @@ void Server::OnAuthenticate(const IPaddress& clientAddress, LoginParams* params)
                 {
                     if(users[i]!=user)
                     {
-                        TellUserAboutUser (user,users[i]);
-                        TellUserAboutUser (users[i],user);
+                        TellUserAboutUser (user, users[i]);
+                        TellUserAboutUser (users[i], user);
                     }
                 }
             }
@@ -540,11 +554,11 @@ void Server::OnAuthenticate(const IPaddress& clientAddress, LoginParams* params)
             SendToClient (clientAddress, &response, 1);
 
             // Remove the user that requested the login:
-            DelUser(pendingUser);
+            DelUser (pendingUser);
         }
     }
 }
-void Server::OnLoginRequest(const IPaddress& clientAddress)
+void Server::OnLoginRequest (const IPaddress& clientAddress)
 {
     if (GetUser (clientAddress))
     {
@@ -555,22 +569,25 @@ void Server::OnLoginRequest(const IPaddress& clientAddress)
     }
     else
     {
-        UserP user = AddUser();
+        UserP user = AddUser ();
         if (user)
         {
+            // Send the user a public key to encrypt password:
+
             int keySize = i2d_RSAPublicKey(user->key, NULL);
             Uint8* data = new Uint8 [keySize + 1];
             data [0] = NETSIG_RSAPUBLICKEY;
-            unsigned char *pe = (unsigned char*)(data + 1);
+            unsigned char *pe = (unsigned char *)(data + 1);
             i2d_RSAPublicKey (user->key, &pe);
-
-            user->address = clientAddress;
 
             SendToClient (clientAddress, data, keySize + 1);
 
             delete [] data;
+
+            // Register IP address:
+            user->address = clientAddress;
         }
-        else // we couldn't create another user
+        else // too many users already
         {
             Uint8 response = NETSIG_SERVERFULL;
             SendToClient (clientAddress, &response, 1);
@@ -635,16 +652,18 @@ int Server::LoopThreadFunc (void* p)
 
     while (!server->done) // is the server still running?
     {
-        while(SDLNet_UDP_Recv (server->socket, server->in))
+        // Poll for incoming packets:
+        while (SDLNet_UDP_Recv (server->socket, server->in))
         {
             server->OnRequest (server->in->address, server->in->data, server->in->len);
         }
 
+        // Get time passed since last iteration:
         ticks = SDL_GetTicks();
         server->Update (ticks - ticks0);
         ticks0 = ticks;
 
-        SDL_Delay (100); // <- this is to allow the other processes to run
+        SDL_Delay (100); // sleep to allow the other thread to run
     }
 
     return 0;
@@ -656,6 +675,7 @@ int main(int argc, char** argv)
     if(!server.Init())
         return 1;
 
+    // Take command line input:
     while (server.TakeCommands());
 
     server.CleanUp();

@@ -16,7 +16,7 @@ obj/%.o: src/%.cpp
 	mkdir -p $(@D)
 	gcc -std=c++0x -D DEBUG -c $< -o $@ $(INCDIRS:%=-I%)
 
-bin/server: obj/geo2d.o obj/str.o obj/ini.o obj/account.o obj/server/server.o
+bin/server: obj/geo2d.o obj/str.o obj/ini.o obj/account.o obj/server/server.o obj/err.o
 	gcc $^ -o $@ -lstdc++ $(SERVERLIBS:%=-l%) $(LIBDIRS:%=-L%)
 
 bin/client: obj/geo2d.o obj/ini.o obj/client/client.o obj/util.o obj/client/connection.o obj/str.o obj/err.o obj/client/textscroll.o\
@@ -27,5 +27,5 @@ bin/test3d: obj/test3d/water.o obj/ini.o obj/test3d/hub.o obj/xml.o obj/str.o ob
 	obj/io.o obj/texture.o obj/test3d/mesh.o obj/util.o obj/font.o obj/test3d/collision.o obj/test3d/toon.o
 	gcc $^ -o $@ $(TEST3DLIBS:%=-l%) $(LIBDIRS:%=-L%)
 
-bin/manager: obj/manager/manager.o obj/str.o obj/account.o 
+bin/manager: obj/manager/manager.o obj/str.o obj/account.o obj/err.o
 	gcc $^ -o $@ -lstdc++ $(MANAGERLIBS:%=-l%) $(LIBDIRS:%=-L%)

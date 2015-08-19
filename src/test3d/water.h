@@ -50,10 +50,10 @@ private:
     vec3 gridpoints [GRIDSIZE][GRIDSIZE],
          gridnormals [GRIDSIZE][GRIDSIZE];
 
-    // Frame color/depth buffers to render to and textures to derive from them:
+    // Frame buffers to render to and textures to store pixel data:
     GLuint
-        fbReflection, cbReflection, dbReflection, texReflection,
-        fbRefraction, cbRefraction, dbRefraction, texRefraction,
+        fbReflection, texReflection, texReflecDepth,
+        fbRefraction, texRefraction, texRefracDepth,
 
         // handle to shader program
         shaderProgramWater;
@@ -63,6 +63,8 @@ private:
 
     // Re-calculates normals for water grid points:
     void UpdateWaterNormals (void);
+
+    void CubeBlockWaves (void);
 
     // Create a wave at point p with length l
     void MakeWave (const vec3 p, const float l);

@@ -39,7 +39,7 @@ GLuint CreateShader(const std::string& source, int type)
 
     GLint result;
     int logLength;
-    GLuint shader = glCreateShader(type);
+    GLuint shader = glCreateShader (type);
 
     // Compile
     const char *src_ptr = source.c_str();
@@ -50,12 +50,19 @@ GLuint CreateShader(const std::string& source, int type)
     if(result!=GL_TRUE)
     {
         // Error occurred, get compile log:
+        glGetShaderiv (shader, GL_INFO_LOG_LENGTH, &logLength);
 
-        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &logLength);
+        char *errorString = new char [logLength + 1];
+        glGetShaderInfoLog (shader, logLength, NULL, errorString);
 
-        char *errorString = new char[logLength];
-        glGetShaderInfoLog(shader, logLength, NULL, errorString);
-        SetError ("Error compiling shader: %s", errorString);
+        if (type == GL_VERTEX_SHADER)
+
+            SetError ("Error compiling vertex shader: %s", errorString);
+
+        else if (type == GL_FRAGMENT_SHADER)
+
+            SetError ("Error compiling fragment shader: %s", errorString);
+
         delete [] errorString;
 
         glDeleteShader (shader);
@@ -79,8 +86,10 @@ GLuint CreateShaderProgram(const std::string& sourceVertex, const std::string& s
     {
         // Combine the compiled shaders into a program:
         program = glCreateProgram();
+
         glAttachShader (program, vertexShader);
         glAttachShader (program, fragmentShader);
+
         glLinkProgram (program);
 
         glGetProgramiv (program, GL_LINK_STATUS, &result);

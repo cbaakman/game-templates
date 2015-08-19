@@ -35,11 +35,12 @@
 #define VIEW_ANGLE 45.0f
 #define NEAR_VIEW 0.1f
 #define FAR_VIEW 1000.0f
+#define CUBESIZE 2.0f
 
 WaterScene::WaterScene (App *pApp) : Scene(pApp),
 
-    fbReflection(0), cbReflection(0), dbReflection(0), texReflection(0),
-    fbRefraction(0), cbRefraction(0), dbRefraction(0), texRefraction(0),
+    fbReflection(0), texReflection(0), texReflecDepth(0),
+    fbRefraction(0), texRefraction(0), texRefracDepth(0),
     shaderProgramWater(0),
 
     timeDrop(0),
@@ -56,8 +57,8 @@ WaterScene::WaterScene (App *pApp) : Scene(pApp),
     {
         for(int z=0; z<GRIDSIZE; z++)
         {
-            gridnormals[x][z] = vec3(0.0f, 1.0f, 0.0f);
-            gridpoints[x][z] = vec3(x * spacing + offset, 0, z * spacing + offset);
+            gridnormals[x][z] = vec3 (0.0f, 1.0f, 0.0f);
+            gridpoints[x][z] = vec3 (x * spacing + offset, 0, z * spacing + offset);
             gridspeeds[x][z] = 0.0f;
             gridforces[x][z] = 0.0f;
         }
@@ -69,6 +70,7 @@ bool WaterScene::Init()
     SDL_GL_GetDrawableSize (pApp->GetMainWindow (), &w, &h);
 
     GLenum status;
+    char errBuf [100];
 
     std::string resourceZip = std::string(SDL_GetBasePath()) + "test3d.zip",
                 shaderDir = "shaders/",
@@ -78,35 +80,24 @@ bool WaterScene::Init()
 
     /*
         Build two framebuffers for reflection and refraction.
-        Each framebuffer gets a color and depth buffer.
+        Each framebuffer gets a color and depth-stencil texture.
 
-        Also buid two textures, to which the frame buffer's pixel data
-        will be stored.
+        The color and depth values will be used by the pixel shader.
+        The stencil buffer is needed during render to texture.
      */
 
     glGenFramebuffers (1, &fbReflection);
     glGenFramebuffers (1, &fbRefraction);
 
-    glGenRenderbuffers (1, &cbReflection);
-    glGenRenderbuffers (1, &cbRefraction);
-    glGenRenderbuffers (1, &dbReflection);
-    glGenRenderbuffers (1, &dbRefraction);
-
     glGenTextures (1, &texReflection);
     glGenTextures (1, &texRefraction);
+    glGenTextures (1, &texReflecDepth);
+    glGenTextures (1, &texRefracDepth);
 
     glBindFramebuffer (GL_FRAMEBUFFER, fbReflection);
 
-    glBindRenderbuffer (GL_RENDERBUFFER, cbReflection);
-    glRenderbufferStorage (GL_RENDERBUFFER, GL_RGBA, w, h);
-    glFramebufferRenderbuffer (GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, cbReflection);
-
-    glBindRenderbuffer(GL_RENDERBUFFER, dbReflection);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, w, h);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, dbReflection);
-
     glBindTexture(GL_TEXTURE_2D, texReflection);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA,GL_UNSIGNED_BYTE, NULL);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
@@ -114,25 +105,26 @@ bool WaterScene::Init()
 
     glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, texReflection, 0);
 
+    glBindTexture(GL_TEXTURE_2D, texReflecDepth);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, w, h, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, texReflecDepth, 0);
+
     status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-    if(status != GL_FRAMEBUFFER_COMPLETE)
+    if (status != GL_FRAMEBUFFER_COMPLETE)
     {
-        SetError ("error, reflection framebuffer is not complete");
+        GLFrameBufferErrorString (errBuf, status);
+
+        SetError ("error, reflection framebuffer is not complete: %s", errBuf);
         return false;
     }
 
     glBindFramebuffer (GL_FRAMEBUFFER, fbRefraction);
-
-    glBindRenderbuffer (GL_RENDERBUFFER, cbRefraction);
-    glRenderbufferStorage (GL_RENDERBUFFER, GL_RGBA, w, h);
-    glFramebufferRenderbuffer (GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, cbRefraction);
-
-    glBindRenderbuffer (GL_RENDERBUFFER, dbRefraction);
-    glRenderbufferStorage (GL_RENDERBUFFER, GL_DEPTH_COMPONENT, w, h);
-    glFramebufferRenderbuffer (GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, dbRefraction);
 
     glBindTexture (GL_TEXTURE_2D, texRefraction);
     glTexImage2D (GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
@@ -141,15 +133,24 @@ bool WaterScene::Init()
     glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
     glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 
-    glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, texRefraction, 0);
+    glFramebufferTexture (GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, texRefraction, 0);
 
-    status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    glBindTexture (GL_TEXTURE_2D, texRefracDepth);
+    glTexImage2D (GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, w, h, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glFramebufferTexture (GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, texRefracDepth, 0);
+
+    status = glCheckFramebufferStatus (GL_FRAMEBUFFER);
+
+    glBindFramebuffer (GL_FRAMEBUFFER, 0);
 
     if (status != GL_FRAMEBUFFER_COMPLETE)
     {
-        SetError ("error, refraction framebuffer is not complete");
+        GLFrameBufferErrorString (errBuf, status);
+
+        SetError ("error, refraction framebuffer is not complete: %s", errBuf);
         return false;
     }
 
@@ -200,14 +201,11 @@ WaterScene::~WaterScene()
 
     glDeleteTextures(1, &texReflection);
     glDeleteTextures(1, &texRefraction);
+    glDeleteTextures(1, &texReflecDepth);
+    glDeleteTextures(1, &texRefracDepth);
 
     glDeleteFramebuffers(1, &fbReflection);
     glDeleteFramebuffers(1, &fbRefraction);
-
-    glDeleteRenderbuffers(1, &cbReflection);
-    glDeleteRenderbuffers(1, &cbRefraction);
-    glDeleteRenderbuffers(1, &dbReflection);
-    glDeleteRenderbuffers(1, &dbRefraction);
 }
 void WaterScene::UpdateWaterNormals()
 {
@@ -268,6 +266,32 @@ void WaterScene::MakeWave (const vec3 p, const float l)
         }
     }
 }
+void WaterScene::CubeBlockWaves ()
+{
+    float x1 = posCube.x - CUBESIZE / 2, x2 = posCube.x + CUBESIZE / 2,
+          y1 = posCube.y - CUBESIZE / 2, y2 = posCube.y + CUBESIZE / 2,
+          z1 = posCube.z - CUBESIZE / 2, z2 = posCube.z + CUBESIZE / 2,
+
+          smallestDist2;
+
+    for (int x = 1; x < GRIDSIZE; x++)
+    {
+        for(int z = 1; z < GRIDSIZE; z++)
+        {
+            if (0 > y1 && 0 < y2)
+            {
+                if (gridpoints[x][z].x > x1 && gridpoints[x][z].x < x2 &&
+                    gridpoints[x][z].z > z1 && gridpoints[x][z].z < z2)
+                {
+                    // Cancel all waves at the edge of the cube.
+
+                    gridpoints[x][z].y = 0;
+                }
+            }
+        }
+    }
+}
+
 #define SQRT2DIV2 0.707106781186547524400844362104849f
 void WaterScene::UpdateWater (const float dt)
 {
@@ -289,16 +313,18 @@ void WaterScene::UpdateWater (const float dt)
     {
         for(int z=1; z<(GRIDSIZE-1); z++)
         {
-            d=gridpoints[x][z].y -  gridpoints[x-1][z].y;
+            // The forces are composed of the y level differences between points:
+
+            d=gridpoints[x][z].y - gridpoints[x-1][z].y;
               gridforces[x][z]-=d;    gridforces[x-1][z]+=d;
 
-            d=gridpoints[x][z].y -  gridpoints[x+1][z].y;
+            d=gridpoints[x][z].y - gridpoints[x+1][z].y;
               gridforces[x][z]-=d;    gridforces[x+1][z]+=d;
 
-            d=gridpoints[x][z].y -  gridpoints[x][z-1].y;
+            d=gridpoints[x][z].y - gridpoints[x][z-1].y;
               gridforces[x][z]-=d;    gridforces[x][z-1]+=d;
 
-            d=gridpoints[x][z].y -  gridpoints[x][z+1].y;
+            d=gridpoints[x][z].y - gridpoints[x][z+1].y;
               gridforces[x][z]-=d;    gridforces[x][z+1]+=d;
 
             d=gridpoints[x][z].y - gridpoints[x-1][z+1].y; d*=SQRT2DIV2;
@@ -312,6 +338,9 @@ void WaterScene::UpdateWater (const float dt)
 
             d=gridpoints[x][z].y - gridpoints[x+1][z-1].y; d*=SQRT2DIV2;
                gridforces[x][z]-=d;    gridforces[x+1][z-1]+=d;
+
+            // friction:
+            // gridforces[x][z] -= gridspeeds[x][z];
         }
     }
 
@@ -319,21 +348,20 @@ void WaterScene::UpdateWater (const float dt)
     if (ft > 1.0f)
         ft = 1.0f;
 
-    // friction / viscosity
-    float u = (float)exp(250.0f * dt * log(0.99f));
+    float u = (float)exp (-2.5 * dt);
 
     for(int x=0; x<GRIDSIZE; x++)
     {
         for(int z=0; z<GRIDSIZE; z++)
         {
-            gridspeeds[x][z] += 0.2f * gridforces[x][z] * ft;
+            float force = 0.2f * gridforces[x][z] * ft;
+
+            gridspeeds[x][z] += force;
+
             gridpoints[x][z].y += gridspeeds[x][z] * ft;
             gridpoints[x][z].y *= u;
         }
     }
-
-    // Adjust normals to new grid points:
-    UpdateWaterNormals();
 }
 void getCameraPosition(
         const GLfloat angleX, const GLfloat angleY, const GLfloat distCamera,
@@ -429,6 +457,11 @@ void WaterScene::Update(float dt)
         posCube += mx * camX - mz * camZ;
         posCube.y += my;
     }
+
+    // CubeBlockWaves ();
+
+    // Adjust normals to new grid points:
+    UpdateWaterNormals();
 }
 void WaterScene::RenderWater()
 {
@@ -489,7 +522,7 @@ void RenderPlane()
  */
 void RenderCube()
 {
-    GLfloat size = 1.0f;
+    GLfloat size = CUBESIZE / 2;
 
     glBegin(GL_QUADS);
 
@@ -532,19 +565,23 @@ void RenderCube()
     glEnd();
 }
 
-const GLfloat colorCube[] = {0.0f, 1.0f, 0.0f, 1.0f},
-              colorCubeReflect[] = {0.0f, 0.8f, 0.1f, 1.0f},
-              bgcolorReflect[] ={0.1f, 0.2f, 1.0f, 1.0f},
-              bgcolorRefract[] = {0.1f, 0.1f, 0.2f, 1.0f},
+const GLfloat colorCube [] = {0.0f, 1.0f, 0.0f, 1.0f},
+              colorCubeReflect [] = {0.0f, 0.8f, 0.1f, 1.0f},
+              bgcolorReflect [] ={0.1f, 0.2f, 1.0f, 1.0f},
+              bgcolorRefract [] = {0.1f, 0.1f, 0.2f, 1.0f},
 
-              posLight[] = {
+              posLight [] = {
                             0.0f,
                             5.0f,
                             0.0f,
                             1.0f}, // 0 is directional
 
-                ambient[] = {0.5f, 0.5f, 0.5f, 1.0f},
-                diffuse[] = {0.5f, 0.5f, 0.5f, 1.0f};
+                ambient [] = {0.5f, 0.5f, 0.5f, 1.0f},
+                diffuse [] = {0.5f, 0.5f, 0.5f, 1.0f};
+
+// const GLdouble planeWater [] = {0, -1.0, 0, 0}; // at origin, pointing down
+
+#define CUBE_STENCIL_MASK 0xFFFFFFFFL
 
 void WaterScene::Render()
 {
@@ -558,6 +595,7 @@ void WaterScene::Render()
 
     // Settings that stay during the entire rendering process
     glEnable (GL_DEPTH_TEST);
+    glDisable (GL_COLOR_MATERIAL);
     glDisable (GL_TEXTURE_2D);
     glDisable (GL_BLEND);
     glDisable (GL_STENCIL_TEST);
@@ -578,29 +616,60 @@ void WaterScene::Render()
     glEnable(GL_LIGHT0);
     glEnable(GL_LIGHTING);
 
+    /*
+        The pixel shader uses the depth values, assuming that the background depth is 1.0.
+        Thus the water shouldn't be rendered in the frame buffers, or with depthmask set to false!
+     */
+
 
     // Render the refraction in its buffer
     glBindFramebuffer(GL_FRAMEBUFFER, fbRefraction);
     glViewport(0, 0, w, h);
 
-    // Clear the refraction buffer with water color and minimum depth
-    glClearDepth (0.0f);
-    glClearColor(bgcolorRefract[0], bgcolorRefract[1], bgcolorRefract[2], bgcolorRefract[3]);
-    glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    glEnable(GL_CULL_FACE);
+    glEnable (GL_CULL_FACE);
+    glEnable (GL_STENCIL_TEST);
+    glCullFace(GL_FRONT);
 
     // Position the light in normal space
     glLightfv(GL_LIGHT0, GL_POSITION, posLight);
 
-    // Make sure anything above the water isn't drawn
-    glDepthFunc(GL_GREATER);
-    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    glClearDepth (1.0f);
+    glClearStencil (0);
+    glClearColor(bgcolorRefract[0], bgcolorRefract[1], bgcolorRefract[2], bgcolorRefract[3]);
+    glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-    // Render an invisible depth plane at the water level
-    RenderPlane();
-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    glDisable(GL_COLOR_MATERIAL);
+    /*
+        Refraction first Pass, make sure anything above the water isn't drawn.
+        Set stencil values to 1 where the cube is drawn.
+     */
+
+    glDepthFunc(GL_LEQUAL);
+    glColorMask (GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    glStencilFunc (GL_ALWAYS, 1, CUBE_STENCIL_MASK);
+
+    glStencilOp (GL_KEEP, GL_KEEP, GL_KEEP);
+
+    RenderWater ();
+
+    glDepthFunc(GL_GEQUAL);
+    glStencilOp (GL_KEEP, GL_KEEP, GL_REPLACE);
+
+    glTranslatef(posCube.x, posCube.y, posCube.z);
+    glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, colorCubeReflect);
+    RenderCube();
+    glTranslatef(-posCube.x, -posCube.y, -posCube.z);
+
+    /*
+        Refraction second pass, set background depth to 1.0 and render the cube
+        wherever stencil was set to 1.
+     */
+
+    glClearDepth (1.0f);
+    glDepthFunc(GL_LEQUAL);
+    glStencilFunc (GL_EQUAL, 1, CUBE_STENCIL_MASK);
+    glColorMask (GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
+    glClear (GL_DEPTH_BUFFER_BIT);
 
     glTranslatef(posCube.x, posCube.y, posCube.z);
     glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, colorCubeReflect);
@@ -608,29 +677,56 @@ void WaterScene::Render()
     glTranslatef(-posCube.x, -posCube.y, -posCube.z);
 
 
-
-
     // Render the reflection in its buffer
     glBindFramebuffer(GL_FRAMEBUFFER, fbReflection);
     glViewport(0, 0, w, h);
 
-    // Clear the reflection buffer with water color and minimum depth
-    glClearDepth(0.0f);
-    glClearColor(bgcolorReflect[0], bgcolorReflect[1], bgcolorReflect[2], bgcolorReflect[3]);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
     glEnable(GL_CULL_FACE);
     glCullFace(GL_FRONT);
+    glEnable (GL_STENCIL_TEST);
 
-    // Make sure anything below the water isn't drawn
-    glDepthFunc(GL_GEQUAL);
-    glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    // Clear the reflection buffer with water color and maximum depth
+    glClearDepth (1.0f);
+    glClearStencil (0);
+    glClearColor (bgcolorReflect[0], bgcolorReflect[1], bgcolorReflect[2], bgcolorReflect[3]);
+    glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-    // Render an invisible depth plane at the water level
-    RenderPlane();
-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    /*
+        Reflection first Pass, make sure anything above the water isn't drawn.
+        Set stencil values to 1 where the cube is drawn.
+     */
 
-    glCullFace(GL_BACK);
+    glDepthFunc (GL_LEQUAL);
+    glColorMask (GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    glStencilFunc (GL_ALWAYS, 1, CUBE_STENCIL_MASK);
+
+    glStencilOp (GL_KEEP, GL_KEEP, GL_KEEP);
+
+    RenderWater ();
+
+    glDepthFunc (GL_GEQUAL);
+    glStencilOp (GL_KEEP, GL_KEEP, GL_REPLACE);
+    glCullFace (GL_BACK);
+
+    glPushMatrix();
+        // move cube to mirror position
+        glScalef(1, -1, 1);
+        glTranslatef(posCube.x, posCube.y, posCube.z);
+        RenderCube();
+    glPopMatrix();
+
+    /*
+        Reflection second pass, set background depth to 1.0 and render the cube
+        wherever stencil was set to 1.
+     */
+
+    glColorMask (GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glStencilFunc (GL_EQUAL, 1, CUBE_STENCIL_MASK);
+    glClearDepth (1.0f);
+    glDepthFunc (GL_LEQUAL);
+
+    glClear (GL_DEPTH_BUFFER_BIT);
+
     glPushMatrix();
         // move light and cube to their mirror position
         glScalef(1, -1, 1);
@@ -656,6 +752,12 @@ void WaterScene::Render()
     glActiveTexture (GL_TEXTURE1);
     glBindTexture (GL_TEXTURE_2D, texRefraction);
 
+    glActiveTexture (GL_TEXTURE2);
+    glBindTexture (GL_TEXTURE_2D, texReflecDepth);
+
+    glActiveTexture (GL_TEXTURE3);
+    glBindTexture (GL_TEXTURE_2D, texRefracDepth);
+
     glEnable (GL_CULL_FACE);
     glCullFace (GL_FRONT);
 
@@ -666,6 +768,7 @@ void WaterScene::Render()
 
     // Render reflection and refraction to the water
     glUseProgram(shaderProgramWater);
+    glDisable (GL_STENCIL_TEST);
 
     // Tell the shader to use textures GL_TEXTURE0 and GL_TEXTURE1
     texLoc = glGetUniformLocation (shaderProgramWater, "tex_reflect");
@@ -674,10 +777,16 @@ void WaterScene::Render()
     texLoc = glGetUniformLocation (shaderProgramWater, "tex_refract");
     glUniform1i (texLoc, 1);
 
+    texLoc = glGetUniformLocation (shaderProgramWater, "tex_reflect_depth");
+    glUniform1i (texLoc, 2);
+
+    texLoc = glGetUniformLocation (shaderProgramWater, "tex_refract_depth");
+    glUniform1i (texLoc, 3);
+
     RenderWater();
     glUseProgram(0);
 
-    // This must be done to get the coloring right, dunno why
+    // Set active texture back to 0 and disable
     glBindTexture (GL_TEXTURE_2D,0);
     glActiveTexture (GL_TEXTURE0);
     glDisable (GL_TEXTURE_2D);

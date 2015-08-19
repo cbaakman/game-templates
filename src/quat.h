@@ -25,6 +25,14 @@
 
 #define QUAT_ID Quaternion(0,0,0,1)
 
+/*
+    Quaternions are used to represent rotation.
+
+    For further info, see:
+    https://en.wikipedia.org/wiki/Quaternion
+    https://en.wikipedia.org/wiki/Slerp
+ */
+
 struct Quaternion {
 
     union {
@@ -57,7 +65,7 @@ struct Quaternion {
 
         return length2;
     }
-    float Length () const 
+    float Length () const
     {
         return sqrt (Length2());
     }

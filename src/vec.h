@@ -34,9 +34,13 @@
 
 #define PI 3.1415926535897932384626433832795
 
+/*
+    vec3 is a vector of length 3, used for 3D space calculations.
+ */
 
 struct vec3
 {
+    // Coordinates: x, y, and z, or v[0], v[1] and v[2]
     union {
         struct {
             float x, y, z;
@@ -44,25 +48,35 @@ struct vec3
         float v[3];
     };
 
-    vec3(){}
-    vec3(float _x,float _y,float _z){ x=_x; y=_y; z=_z; }
-    vec3(const vec3 &v)
+    vec3 (){}
+    vec3 (float _x,float _y,float _z){ x=_x; y=_y; z=_z; }
+    vec3 (const vec3 &v)
     {
         x = v.x;
         y = v.y;
         z = v.z;
     }
 
-    // Length2 is computationally less expensive than Length
+    /*
+        Length2 is the squared length, it's
+        computationally less expensive than Length
+     */
     float    Length()    const    {return sqrt(x*x+y*y+z*z);}
     float    Length2()    const    {return (x*x+y*y+z*z);}
 
     vec3    Unit()        const
     {
-        float l=Length();
+        // The unit vector has length 1.0
+
+        float l = Length();
         if(l>0) return ((*this)/l);
         else return *this;
     }
+
+    /*
+        vec3 objects can be added on, subtracted and
+        multiplied/divided by a scalar.
+     */
 
     vec3        operator-  ()                    const { return vec3(-x,-y,-z);    }
     vec3        operator-  (const vec3 &v)        const { return vec3(x-v.x,y-v.y,z-v.z); }
@@ -120,8 +134,10 @@ inline vec3 ClosestPointOnLine(const vec3& l1,const vec3& l2,const vec3& point)
 
 struct Plane {
 
-    vec3 n;
-    float d;
+    vec3 n; // plane normal, should have length 1.0
+    float d; // shortest distance from (0,0,0) to plane
+
+    // n * d is a point on the plane
 };
 
 inline Plane Flip (const Plane  &plane)
@@ -146,7 +162,7 @@ struct Triangle {
         p[2] = p2;
     }
 
-    vec3 Center() const
+    vec3 Center () const
     {
         vec3 pb = 0.5f * (p[1] - p[0]),
              pz = pb + 0.333333f*(p[2] - pb);
@@ -154,7 +170,7 @@ struct Triangle {
         return pz;
     }
 
-    Plane GetPlane() const
+    Plane GetPlane () const
     {
         Plane plane;
         plane.n = Cross(p[1] - p[0], p[2] - p[0]).Unit();

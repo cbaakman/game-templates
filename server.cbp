@@ -41,6 +41,8 @@
 		</Linker>
 		<Unit filename="src/account.cpp" />
 		<Unit filename="src/account.h" />
+		<Unit filename="src/err.cpp" />
+		<Unit filename="src/err.h" />
 		<Unit filename="src/geo2d.cpp" />
 		<Unit filename="src/geo2d.h" />
 		<Unit filename="src/ini.cpp" />

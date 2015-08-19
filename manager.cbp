@@ -31,6 +31,8 @@
 		</Linker>
 		<Unit filename="src/account.cpp" />
 		<Unit filename="src/account.h" />
+		<Unit filename="src/err.cpp" />
+		<Unit filename="src/err.h" />
 		<Unit filename="src/manager/manager.cpp" />
 		<Unit filename="src/str.cpp" />
 		<Unit filename="src/str.h">

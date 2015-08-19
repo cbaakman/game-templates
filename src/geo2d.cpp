@@ -18,8 +18,8 @@
 */
 
 
-#include"geo2d.h"
-#include<math.h>
+#include "geo2d.h"
+#include <math.h>
 
 vec2::vec2(){}
 vec2::vec2(float _x, float _y)
@@ -80,56 +80,65 @@ vec2 vec2::unit() const
 vec2 vec2::rotate(float a) const
 {
     vec2 r;
-    const float    c=cos(a),
-                s=sin(a);
+    const float
+        c = cos(a),
+        s = sin(a);
 
-    r.x=c*x - s*y;
-    r.y=s*x + c*y;
+    r.x = c * x - s * y;
+    r.y = s * x + c * y;
 
     return r;
 }
-float vec2::angle() const
+float vec2::angle () const
 {
-    return atan(y/x);
+    return atan (y / x);
 }
 vec2 operator* (const float& f, const vec2& v)
 {
-    return (v*f);
+    return (v * f);
 }
 float distance2(const vec2& v1, const vec2& v2)
 {
-    return (v2-v1).length2();
+    return (v2 - v1).length2();
 }
 float distance(const vec2& v1, const vec2& v2)
 {
-    return (v2-v1).length();
+    return (v2 - v1).length();
 }
 float dot (const vec2& v1, const vec2& v2)
 {
-    return v1.x*v2.x+v1.y*v2.y;
+    return v1.x * v2.x + v1.y * v2.y;
 }
 float angle (const vec2&v1,const vec2&v2)
 {
     float a=acosf(dot(v1.unit(),v2.unit()));
-    while(a>M_PI)   { a-=2*M_PI; }
-    while(a<=-M_PI) { a+=2*M_PI; }
+
+    /*
+        Return an angle between -PI and PI.
+        Adding or subtracting 2PI always results
+        in the same angle.
+     */
+    while (a > M_PI)   { a -= 2*M_PI; }
+    while (a <= -M_PI) { a += 2*M_PI; }
+
     return a;
 }
-vec2 projection(const vec2& v,const vec2& on_v)
+vec2 projection (const vec2& v,const vec2& on_v)
 {
-    return on_v*dot(v,on_v)/on_v.length2();
+    return on_v * dot (v, on_v) / on_v.length2 ();
 }
 vec2 lineIntersection(const vec2& a1, const vec2& a2, const vec2& b1, const vec2& b2)
 {
-     float d=(a1.x-a2.x)*(b1.y-b2.y)-(a1.y-a2.y)*(b1.x-b2.x),
-             a=a1.x*a2.y-a1.y*a2.x,
-             b=b1.x*b2.y-b1.y*b2.x;
-     vec2 r((a*(b1.x-b2.x)-b*(a1.x-a2.x))/d,(a*(b1.y-b2.y)-b*(a1.y-a2.y))/d);
+     float d = (a1.x - a2.x) * (b1.y - b2.y) - (a1.y - a2.y) * (b1.x - b2.x),
+           a = a1.x * a2.y - a1.y * a2.x,
+           b = b1.x * b2.y - b1.y * b2.x;
+
+     vec2 r ((a*(b1.x-b2.x)-b*(a1.x-a2.x))/d,(a*(b1.y-b2.y)-b*(a1.y-a2.y))/d);
      return r;
 }
 vec2 pointOnBezierCurve(float ti, const vec2& p0, const vec2& p1, const vec2& p2, const vec2& p3)
 {
-    float   invti = 1.0f-ti;
+    float   invti = 1.0f - ti;
 
     return  invti*invti*invti*p0 + 3*invti*invti*ti*p1 + 3*invti*ti*ti*p2 + ti*ti*ti*p3;
 }

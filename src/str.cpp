@@ -29,48 +29,64 @@ const char *ParseFloat(const char *in, float *out)
 {
     float f = 10.0f;
     int digit, ndigit = 0;
+
+    // start from zero
     *out = 0;
+
     const char *p = in;
     while (*p)
     {
-        if (isdigit(*p))
+        if (isdigit (*p))
         {
             digit = (*p - '0');
-            if (f > 1.0f)
+
+            if (f > 1.0f) // left from period
             {
                 *out *= f;
                 *out += digit;
             }
-            else
+            else // right from period, decimal
             {
                 *out += f * digit;
                 f *= 0.1f;
             }
             ndigit++;
         }
-        else if (tolower(*p) == 'e')
+        else if (tolower (*p) == 'e')
         {
+            // exponent
+
+            // if no digits precede the exponent, assume 1
             if (ndigit <= 0)
                 *out = 1.0f;
 
             p++;
-            if (*p == '+')
-                p++;
+            if (*p == '+') // '+' just means positive power, default
+                p++; // skip it, don't give it to atoi
 
             int e = atoi (p);
 
             *out = *out * pow(10, e);
 
-            if (*p == '-') p++;
-            while (isdigit(*p)) p++;
+            // read past exponent number
+            if (*p == '-')
+                p++;
+
+            while (isdigit(*p))
+                p++;
+
             return p;
         }
         else if (*p == '.')
         {
+            // expect decimal digits after this
+
             f = 0.1f;
         }
         else if (*p == '-')
         {
+            // negative number
+
             float v;
             p = ParseFloat(p + 1, &v);
 
@@ -80,6 +96,8 @@ const char *ParseFloat(const char *in, float *out)
         }
         else
         {
+            // To assume success, must have read at least one digit
+
             if (ndigit > 0)
                 return p;
             else
@@ -90,9 +108,9 @@ const char *ParseFloat(const char *in, float *out)
 
     return p;
 }
-bool isnewline(const int c)
+bool isnewline (const int c)
 {
-    return (c=='\n'||c=='\r');
+    return (c=='\n' || c=='\r');
 }
 bool emptyline (const char *line)
 {
@@ -100,12 +118,15 @@ bool emptyline (const char *line)
     {
         if (!isspace (*line))
             return false;
+
         line ++;
     }
     return true;
 }
 void stripr (char *s)
 {
+    // Start on the back and move left:
+
     int n = strlen (s);
     while (true)
     {

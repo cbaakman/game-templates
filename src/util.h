@@ -73,6 +73,11 @@ bool ReadAll (SDL_RWops *, std::string &out);
 void GLErrorString (char *out, GLenum status);
 
 /**
+ * Converts a GL framebuffer error status to a string.
+ */
+void GLFrameBufferErrorString (char *out, GLenum status);
+
+/**
  * Gives a h,s,v color to OpenGL
  */
 void glColorHSV (float h, float s, float v);

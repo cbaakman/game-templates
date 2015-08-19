@@ -55,6 +55,39 @@ void GLErrorString(char *out, GLenum status)
         break;
     }
 }
+void GLFrameBufferErrorString (char *out, GLenum status)
+{
+    switch (status)
+    {
+    case GL_FRAMEBUFFER_UNDEFINED:
+        strcpy (out, "GL_FRAMEBUFFER_UNDEFINED");
+        break;
+    case GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT:
+        strcpy (out, "GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT");
+        break;
+    case GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT:
+        strcpy (out, "GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT");
+        break;
+    case GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER:
+        strcpy (out, "GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER");
+        break;
+    case GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER:
+        strcpy (out, "GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER");
+        break;
+    case GL_FRAMEBUFFER_UNSUPPORTED:
+        strcpy (out, "GL_FRAMEBUFFER_UNSUPPORTED");
+        break;
+    case GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE:
+        strcpy (out, "GL_FRAMEBUFFER_INCOMPLETE_MULTISAMPLE");
+        break;
+    case GL_FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS:
+        strcpy (out, "GL_FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS");
+        break;
+    default:
+        sprintf (out, "unknown error 0x%.8X", status);
+        break;
+    }
+}
 
 bool ReadAll (SDL_RWops *io, std::string &out)
 {

@@ -40,6 +40,53 @@ ToonScene::~ToonScene ()
     glDeleteTextures (1, &texBG.tex);
     glDeleteProgram (shaderProgram);
 }
+
+const char
+
+// Toon vector shader:
+toon_vsh [] = R"shader(
+
+    varying vec3 N;
+    varying vec3 v;
+    varying vec4 color;
+
+    void main()
+    {
+        v = vec3 (gl_ModelViewMatrix * gl_Vertex);
+
+        N = normalize (gl_NormalMatrix * gl_Normal);
+
+        color = gl_Color;
+
+        gl_Position = ftransform();
+    }
+
+)shader",
+
+// Toon fragment shader:
+toon_fsh [] = R"shader(
+
+    uniform float cutOff = 0.8;
+
+    varying vec3 N;
+    varying vec3 v;
+    varying vec4 color;
+
+    void main()
+    {
+        vec3 L = normalize(gl_LightSource[0].position.xyz - v);
+
+        float lum = clamp (dot(normalize (N), L) + 0.5, 0.0, 1.0);
+
+        if (lum < cutOff)
+            lum = cutOff;
+        else
+            lum = 1.0;
+
+        gl_FragColor = color * lum;
+    }
+
+)shader";
 bool ToonScene::Init ()
 {
     std::string resPath = std::string(SDL_GetBasePath()) + "test3d.zip";

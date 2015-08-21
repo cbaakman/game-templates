@@ -26,10 +26,6 @@
 
 #include <string>
 
-extern const char
-    water_vsh [], water_fsh [],
-    toon_vsh [], toon_fsh [];
-
 /**
  * Creates a shader program from source.
  * :param sourceVertex: source of the vertex shader

@@ -67,14 +67,86 @@ WaterScene::WaterScene (App *pApp) : Scene(pApp),
     }
 }
 
-// very simple one-line shaders:
-const std::string
+const char
 
         // In this shader, given vertices are simply interpreted as if in clip space.
-        srcClipVertex = "void main () {gl_Position = gl_Vertex;}",
+        srcClipVertex [] = "void main () {gl_Position = gl_Vertex;}",
 
         // This shader sets depth to 1.0 everywhere.
-        srcDepth1Fragment = "uniform vec4 color; void main () {gl_FragColor = color; gl_FragDepth = 1.0;}";
+        srcDepth1Fragment [] = "uniform vec4 color; void main () {gl_FragColor = color; gl_FragDepth = 1.0;}",
+
+// Vector shader for the water's surface:
+water_vsh [] = R"shader(
+
+    varying vec3 normal;
+
+    void main()
+    {
+        normal=gl_Normal;
+
+        gl_Position = ftransform();
+
+        gl_TexCoord[0].s = 0.5 * gl_Position.x / gl_Position.w + 0.5;
+        gl_TexCoord[0].t = 0.5 * gl_Position.y / gl_Position.w + 0.5;
+    }
+
+)shader",
+
+// Fragment shader for the water's surface:
+water_fsh [] = R"shader(
+
+    uniform sampler2D tex_reflect,
+                      tex_refract,
+                      tex_reflect_depth,
+                      tex_refract_depth;
+
+    varying vec3 normal;
+    varying vec4 water_level_position;
+
+    const vec3 mirror_normal = vec3(0.0, 1.0, 0.0);
+
+    const float refrac = 1.33; // air to water
+
+    void main()
+    {
+        float nfac = dot (normal, mirror_normal);
+
+        vec2 reflectOffset;
+        if (nfac > 0.9999) // clamp reflectOffset to prevent glitches
+        {
+            reflectOffset = vec2(0.0, 0.0);
+        }
+        else
+        {
+            vec3 flat_normal = normal - nfac * mirror_normal;
+
+            vec3 eye_normal = normalize (gl_NormalMatrix * flat_normal);
+
+            reflectOffset = eye_normal.xy * length (flat_normal) * 0.1;
+        }
+
+        // The deeper under water, the more distortion:
+
+        float reflection_depth = min (texture2D (tex_reflect_depth, gl_TexCoord[0].st).r,
+                                      texture2D (tex_reflect_depth, gl_TexCoord[0].st + reflectOffset.xy).r),
+              refraction_depth = min (texture2D (tex_refract_depth, gl_TexCoord[0].st).r,
+                                      texture2D (tex_refract_depth, gl_TexCoord[0].st - refrac * reflectOffset.xy).r),
+
+              // diff_reflect and diff_refract will be linear representations of depth:
+
+              diff_reflect = clamp (30 * (reflection_depth - gl_FragCoord.z) / gl_FragCoord.w, 0.0, 1.0),
+              diff_refract = clamp (30 * (refraction_depth - gl_FragCoord.z) / gl_FragCoord.w, 0.0, 1.0);
+
+        vec4 reflectcolor = texture2D (tex_reflect, gl_TexCoord[0].st + diff_reflect * reflectOffset.xy),
+             refractcolor = texture2D (tex_refract, gl_TexCoord[0].st - diff_refract * refrac * reflectOffset.xy);
+
+        float Rfraq = normalize (gl_NormalMatrix * normal).z;
+        Rfraq = Rfraq * Rfraq;
+
+        gl_FragColor = reflectcolor * (1.0 - Rfraq) + refractcolor * Rfraq;
+    }
+
+)shader";
 
 bool WaterScene::Init()
 {

@@ -42,8 +42,7 @@ ToonScene::~ToonScene ()
 }
 bool ToonScene::Init ()
 {
-    std::string resPath = std::string(SDL_GetBasePath()) + "test3d.zip",
-                sourceV = "", sourceF = "";;
+    std::string resPath = std::string(SDL_GetBasePath()) + "test3d.zip";
 
     SDL_RWops *f;
     bool success;
@@ -85,38 +84,11 @@ bool ToonScene::Init ()
         return false;
     }
 
-    // Load the vertex shader source:
-    f = SDL_RWFromZipArchive (resPath.c_str(), "shaders/toon.vsh");
-    if (!f)
-        return false;
-
-    success = ReadAll (f, sourceV);
-    f->close(f);
-
-    if (!success)
-    {
-        SetError ("error parsing toon.vsh: %s", GetError ());
-        return false;
-    }
-
-    // Load the fragment shader source:
-    f = SDL_RWFromZipArchive (resPath.c_str(), "shaders/toon.fsh");
-    if (!f)
-        return false;
-    success = ReadAll (f, sourceF);
-    f->close(f);
-
-    if (!success)
-    {
-        SetError ("error parsing toon.fsh: %s", GetError ());
-        return false;
-    }
-
     // Create shader from sources:
-    shaderProgram = CreateShaderProgram (sourceV, sourceF);
+    shaderProgram = CreateShaderProgram (toon_vsh, toon_fsh);
     if (!shaderProgram)
     {
-        SetError ("error creating shader program from toon.vsh and toon.fsh: %s", GetError ());
+        SetError ("error creating toon shader program: %s", GetError ());
         return false;
     }
 

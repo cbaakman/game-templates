@@ -26,6 +26,10 @@
 
 #include <string>
 
+extern const char
+    water_vsh [], water_fsh [],
+    toon_vsh [], toon_fsh [];
+
 /**
  * Creates a shader program from source.
  * :param sourceVertex: source of the vertex shader
@@ -33,5 +37,6 @@
  * :returns: OpenGL handle to the shader program, or 0 on error
  */
 GLuint CreateShaderProgram (const std::string& sourceVertex, const std::string& sourceFragment);
+GLuint CreateShaderProgram (const char *sourceVertex, const char *sourceFragment);
 
 #endif // SHADER_H

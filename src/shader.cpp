@@ -24,6 +24,121 @@
 #include "err.h"
 #include "shader.h"
 
+const char
+    water_vsh [] = R"shader(
+
+varying vec3 normal;
+
+    void main()
+    {
+        normal=gl_Normal;
+
+        gl_Position = ftransform();
+
+        gl_TexCoord[0].s = 0.5 * gl_Position.x / gl_Position.w + 0.5;
+        gl_TexCoord[0].t = 0.5 * gl_Position.y / gl_Position.w + 0.5;
+    }
+
+)shader",
+
+water_fsh [] = R"shader(
+
+    uniform sampler2D tex_reflect,
+                      tex_refract,
+                      tex_reflect_depth,
+                      tex_refract_depth;
+
+    varying vec3 normal;
+    varying vec4 water_level_position;
+
+    const vec3 mirror_normal = vec3(0.0, 1.0, 0.0);
+
+    const float refrac = 1.33; // air to water
+
+    void main()
+    {
+        float nfac = dot (normal, mirror_normal);
+
+        vec2 reflectOffset;
+        if (nfac > 0.9999) // clamp reflectOffset to prevent glitches
+        {
+            reflectOffset = vec2(0.0, 0.0);
+        }
+        else
+        {
+            vec3 flat_normal = normal - nfac * mirror_normal;
+
+            vec3 eye_normal = normalize (gl_NormalMatrix * flat_normal);
+
+            reflectOffset = eye_normal.xy * length (flat_normal) * 0.1;
+        }
+
+        // The deeper under water, the more distortion:
+
+        float reflection_depth = min (texture2D (tex_reflect_depth, gl_TexCoord[0].st).r,
+                                      texture2D (tex_reflect_depth, gl_TexCoord[0].st + reflectOffset.xy).r),
+              refraction_depth = min (texture2D (tex_refract_depth, gl_TexCoord[0].st).r,
+                                      texture2D (tex_refract_depth, gl_TexCoord[0].st - refrac * reflectOffset.xy).r),
+
+              // diff_reflect and diff_refract will be linear representations of depth:
+
+              diff_reflect = clamp (30 * (reflection_depth - gl_FragCoord.z) / gl_FragCoord.w, 0.0, 1.0),
+              diff_refract = clamp (30 * (refraction_depth - gl_FragCoord.z) / gl_FragCoord.w, 0.0, 1.0);
+
+        vec4 reflectcolor = texture2D (tex_reflect, gl_TexCoord[0].st + diff_reflect * reflectOffset.xy),
+             refractcolor = texture2D (tex_refract, gl_TexCoord[0].st - diff_refract * refrac * reflectOffset.xy);
+
+        float Rfraq = normalize (gl_NormalMatrix * normal).z;
+        Rfraq = Rfraq * Rfraq;
+
+        gl_FragColor = reflectcolor * (1.0 - Rfraq) + refractcolor * Rfraq;
+    }
+
+)shader",
+
+toon_vsh [] = R"shader(
+
+    varying vec3 N;
+    varying vec3 v;
+    varying vec4 color;
+
+    void main()
+    {
+        v = vec3 (gl_ModelViewMatrix * gl_Vertex);
+
+        N = normalize (gl_NormalMatrix * gl_Normal);
+
+        color = gl_Color;
+
+        gl_Position = ftransform();
+    }
+
+)shader",
+
+toon_fsh [] = R"shader(
+
+    uniform float cutOff = 0.8;
+
+    varying vec3 N;
+    varying vec3 v;
+    varying vec4 color;
+
+    void main()
+    {
+        vec3 L = normalize(gl_LightSource[0].position.xyz - v);
+
+        float lum = clamp (dot(normalize (N), L) + 0.5, 0.0, 1.0);
+
+        if (lum < cutOff)
+            lum = cutOff;
+        else
+            lum = 1.0;
+
+        gl_FragColor = color * lum;
+    }
+
+)shader";
+
 /**
  * Compile either the source of a vertex or fragment shader.
  * :param type: either GL_VERTEX_SHADER or GL_FRAGMENT_SHADER
@@ -71,8 +186,11 @@ GLuint CreateShader(const std::string& source, int type)
 
     return shader;
 }
-
-GLuint CreateShaderProgram(const std::string& sourceVertex, const std::string& sourceFragment)
+GLuint CreateShaderProgram (const char *sourceVertex, const char *sourceFragment)
+{
+    return CreateShaderProgram (std::string (sourceVertex), std::string (sourceFragment));
+}
+GLuint CreateShaderProgram (const std::string& sourceVertex, const std::string& sourceFragment)
 {
     GLint result = GL_FALSE;
     int logLength;

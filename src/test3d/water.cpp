@@ -67,6 +67,7 @@ WaterScene::WaterScene (App *pApp) : Scene(pApp),
     }
 }
 
+// very simple one-line shaders:
 const std::string
 
         // In this shader, given vertices are simply interpreted as if in clip space.
@@ -82,12 +83,6 @@ bool WaterScene::Init()
 
     GLenum status;
     char errBuf [100];
-
-    std::string resourceZip = std::string(SDL_GetBasePath()) + "test3d.zip",
-                shaderDir = "shaders/",
-                pathVSH = shaderDir + "water.vsh",
-                pathFSH = shaderDir + "water.fsh",
-                sourceV = "", sourceF = "";
 
     /*
         Build two framebuffers for reflection and refraction.
@@ -165,42 +160,11 @@ bool WaterScene::Init()
         return false;
     }
 
-    SDL_RWops *f;
-    bool success;
-
-    // Read vertex shader source from archive:
-    f = SDL_RWFromZipArchive (resourceZip.c_str(), pathVSH.c_str());
-    if (!f)
-        return false; // file or archive missing
-
-    success = ReadAll (f, sourceV);
-    f->close(f);
-
-    if (!success)
-    {
-        SetError ("error parsing %s: %s", pathVSH.c_str(), GetError ());
-        return false;
-    }
-
-    // Read fragment shader source from archive:
-    f = SDL_RWFromZipArchive (resourceZip.c_str(), pathFSH.c_str());
-    if (!f)
-        return false;
-
-    success = ReadAll (f, sourceF);
-    f->close(f);
-
-    if (!success)
-    {
-        SetError ("error parsing %s: %s", pathFSH.c_str(), GetError ());
-        return false;
-    }
-
     // Create shader program:
-    shaderProgramWater = CreateShaderProgram (sourceV, sourceF);
+    shaderProgramWater = CreateShaderProgram (water_vsh, water_fsh);
     if (!shaderProgramWater)
     {
-        SetError ("error creating shader program from %s and %s: %s", pathVSH.c_str(), pathFSH.c_str(), GetError ());
+        SetError ("error creating water shader program : %s", GetError ());
         return false;
     }
 

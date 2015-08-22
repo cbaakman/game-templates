@@ -33,5 +33,6 @@
  * :returns: OpenGL handle to the shader program, or 0 on error
  */
 GLuint CreateShaderProgram (const std::string& sourceVertex, const std::string& sourceFragment);
+GLuint CreateShaderProgram (const char *sourceVertex, const char *sourceFragment);
 
 #endif // SHADER_H

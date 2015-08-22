@@ -40,10 +40,56 @@ ToonScene::~ToonScene ()
     glDeleteTextures (1, &texBG.tex);
     glDeleteProgram (shaderProgram);
 }
+
+const char
+
+// Toon vector shader:
+toon_vsh [] = R"shader(
+
+    varying vec3 N;
+    varying vec3 v;
+    varying vec4 color;
+
+    void main()
+    {
+        v = vec3 (gl_ModelViewMatrix * gl_Vertex);
+
+        N = normalize (gl_NormalMatrix * gl_Normal);
+
+        color = gl_Color;
+
+        gl_Position = ftransform();
+    }
+
+)shader",
+
+// Toon fragment shader:
+toon_fsh [] = R"shader(
+
+    uniform float cutOff = 0.8;
+
+    varying vec3 N;
+    varying vec3 v;
+    varying vec4 color;
+
+    void main()
+    {
+        vec3 L = normalize(gl_LightSource[0].position.xyz - v);
+
+        float lum = clamp (dot(normalize (N), L) + 0.5, 0.0, 1.0);
+
+        if (lum < cutOff)
+            lum = cutOff;
+        else
+            lum = 1.0;
+
+        gl_FragColor = color * lum;
+    }
+
+)shader";
 bool ToonScene::Init ()
 {
-    std::string resPath = std::string(SDL_GetBasePath()) + "test3d.zip",
-                sourceV = "", sourceF = "";;
+    std::string resPath = std::string(SDL_GetBasePath()) + "test3d.zip";
 
     SDL_RWops *f;
     bool success;
@@ -85,38 +131,11 @@ bool ToonScene::Init ()
         return false;
     }
 
-    // Load the vertex shader source:
-    f = SDL_RWFromZipArchive (resPath.c_str(), "shaders/toon.vsh");
-    if (!f)
-        return false;
-
-    success = ReadAll (f, sourceV);
-    f->close(f);
-
-    if (!success)
-    {
-        SetError ("error parsing toon.vsh: %s", GetError ());
-        return false;
-    }
-
-    // Load the fragment shader source:
-    f = SDL_RWFromZipArchive (resPath.c_str(), "shaders/toon.fsh");
-    if (!f)
-        return false;
-    success = ReadAll (f, sourceF);
-    f->close(f);
-
-    if (!success)
-    {
-        SetError ("error parsing toon.fsh: %s", GetError ());
-        return false;
-    }
-
     // Create shader from sources:
-    shaderProgram = CreateShaderProgram (sourceV, sourceF);
+    shaderProgram = CreateShaderProgram (toon_vsh, toon_fsh);
     if (!shaderProgram)
     {
-        SetError ("error creating shader program from toon.vsh and toon.fsh: %s", GetError ());
+        SetError ("error creating toon shader program: %s", GetError ());
         return false;
     }
 

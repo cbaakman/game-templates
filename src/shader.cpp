@@ -71,8 +71,11 @@ GLuint CreateShader(const std::string& source, int type)
 
     return shader;
 }
-
-GLuint CreateShaderProgram(const std::string& sourceVertex, const std::string& sourceFragment)
+GLuint CreateShaderProgram (const char *sourceVertex, const char *sourceFragment)
+{
+    return CreateShaderProgram (std::string (sourceVertex), std::string (sourceFragment));
+}
+GLuint CreateShaderProgram (const std::string& sourceVertex, const std::string& sourceFragment)
 {
     GLint result = GL_FALSE;
     int logLength;

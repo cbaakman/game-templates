@@ -37,6 +37,8 @@
 #define FAR_VIEW 1000.0f
 #define CUBESIZE 2.0f
 
+#define GLSL(src) #src
+
 WaterScene::WaterScene (App *pApp) : Scene(pApp),
 
     fbReflection(0), texReflection(0), texReflecDepth(0),
@@ -64,6 +66,88 @@ WaterScene::WaterScene (App *pApp) : Scene(pApp),
         }
     }
 }
+
+const char
+
+        // In this shader, given vertices are simply interpreted as if in clip space.
+        srcClipVertex [] = "void main () {gl_Position = gl_Vertex;}",
+
+        // This shader sets depth to 1.0 everywhere.
+        srcDepth1Fragment [] = "uniform vec4 color; void main () {gl_FragColor = color; gl_FragDepth = 1.0;}",
+
+// Vector shader for the water's surface:
+water_vsh [] = R"shader(
+
+    varying vec3 normal;
+
+    void main()
+    {
+        normal=gl_Normal;
+
+        gl_Position = ftransform();
+
+        gl_TexCoord[0].s = 0.5 * gl_Position.x / gl_Position.w + 0.5;
+        gl_TexCoord[0].t = 0.5 * gl_Position.y / gl_Position.w + 0.5;
+    }
+
+)shader",
+
+// Fragment shader for the water's surface:
+water_fsh [] = R"shader(
+
+    uniform sampler2D tex_reflect,
+                      tex_refract,
+                      tex_reflect_depth,
+                      tex_refract_depth;
+
+    varying vec3 normal;
+    varying vec4 water_level_position;
+
+    const vec3 mirror_normal = vec3(0.0, 1.0, 0.0);
+
+    const float refrac = 1.33; // air to water
+
+    void main()
+    {
+        float nfac = dot (normal, mirror_normal);
+
+        vec2 reflectOffset;
+        if (nfac > 0.9999) // clamp reflectOffset to prevent glitches
+        {
+            reflectOffset = vec2(0.0, 0.0);
+        }
+        else
+        {
+            vec3 flat_normal = normal - nfac * mirror_normal;
+
+            vec3 eye_normal = normalize (gl_NormalMatrix * flat_normal);
+
+            reflectOffset = eye_normal.xy * length (flat_normal) * 0.1;
+        }
+
+        // The deeper under water, the more distortion:
+
+        float reflection_depth = min (texture2D (tex_reflect_depth, gl_TexCoord[0].st).r,
+                                      texture2D (tex_reflect_depth, gl_TexCoord[0].st + reflectOffset.xy).r),
+              refraction_depth = min (texture2D (tex_refract_depth, gl_TexCoord[0].st).r,
+                                      texture2D (tex_refract_depth, gl_TexCoord[0].st - refrac * reflectOffset.xy).r),
+
+              // diff_reflect and diff_refract will be linear representations of depth:
+
+              diff_reflect = clamp (30 * (reflection_depth - gl_FragCoord.z) / gl_FragCoord.w, 0.0, 1.0),
+              diff_refract = clamp (30 * (refraction_depth - gl_FragCoord.z) / gl_FragCoord.w, 0.0, 1.0);
+
+        vec4 reflectcolor = texture2D (tex_reflect, gl_TexCoord[0].st + diff_reflect * reflectOffset.xy),
+             refractcolor = texture2D (tex_refract, gl_TexCoord[0].st - diff_refract * refrac * reflectOffset.xy);
+
+        float Rfraq = normalize (gl_NormalMatrix * normal).z;
+        Rfraq = Rfraq * Rfraq;
+
+        gl_FragColor = reflectcolor * (1.0 - Rfraq) + refractcolor * Rfraq;
+    }
+
+)shader";
+
 bool WaterScene::Init()
 {
     int w, h;
@@ -71,12 +155,6 @@ bool WaterScene::Init()
 
     GLenum status;
     char errBuf [100];
-
-    std::string resourceZip = std::string(SDL_GetBasePath()) + "test3d.zip",
-                shaderDir = "shaders/",
-                pathVSH = shaderDir + "water.vsh",
-                pathFSH = shaderDir + "water.fsh",
-                sourceV = "", sourceF = "";
 
     /*
         Build two framebuffers for reflection and refraction.
@@ -154,42 +232,18 @@ bool WaterScene::Init()
         return false;
     }
 
-    SDL_RWops *f;
-    bool success;
-
-    // Read vertex shader source from archive:
-    f = SDL_RWFromZipArchive (resourceZip.c_str(), pathVSH.c_str());
-    if (!f)
-        return false; // file or archive missing
-
-    success = ReadAll (f, sourceV);
-    f->close(f);
-
-    if (!success)
-    {
-        SetError ("error parsing %s: %s", pathVSH.c_str(), GetError ());
-        return false;
-    }
-
-    // Read fragment shader source from archive:
-    f = SDL_RWFromZipArchive (resourceZip.c_str(), pathFSH.c_str());
-    if (!f)
-        return false;
-
-    success = ReadAll (f, sourceF);
-    f->close(f);
-
-    if (!success)
-    {
-        SetError ("error parsing %s: %s", pathFSH.c_str(), GetError ());
-        return false;
-    }
-
     // Create shader program:
-    shaderProgramWater = CreateShaderProgram (sourceV, sourceF);
+    shaderProgramWater = CreateShaderProgram (water_vsh, water_fsh);
     if (!shaderProgramWater)
     {
-        SetError ("error creating shader program from %s and %s: %s", pathVSH.c_str(), pathFSH.c_str(), GetError ());
+        SetError ("error creating water shader program : %s", GetError ());
+        return false;
+    }
+
+    shaderProgramDepth = CreateShaderProgram (srcClipVertex, srcDepth1Fragment);
+    if (!shaderProgramDepth)
+    {
+        SetError ("error creating depth shader program: %s", GetError ());
         return false;
     }
 
@@ -198,6 +252,7 @@ bool WaterScene::Init()
 WaterScene::~WaterScene()
 {
     glDeleteProgram(shaderProgramWater);
+    glDeleteProgram(shaderProgramDepth);
 
     glDeleteTextures(1, &texReflection);
     glDeleteTextures(1, &texRefraction);
@@ -569,6 +624,7 @@ const GLfloat colorCube [] = {0.0f, 1.0f, 0.0f, 1.0f},
               colorCubeReflect [] = {0.0f, 0.8f, 0.1f, 1.0f},
               bgcolorReflect [] ={0.1f, 0.2f, 1.0f, 1.0f},
               bgcolorRefract [] = {0.1f, 0.1f, 0.2f, 1.0f},
+              bgcolorRed [] = {1.0f, 0.0f, 0.0f, 1.0f},
 
               posLight [] = {
                             0.0f,
@@ -581,11 +637,12 @@ const GLfloat colorCube [] = {0.0f, 1.0f, 0.0f, 1.0f},
 
 // const GLdouble planeWater [] = {0, -1.0, 0, 0}; // at origin, pointing down
 
-#define CUBE_STENCIL_MASK 0xFFFFFFFFL
+#define WATER_STENCIL_MASK 0xFFFFFFFFL
+#define WATER_LINE_MARGE 0.1f // moves water line slightly up to prevent artifacts
 
 void WaterScene::Render()
 {
-    GLint texLoc;
+    GLint texLoc, colLoc;
     int w, h;
     SDL_GL_GetDrawableSize (pApp->GetMainWindow (), &w, &h);
 
@@ -616,134 +673,138 @@ void WaterScene::Render()
     glEnable(GL_LIGHT0);
     glEnable(GL_LIGHTING);
 
+
     /*
-        The pixel shader uses the depth values, assuming that the background depth is 1.0.
-        Thus the water shouldn't be rendered in the frame buffers, or with depthmask set to false!
+        Refraction: make sure anything above the water isn't drawn.
+        Set background depth to 1.0 for the pixel shader.
      */
 
-
-    // Render the refraction in its buffer
-    glBindFramebuffer(GL_FRAMEBUFFER, fbRefraction);
-    glViewport(0, 0, w, h);
+    // Switch to refraction frame buffer
+    glBindFramebuffer (GL_FRAMEBUFFER, fbRefraction);
+    glViewport (0, 0, w, h);
 
     glEnable (GL_CULL_FACE);
     glEnable (GL_STENCIL_TEST);
-    glCullFace(GL_FRONT);
+    glEnable (GL_DEPTH_TEST);
 
     // Position the light in normal space
-    glLightfv(GL_LIGHT0, GL_POSITION, posLight);
+    glLightfv (GL_LIGHT0, GL_POSITION, posLight);
 
+    // Clear the refraction buffer with water color, maximum depth and stencil 1
     glClearDepth (1.0f);
-    glClearStencil (0);
-    glClearColor(bgcolorRefract[0], bgcolorRefract[1], bgcolorRefract[2], bgcolorRefract[3]);
+    glClearStencil (1);
+    glClearColor (bgcolorRefract[0], bgcolorRefract[1], bgcolorRefract[2], bgcolorRefract[3]);
     glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-    /*
-        Refraction first Pass, make sure anything above the water isn't drawn.
-        Set stencil values to 1 where the cube is drawn.
-     */
-
-    glDepthFunc(GL_LEQUAL);
-    glColorMask (GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-    glStencilFunc (GL_ALWAYS, 1, CUBE_STENCIL_MASK);
-
-    glStencilOp (GL_KEEP, GL_KEEP, GL_KEEP);
-
-    RenderWater ();
-
-    glDepthFunc(GL_GEQUAL);
+    // Render cube refraction, set stencil to 0 there
+    glStencilFunc (GL_ALWAYS, 0, WATER_STENCIL_MASK);
     glStencilOp (GL_KEEP, GL_KEEP, GL_REPLACE);
+    glCullFace (GL_FRONT);
+    glDepthFunc (GL_LEQUAL);
+    glColorMask (GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glMaterialfv (GL_FRONT, GL_AMBIENT_AND_DIFFUSE, colorCubeReflect);
+    glTranslatef (posCube.x, posCube.y, posCube.z);
+    RenderCube ();
+    glTranslatef (-posCube.x, -posCube.y, -posCube.z);
 
-    glTranslatef(posCube.x, posCube.y, posCube.z);
-    glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, colorCubeReflect);
-    RenderCube();
-    glTranslatef(-posCube.x, -posCube.y, -posCube.z);
+    // Set stencil to 1 for everything above the water level.
+    glStencilFunc (GL_ALWAYS, 1, WATER_STENCIL_MASK);
+    glCullFace (GL_FRONT);
+    glDepthFunc (GL_GEQUAL);
+    glStencilOp (GL_KEEP, GL_KEEP, GL_REPLACE);
+    glDepthMask (GL_FALSE);
+    glColorMask (GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    glTranslatef (0, WATER_LINE_MARGE, 0);
+    RenderWater ();
+    glTranslatef (0, -WATER_LINE_MARGE, 0);
+
+    // Set the depth value 1.0 and water color for all pixels with stencil 1.
+    glDepthMask (GL_TRUE);
+    glColorMask (GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glDepthFunc (GL_ALWAYS);
+    glStencilFunc (GL_EQUAL, 1, WATER_STENCIL_MASK);
+    glUseProgram (shaderProgramDepth);
+    colLoc = glGetUniformLocation (shaderProgramDepth, "color");
+    glUniform4fv (colLoc, 1, bgcolorRefract);
+    glBegin (GL_QUADS);
+        glVertex4f (-1.0f, 1.0f, 0.5f, 1.0f);
+        glVertex4f ( 1.0f, 1.0f, 0.5f, 1.0f);
+        glVertex4f ( 1.0f,-1.0f, 0.5f, 1.0f);
+        glVertex4f (-1.0f,-1.0f, 0.5f, 1.0f);
+    glEnd ();
+    glUseProgram (0);
+
 
     /*
-        Refraction second pass, set background depth to 1.0 and render the cube
-        wherever stencil was set to 1.
+        Reflection: make sure anything below the water isn't drawn and
+        everything above the water is drawn in mirror image.
+        Set background depth to 1.0 for the pixel shader.
      */
 
-    glClearDepth (1.0f);
-    glDepthFunc(GL_LEQUAL);
-    glStencilFunc (GL_EQUAL, 1, CUBE_STENCIL_MASK);
-    glColorMask (GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    // Switch to reflection frame buffer
+    glBindFramebuffer (GL_FRAMEBUFFER, fbReflection);
+    glViewport (0, 0, w, h);
 
-    glClear (GL_DEPTH_BUFFER_BIT);
-
-    glTranslatef(posCube.x, posCube.y, posCube.z);
-    glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, colorCubeReflect);
-    RenderCube();
-    glTranslatef(-posCube.x, -posCube.y, -posCube.z);
-
-
-    // Render the reflection in its buffer
-    glBindFramebuffer(GL_FRAMEBUFFER, fbReflection);
-    glViewport(0, 0, w, h);
-
-    glEnable(GL_CULL_FACE);
-    glCullFace(GL_FRONT);
+    glEnable (GL_CULL_FACE);
     glEnable (GL_STENCIL_TEST);
+    glEnable (GL_DEPTH_TEST);
 
-    // Clear the reflection buffer with water color and maximum depth
+    // Clear the reflection buffer with water color, maximum depth and stencil 1
     glClearDepth (1.0f);
-    glClearStencil (0);
+    glClearStencil (1);
     glClearColor (bgcolorReflect[0], bgcolorReflect[1], bgcolorReflect[2], bgcolorReflect[3]);
     glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-    /*
-        Reflection first Pass, make sure anything above the water isn't drawn.
-        Set stencil values to 1 where the cube is drawn.
-     */
-
-    glDepthFunc (GL_LEQUAL);
-    glColorMask (GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-    glStencilFunc (GL_ALWAYS, 1, CUBE_STENCIL_MASK);
-
-    glStencilOp (GL_KEEP, GL_KEEP, GL_KEEP);
-
-    RenderWater ();
-
-    glDepthFunc (GL_GEQUAL);
+    // Render cube reflection, set stencil to 0 there
+    glStencilFunc (GL_ALWAYS, 0, WATER_STENCIL_MASK);
     glStencilOp (GL_KEEP, GL_KEEP, GL_REPLACE);
     glCullFace (GL_BACK);
-
-    glPushMatrix();
-        // move cube to mirror position
-        glScalef(1, -1, 1);
-        glTranslatef(posCube.x, posCube.y, posCube.z);
-        RenderCube();
-    glPopMatrix();
-
-    /*
-        Reflection second pass, set background depth to 1.0 and render the cube
-        wherever stencil was set to 1.
-     */
-
-    glColorMask (GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    glStencilFunc (GL_EQUAL, 1, CUBE_STENCIL_MASK);
-    glClearDepth (1.0f);
     glDepthFunc (GL_LEQUAL);
-
-    glClear (GL_DEPTH_BUFFER_BIT);
-
-    glPushMatrix();
+    glColorMask (GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glPushMatrix ();
         // move light and cube to their mirror position
-        glScalef(1, -1, 1);
-        glLightfv(GL_LIGHT0, GL_POSITION, posLight);
-        glTranslatef(posCube.x, posCube.y, posCube.z);
-        glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, colorCubeReflect);
-        RenderCube();
-    glPopMatrix();
+        glScalef (1, -1, 1);
+        glLightfv (GL_LIGHT0, GL_POSITION, posLight);
+        glTranslatef (posCube.x, posCube.y, posCube.z);
+        glMaterialfv (GL_FRONT, GL_AMBIENT_AND_DIFFUSE, colorCubeReflect);
+        RenderCube ();
+    glPopMatrix ();
+
+    // Set stencil to 1 for everything above the water level.
+    glStencilFunc (GL_ALWAYS, 1, WATER_STENCIL_MASK);
+    glCullFace (GL_FRONT);
+    glDepthFunc (GL_GEQUAL);
+    glStencilOp (GL_KEEP, GL_KEEP, GL_REPLACE);
+    glDepthMask (GL_FALSE);
+    glColorMask (GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    glTranslatef (0, WATER_LINE_MARGE, 0);
+    RenderWater ();
+    glTranslatef (0, -WATER_LINE_MARGE, 0);
+
+    // Set the depth value 1.0 and water color for all pixels with stencil 1.
+    glDepthMask (GL_TRUE);
+    glColorMask (GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glDepthFunc (GL_ALWAYS);
+    glStencilFunc (GL_EQUAL, 1, WATER_STENCIL_MASK);
+    glUseProgram (shaderProgramDepth);
+    colLoc = glGetUniformLocation (shaderProgramDepth, "color");
+    glUniform4fv (colLoc, 1, bgcolorReflect);
+    glBegin (GL_QUADS);
+        glVertex4f (-1.0f, 1.0f, 0.5f, 1.0f);
+        glVertex4f ( 1.0f, 1.0f, 0.5f, 1.0f);
+        glVertex4f ( 1.0f,-1.0f, 0.5f, 1.0f);
+        glVertex4f (-1.0f,-1.0f, 0.5f, 1.0f);
+    glEnd ();
+    glUseProgram (0);
 
 
     // Direct rendering to the screen
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, w, h);
+    glBindFramebuffer (GL_FRAMEBUFFER, 0);
+    glViewport (0, 0, w, h);
 
-    glDepthFunc(GL_LEQUAL);
+    glDepthFunc (GL_LEQUAL);
 
-    glEnable(GL_TEXTURE_2D);
+    glEnable (GL_TEXTURE_2D);
 
     // Bind reflection to texture 0 and refraction to texture 1
     glActiveTexture (GL_TEXTURE0);

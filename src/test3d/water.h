@@ -55,8 +55,9 @@ private:
         fbReflection, texReflection, texReflecDepth,
         fbRefraction, texRefraction, texRefracDepth,
 
-        // handle to shader program
-        shaderProgramWater;
+        // handle to shader programs
+        shaderProgramWater,
+        shaderProgramDepth;
 
     // Moves water grid points in time:
     void UpdateWater (const float dt);

@@ -89,6 +89,8 @@ struct ChatEntry
 class Server
 {
 private:
+    enum MessageType {INFO, ERROR};
+
     struct User // created after login, identified by IP-adress
     {
         IPaddress address;
@@ -123,9 +125,7 @@ private:
     int port;
     UDPsocket socket;
 
-    bool done; // if true, loopThread ends
-    SDL_Thread *loopThread;
-    static int LoopThreadFunc (void* server);
+    bool done; // if true, loop ends
 
     void Update (Uint32 ticks);
 
@@ -144,6 +144,8 @@ private:
 
     void OnPlayerRemove (User* user);
 
+    void OnMessage (MessageType type, const char *format, ...);
+
     void TellUserAboutUser (User* to, User* about);
 
     void OnChatMessage (const User*, const char*);
@@ -152,12 +154,13 @@ private:
 
     void SendToAll (const Uint8*, const int len);
 
+    void ShutDown (void);
 public:
 
     Server();
     ~Server();
 
-    bool TakeCommands();
+    int Loop ();
     bool Init();
     void CleanUp();
 };

@@ -18,10 +18,9 @@
 */
 
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <cstdarg>
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
 
 #include "server.h"
 
@@ -39,31 +38,11 @@
 
 const int CONNECTION_TIMEOUT_TICKS = CONNECTION_TIMEOUT * 1000;
 
-void Server::OnMessage (Server::MessageType type, const char *format, ...)
-{
-    va_list args;
-    va_start (args, format);
-
-    switch (type)
-    {
-    case INFO:
-        fprintf (stdout, "INFO: ");
-        vfprintf (stdout, format, args);
-        fprintf (stdout, "\n");
-    break;
-    case ERROR:
-        fprintf (stderr, "ERROR: ");
-        vfprintf (stderr, format, args);
-        fprintf (stderr, "\n");
-    break;
-    }
-
-    va_end (args);
-}
 Server::Server() :
     done(false),
     users (NULL),
     maxUsers(0),
+    loopThread(NULL),
     in(NULL), out(NULL),
     udpPackets(NULL),
     socket(NULL)
@@ -72,7 +51,6 @@ Server::Server() :
 }
 Server::~Server()
 {
-    CleanUp ();
 }
 bool Server::Init()
 {
@@ -90,7 +68,7 @@ bool Server::Init()
     }
     else
     {
-        OnMessage (ERROR, "Max Login not found in %s\n", settingsPath.c_str());
+        fprintf (stderr, "Max Login not found in %s\n", settingsPath.c_str());
         return false;
     }
 
@@ -98,28 +76,36 @@ bool Server::Init()
     port = LoadSetting (settingsPath.c_str(), PORT_SETTING);
     if (port <= 0)
     {
-        OnMessage (ERROR,"Port not set in %s\n", settingsPath.c_str());
+        fprintf (stderr,"Port not set in %s\n", settingsPath.c_str());
         return false;
     }
 
     // Init SDL_net
-    if (SDLNet_Init () < 0)
+    if (SDLNet_Init() < 0)
     {
-        OnMessage (ERROR,"SDLNet_Init: %s\n", SDLNet_GetError ());
+        fprintf (stderr,"SDLNet_Init: %s\n", SDLNet_GetError());
         return false;
     }
 
     // Open a socket and listen at the configured port:
     if (!(socket = SDLNet_UDP_Open (port)))
     {
-        OnMessage (ERROR,"SDLNet_UDP_Open: %s\n", SDLNet_GetError());
+        fprintf (stderr,"SDLNet_UDP_Open: %s\n", SDLNet_GetError());
+        return false;
+    }
+
+    // Start the request handling thread
+    loopThread = SDL_CreateThread (LoopThreadFunc, "server_request_handler_thread", (void *)this);
+    if(!loopThread)
+    {
+        fprintf (stderr,"Server loop thread not started\n");
         return false;
     }
 
     // Allocate packets of the size we need, one for incoming, one for outgoing
     if (!(udpPackets = SDLNet_AllocPacketV (2, PACKET_MAXSIZE)))
     {
-        OnMessage (ERROR, "SDLNet_AllocPacketV: %s\n", SDLNet_GetError());
+        fprintf (stderr, "SDLNet_AllocPacketV: %s\n", SDLNet_GetError());
         return false;
     }
     in = udpPackets [0];
@@ -133,17 +119,25 @@ bool Server::Init()
 }
 void Server::CleanUp()
 {
-    if (udpPackets)
+    if(udpPackets)
     {
         SDLNet_FreePacketV (udpPackets);
         udpPackets = NULL;
         in = out = NULL;
     }
-    if (socket)
+    if(socket)
     {
         SDLNet_UDP_Close(socket);
         socket = NULL;
     }
+
+    // Tell the request handling thread that it should return:
+    if (loopThread)
+    {
+        SDL_DetachThread (loopThread);
+        loopThread = NULL;
+    }
+    done = true;
 
     SDLNet_Quit();
 
@@ -282,6 +276,40 @@ void Server::DelUser(Server::User* user)
         }
     }
 }
+bool Server::TakeCommands()
+{
+    // looping function that collects commandline input
+
+    printf("server>");
+    fgets (command, COMMAND_MAXLENGTH, stdin);
+    stripr (command);
+
+    bool bEmpty = emptyline (command);
+
+    if (bEmpty || strcmp (command, "help")==0)
+    {
+        // Must print all possible commands
+
+        printf ("help: print this info\n");
+        printf ("quit: shutdown server\n");
+        printf ("users: print users logged in\n");
+        printf ("chat-history: print chat history\n");
+    }
+    else if (strcmp(command,"quit") == 0)
+    {
+        // means shutdown
+        return false;
+    }
+    else if (strcmp(command,"users") == 0)
+        PrintUsers();
+    else if (strcmp(command,"chat-history") == 0)
+        PrintChatHistory ();
+    else
+        printf("unrecognized command: %s\n",command);
+
+    // means reloop
+    return true;
+}
 void Server::Update(Uint32 ticks)
 {
     for(Uint64 i=0; i<maxUsers; i++)
@@ -330,8 +358,6 @@ void Server::OnChatMessage (const User *user, const char *msg)
     data [0] = NETSIG_CHATMESSAGE;
     memcpy (data + 1, &e, sizeof (e));
 
-    OnMessage (INFO, "%s said: %s", user->accountName, msg);
-
     SendToAll (data, len);
 
     delete [] data;
@@ -371,8 +397,6 @@ void Server::OnLogout(Server::User* user)
 
     OnPlayerRemove (user);
     DelUser (user);
-
-    OnMessage (INFO, "%s just logged out", user->accountName);
 }
 void Server::OnRequest(const IPaddress& clientAddress, Uint8*data, int len)
 {
@@ -512,9 +536,9 @@ void Server::OnAuthenticate(const IPaddress& clientAddress, LoginParams* params)
             delete data;
 
             // Tell other users about this new user:
-            for (Uint64 i = 0; i < maxUsers; i++)
+            for(Uint64 i = 0; i < maxUsers; i++)
             {
-                if (users[i] && LoggedIn (users[i]))
+                if(users[i] && LoggedIn(users[i]))
                 {
                     if(users[i]!=user)
                     {
@@ -523,8 +547,6 @@ void Server::OnAuthenticate(const IPaddress& clientAddress, LoginParams* params)
                     }
                 }
             }
-
-            OnMessage (INFO, "%s just logged in", params->username);
         }
         else // authentication failed
         {
@@ -621,30 +643,24 @@ void Server::PrintUsers() const
     if (nFound <= 0)
         printf ("nobody is logged in right now\n");
 }
-void Server::ShutDown (void)
+int Server::LoopThreadFunc (void* p)
 {
-    done = true;
-}
-int Server::Loop ()
-{
-    // tell console that all went well:
-    printf ("server started sucessfully\n");
+    // This function continually runs in a separate thread to handle client requests
 
-    done = false;
-    Uint32 ticks0 = SDL_GetTicks(),
-           ticks;
+    Server* server = (Server*)p;
+    Uint32 ticks0 = SDL_GetTicks(), ticks;
 
-    while (!done) // is the server still running?
+    while (!server->done) // is the server still running?
     {
         // Poll for incoming packets:
-        while (SDLNet_UDP_Recv (socket, in))
+        while (SDLNet_UDP_Recv (server->socket, server->in))
         {
-            OnRequest (in->address, in->data, in->len);
+            server->OnRequest (server->in->address, server->in->data, server->in->len);
         }
 
         // Get time passed since last iteration:
         ticks = SDL_GetTicks();
-        Update (ticks - ticks0);
+        server->Update (ticks - ticks0);
         ticks0 = ticks;
 
         SDL_Delay (100); // sleep to allow the other thread to run
@@ -652,25 +668,17 @@ int Server::Loop ()
 
     return 0;
 }
-
-Server server;
-
-void OnExit (void)
-{
-    pServer.CleanUp();
-}
-
 int main(int argc, char** argv)
 {
-    if (atexit (OnExit) != 0)
-        return 1;
+    Server server;
 
     if(!server.Init())
         return 1;
 
-    int res = server.Loop ();
+    // Take command line input:
+    while (server.TakeCommands());
 
     server.CleanUp();
 
-    return res;
+    return 0;
 }

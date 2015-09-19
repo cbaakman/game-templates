@@ -219,6 +219,38 @@ void MeshObject::RenderSubset (const std::string &id)
     }
     glEnd();
 }
+void MeshObject::ThroughSubsetFaces (const std::string &id, MeshFaceFunc func, void *pObj)
+{
+    if(pMeshData->subsets.find(id) == pMeshData->subsets.end())
+    {
+        SetError ("cannot render %s, no such subset", id.c_str());
+        return;
+    }
+    const MeshSubset *pSubset = &pMeshData->subsets.at(id);
+
+    const MeshVertex *vs [4];
+
+    for(std::list<PMeshQuad>::const_iterator it = pSubset->quads.begin(); it != pSubset->quads.end(); it++)
+    {
+        PMeshQuad pQuad = *it;
+        for(size_t j = 0; j < 4; j++)
+        {
+            vs [j] = &vertexStates [pQuad->GetVertexID(j)];
+        }
+
+        func (pObj, 4, vs, pQuad->texels);
+    }
+    for(std::list<PMeshTriangle>::const_iterator it = pSubset->triangles.begin(); it != pSubset->triangles.end(); it++)
+    {
+        PMeshTriangle pTriangle = *it;
+        for(size_t j = 0; j < 3; j++)
+        {
+            vs [j] = &vertexStates [pTriangle->GetVertexID(j)];
+        }
+
+        func (pObj, 3, vs, pTriangle->texels);
+    }
+}
 
 /**
  * Gets the r,g,b and a attributes from the given tag.

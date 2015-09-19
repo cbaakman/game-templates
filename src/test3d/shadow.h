@@ -62,7 +62,9 @@ private:
 
     vec3 posPlayer, directionPlayer;
 
-    Texture texDummy, // texture of the character mesh
+    GLuint shader_normal;
+
+    Texture texDummy, texDummyNormal, // textures of the character mesh
             texBox, // texture of the walls and floor
             texSky, // texture for the sky
             texPar; // semi-transparent particle texture

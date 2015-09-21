@@ -198,6 +198,16 @@ struct MeshData {
     std::map<std::string, MeshAnimation> animations;
 };
 
+/**
+ * Arguments of MeshFaceFunc are:
+ * 1. a user provided uniform object
+ * 2. the number of vertices in the face
+ * 3. the array of vertex pointers
+ * 4. the array of texels
+ */
+typedef void (*MeshFaceFunc) (void *, const int, const MeshVertex **, const MeshTexel *);
+
+void ThroughUnAnimatedSubsetFaces (const MeshData *, const std::string &subset_id, MeshFaceFunc func, void *pObj=NULL);
 void RenderUnAnimatedSubset (const MeshData *, const std::string &subset_id);
 
 // ToTriangles is useful for collision detection
@@ -226,6 +236,9 @@ private:
     void ApplyBoneTransformations (const std::map <std::string, matrix4> transforms);
 
 public:
+
+    // Executes func for every face in the subset
+    void ThroughSubsetFaces (const std::string &subset_id, MeshFaceFunc func, void *pObj=NULL);
 
     // Render subset in OpenGL, could precede this with desired GL settings
     void RenderSubset (const std::string &subset_id);

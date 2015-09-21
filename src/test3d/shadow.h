@@ -62,7 +62,13 @@ private:
 
     vec3 posPlayer, directionPlayer;
 
-    Texture texDummy, // texture of the character mesh
+    GLuint shader_normal;
+
+    // indices for tangent and bitangent vertex attributes:
+    GLint index_tangent,
+          index_bitangent;
+
+    Texture texDummy, texDummyNormal, // textures of the character mesh
             texBox, // texture of the walls and floor
             texSky, // texture for the sky
             texPar; // semi-transparent particle texture

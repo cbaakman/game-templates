@@ -38,6 +38,28 @@
 
 const int CONNECTION_TIMEOUT_TICKS = CONNECTION_TIMEOUT * 1000;
 
+void Server::OnMessage (Server::MessageType type, const char *format, ...)
+{
+    va_list args;
+    va_start (args, format);
+
+    switch (type)
+    {
+    case INFO:
+        fprintf (stdout, "INFO: ");
+        vfprintf (stdout, format, args);
+        fprintf (stdout, "\n");
+    break;
+    case ERROR:
+        fprintf (stderr, "ERROR: ");
+        vfprintf (stderr, format, args);
+        fprintf (stderr, "\n");
+    break;
+    }
+
+    va_end (args);
+}
+
 Server::Server() :
     done(false),
     users (NULL),
@@ -119,6 +141,8 @@ bool Server::Init()
 }
 void Server::CleanUp()
 {
+    int status;
+
     if(udpPackets)
     {
         SDLNet_FreePacketV (udpPackets);
@@ -131,13 +155,12 @@ void Server::CleanUp()
         socket = NULL;
     }
 
-    // Tell the request handling thread that it should return:
-    if (loopThread)
-    {
-        SDL_DetachThread (loopThread);
-        loopThread = NULL;
-    }
+    /*
+        Tell the request handling thread that it should return
+        and wait for it to finish.
+     */
     done = true;
+    SDL_WaitThread (loopThread, &status);
 
     SDLNet_Quit();
 
@@ -276,40 +299,6 @@ void Server::DelUser(Server::User* user)
         }
     }
 }
-bool Server::TakeCommands()
-{
-    // looping function that collects commandline input
-
-    printf("server>");
-    fgets (command, COMMAND_MAXLENGTH, stdin);
-    stripr (command);
-
-    bool bEmpty = emptyline (command);
-
-    if (bEmpty || strcmp (command, "help")==0)
-    {
-        // Must print all possible commands
-
-        printf ("help: print this info\n");
-        printf ("quit: shutdown server\n");
-        printf ("users: print users logged in\n");
-        printf ("chat-history: print chat history\n");
-    }
-    else if (strcmp(command,"quit") == 0)
-    {
-        // means shutdown
-        return false;
-    }
-    else if (strcmp(command,"users") == 0)
-        PrintUsers();
-    else if (strcmp(command,"chat-history") == 0)
-        PrintChatHistory ();
-    else
-        printf("unrecognized command: %s\n",command);
-
-    // means reloop
-    return true;
-}
 void Server::Update(Uint32 ticks)
 {
     for(Uint64 i=0; i<maxUsers; i++)
@@ -350,6 +339,8 @@ void Server::OnChatMessage (const User *user, const char *msg)
     strcpy (e.message, msg);
 
     chat_history.push_back (e);
+
+    OnMessage (INFO, "%s said: %s", user->accountName, msg);
 
     // Tell everybody about this chat message:
 
@@ -397,6 +388,8 @@ void Server::OnLogout(Server::User* user)
 
     OnPlayerRemove (user);
     DelUser (user);
+
+    OnMessage (INFO, "%s just logged out", user->accountName);
 }
 void Server::OnRequest(const IPaddress& clientAddress, Uint8*data, int len)
 {
@@ -535,6 +528,8 @@ void Server::OnAuthenticate(const IPaddress& clientAddress, LoginParams* params)
             SendToClient (clientAddress,data,len);
             delete data;
 
+            OnMessage (INFO, "%s just logged in", user->accountName);
+
             // Tell other users about this new user:
             for(Uint64 i = 0; i < maxUsers; i++)
             {
@@ -668,15 +663,22 @@ int Server::LoopThreadFunc (void* p)
 
     return 0;
 }
-int main(int argc, char** argv)
-{
-    Server server;
 
+Server server;
+
+void exit (void)
+{
+    server.CleanUp ();
+}
+int main (int argc, char** argv)
+{
     if(!server.Init())
         return 1;
 
-    // Take command line input:
-    while (server.TakeCommands());
+    atexit (exit);
+
+    printf ("Server is now running, press enter to shut down.\n");
+    fgetc (stdin);
 
     server.CleanUp();
 

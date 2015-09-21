@@ -89,6 +89,8 @@ struct ChatEntry
 class Server
 {
 private:
+    enum MessageType {INFO, ERROR};
+
     struct User // created after login, identified by IP-adress
     {
         IPaddress address;
@@ -152,12 +154,13 @@ private:
 
     void SendToAll (const Uint8*, const int len);
 
+    void OnMessage (MessageType, const char *format, ...);
+
 public:
 
     Server();
     ~Server();
 
-    bool TakeCommands();
     bool Init();
     void CleanUp();
 };

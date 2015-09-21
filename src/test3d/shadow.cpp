@@ -29,6 +29,7 @@
 #include "../xml.h"
 #include "../random.h"
 #include "../err.h"
+#include "../shader.h"
 
 #define VIEW_ANGLE 45.0f
 #define NEAR_VIEW 0.1f
@@ -49,6 +50,58 @@
 #define PARTICLE_INTERVAL_MAX 0.4f
 #define PARTICLE_MAXSPEED 5.0f
 
+const char
+
+normal_vsh [] = R"shader(
+
+    varying vec3 b, t, n, v;
+
+    attribute vec3 tangent,
+                   bitangent;
+
+    void main()
+    {
+        v = vec3 (gl_ModelViewMatrix * gl_Vertex);
+
+        n = normalize (gl_NormalMatrix * gl_Normal);
+        t = normalize (gl_NormalMatrix * tangent);
+        b = normalize (gl_NormalMatrix * bitangent);
+
+        gl_Position = ftransform();
+        gl_TexCoord[0] = gl_MultiTexCoord0;
+    }
+
+)shader",
+
+normal_fsh [] = R"shader(
+
+    uniform sampler2D tex_color,
+                      tex_normal;
+
+    varying vec3 b, t, n, v;
+
+    void main()
+    {
+        vec4 normal_color = texture2D (tex_normal, gl_TexCoord[0].st);
+
+        vec3 L = normalize (gl_LightSource[0].position.xyz - v),
+
+                 texNormal = vec3 (2 * (normal_color.r - 0.5),
+                                   2 * (normal_color.g - 0.5),
+                                   normal_color.b);
+
+        texNormal = normalize (texNormal.z * normalize (n) +
+                               texNormal.x * normalize (t) +
+                               texNormal.y * normalize (b));
+
+        float lum = min (1.0, 0.3 + clamp (dot (texNormal, L), 0.0, 1.0));
+
+        gl_FragColor = texture2D (tex_color, gl_TexCoord[0].st);
+        gl_FragColor.rgb *= lum;
+    }
+
+)shader";
+
 ShadowScene::ShadowScene(App *pApp) : Scene(pApp),
     frame (0),
     shadowTriangles (NULL),
@@ -61,10 +114,11 @@ ShadowScene::ShadowScene(App *pApp) : Scene(pApp),
     onGround (false), touchDown (false),
     show_bones (false), show_normals (false), show_triangles (false),
     pMeshDummy (NULL),
-    collision_triangles (NULL), n_collision_triangles (0)
+    collision_triangles (NULL), n_collision_triangles (0),
+    shader_normal(0)
 {
-    texDummy.tex = texBox.tex = texSky.tex = texPar.tex = 0;
-
+    texDummyNormal.tex = texDummy.tex =
+    texBox.tex = texSky.tex = texPar.tex = 0;
 
     // colliders [0] = new FeetCollider (vec3 (0, -2.0f, 0));
 
@@ -91,10 +145,13 @@ ShadowScene::ShadowScene(App *pApp) : Scene(pApp),
 }
 ShadowScene::~ShadowScene()
 {
+    glDeleteTextures(1, &texDummyNormal.tex);
     glDeleteTextures(1, &texDummy.tex);
     glDeleteTextures(1, &texBox.tex);
     glDeleteTextures(1, &texSky.tex);
     glDeleteTextures(1, &texPar.tex);
+
+    glDeleteProgram (shader_normal);
 
     delete pMeshDummy;
     delete [] shadowTriangles;
@@ -129,6 +186,21 @@ bool ShadowScene::Init(void)
     if (!success)
     {
         SetError ("error parsing dummy.png: %s", GetError ());
+        return false;
+    }
+
+    // Load dummy normal texture:
+
+    f = SDL_RWFromZipArchive (resPath.c_str(), "dummy_n.png");
+    if (!f) // file or archive missing
+        return false;
+
+    success = LoadPNG(f, &texDummyNormal);
+    f->close(f);
+
+    if (!success)
+    {
+        SetError ("error parsing dummy_n.png: %s", GetError ());
         return false;
     }
 
@@ -249,6 +321,20 @@ bool ShadowScene::Init(void)
         return false;
     }
 
+    shader_normal = CreateShaderProgram (normal_vsh, normal_fsh);
+    if (!shader_normal)
+    {
+        SetError ("error creating normal shader program: %s", GetError ());
+        return false;
+    }
+
+    // Pick tangent and bitangent index:
+    GLint max_attribs;
+    glGetIntegerv (GL_MAX_VERTEX_ATTRIBS, &max_attribs);
+
+    index_tangent = max_attribs - 2;
+    index_bitangent = max_attribs - 1;
+
     // Derive extra objects from the data we just loaded:
 
     shadowTriangles = new STriangle[meshDataDummy.triangles.size() + 2 * meshDataDummy.quads.size()];
@@ -262,27 +348,6 @@ bool ShadowScene::Init(void)
 
     return true;
 }
-
-/*
-float toAngle(const float x, const float z)
-{
-    if (x == 0)
-    {
-        if (z > 0)
-            return M_PI / 2;
-        else
-            return -M_PI / 2;
-    }
-    else if (x > 0)
-    {
-        return atan (z / x);
-    }
-    else // x <= 0
-    {
-        return M_PI - atan (z / x);
-    }
-}
-*/
 
 void getCameraPosition( const vec3 &center,
         const GLfloat angleX, const GLfloat angleY, const GLfloat dist,
@@ -614,6 +679,7 @@ void RenderSprite (const vec3 &pos, const Texture *pTex,
          p3 = pos - sz * modelViewUp + sz * modelViewRight,
          p4 = pos - sz * modelViewUp - sz * modelViewRight;
 
+    glActiveTexture (GL_TEXTURE0);
     glBindTexture (GL_TEXTURE_2D, pTex->tex);
 
     glBegin (GL_QUADS);
@@ -627,9 +693,68 @@ void RenderSprite (const vec3 &pos, const Texture *pTex,
     glVertex3f (p4.x, p4.y, p4.z);
     glEnd ();
 }
+
+struct IndexSet
+{
+    GLint index_tangent,
+          index_bitangent;
+};
+
+void TangentRenderFunc (void *pObj, const int n_vertices, const MeshVertex **p_vertices, const MeshTexel *texels)
+{
+    if (n_vertices == 4)
+        glBegin (GL_QUADS);
+    else if (n_vertices == 3)
+        glBegin (GL_TRIANGLES);
+    else
+        return;
+
+    vec3 t, b, v0, v1;
+
+    size_t i, j, k;
+
+    float du0, dv0, du1, dv1;
+
+    IndexSet *pSet = (IndexSet *)pObj;
+
+    for(i = 0; i < n_vertices; i++)
+    {
+        glTexCoord2f (texels [i].u, texels [i].v);
+        glNormal3f (p_vertices [i]->n.x, p_vertices [i]->n.y, p_vertices [i]->n.z);
+        glVertex3f (p_vertices [i]->p.x, p_vertices [i]->p.y, p_vertices [i]->p.z);
+
+        /*
+          Calculate tangent and bitangent from neighbouring
+          vertices (positions and texture coords)
+         */
+
+        j = (n_vertices + i - 1) % n_vertices;
+        k = (i + 1) % n_vertices;
+
+        v0 = p_vertices [j]->p - p_vertices [i]->p;
+        du0 = texels [j].u - texels [i].u;
+        dv0 = texels [j].v - texels [i].v;
+
+        v1 = p_vertices [k]->p - p_vertices [i]->p;
+        du1 = texels [k].u - texels [i].u;
+        dv1 = texels [k].v - texels [i].v;
+
+        float r = 1.0f / (du0 * dv1 - dv0 * du1);
+        t = (v0 * dv1 - v1 * dv0) * r;
+        b = (v1 * du0 - v0 * du1) * r;
+
+        glVertexAttrib3f (pSet->index_tangent, t.x, t.y, t.z);
+        glVertexAttrib3f (pSet->index_bitangent, b.x, b.y, b.z);
+    }
+
+    glEnd ();
+}
 #define SHADOW_STENCIL_MASK 0xFFFFFFFFL
 void ShadowScene::Render ()
 {
+    GLint texLoc, posLoc;
+    IndexSet set_i = {index_tangent, index_bitangent};
+
     int w, h;
     SDL_GL_GetDrawableSize (pApp->GetMainWindow (), &w, &h);
 
@@ -709,8 +834,11 @@ void ShadowScene::Render ()
     glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // Render the world:
+    glActiveTexture (GL_TEXTURE0);
     glBindTexture (GL_TEXTURE_2D, texBox.tex);
+
     RenderUnAnimatedSubset (&meshDataBox, "0");
+
     glDisable (GL_BLEND);
     glDisable (GL_TEXTURE_2D);
 
@@ -736,11 +864,32 @@ void ShadowScene::Render ()
 
     // Render player (and bones/normals if requested)
     glEnable (GL_TEXTURE_2D);
+    glActiveTexture (GL_TEXTURE0);
     glBindTexture (GL_TEXTURE_2D, texDummy.tex);
+    glActiveTexture (GL_TEXTURE1);
+    glBindTexture (GL_TEXTURE_2D, texDummyNormal.tex);
+
     matrix4 transformPlayer = matTranslation (posPlayer) * matInverse (matLookAt (VEC_O, directionPlayer, VEC_UP));
 
     glMultMatrixf (transformPlayer.m);
-    pMeshDummy->RenderSubset("0");
+
+
+    glUseProgram (shader_normal);
+
+    texLoc = glGetUniformLocation (shader_normal, "tex_color");
+    glUniform1i (texLoc, 0);
+
+    texLoc = glGetUniformLocation (shader_normal, "tex_normal");
+    glUniform1i (texLoc, 1);
+
+    glBindAttribLocation (shader_normal, index_tangent, "tangent");
+    glBindAttribLocation (shader_normal, index_bitangent, "bitangent");
+
+    pMeshDummy->ThroughSubsetFaces ("0", TangentRenderFunc, &set_i);
+
+    glUseProgram (0);
+    glActiveTexture (GL_TEXTURE1);
+    glBindTexture (GL_TEXTURE_2D, 0);
 
     glDisable (GL_DEPTH_TEST);
     glDisable (GL_LIGHTING);

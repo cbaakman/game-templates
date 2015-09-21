@@ -64,6 +64,10 @@ private:
 
     GLuint shader_normal;
 
+    // indices for tangent and bitangent vertex attributes:
+    GLint index_tangent,
+          index_bitangent;
+
     Texture texDummy, texDummyNormal, // textures of the character mesh
             texBox, // texture of the walls and floor
             texSky, // texture for the sky

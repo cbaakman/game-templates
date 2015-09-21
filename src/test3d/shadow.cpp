@@ -322,7 +322,7 @@ bool ShadowScene::Init(void)
     shader_normal = CreateShaderProgram (normal_vsh, normal_fsh);
     if (!shader_normal)
     {
-        SetError ("error creating depth shader program: %s", GetError ());
+        SetError ("error creating normal shader program: %s", GetError ());
         return false;
     }
 

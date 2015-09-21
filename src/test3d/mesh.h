@@ -198,6 +198,16 @@ struct MeshData {
     std::map<std::string, MeshAnimation> animations;
 };
 
+/**
+ * Arguments of MeshFaceFunc are:
+ * 1. a user provided uniform object
+ * 2. the number of vertices in the face
+ * 3. the array of vertex pointers
+ * 4. the array of texels
+ */
+typedef void (*MeshFaceFunc) (void *, const int, const MeshVertex **, const MeshTexel *);
+
+void ThroughUnAnimatedSubsetFaces (const MeshData *, const std::string &subset_id, MeshFaceFunc func, void *pObj=NULL);
 void RenderUnAnimatedSubset (const MeshData *, const std::string &subset_id);
 
 // ToTriangles is useful for collision detection
@@ -208,15 +218,6 @@ void ToTriangles (const MeshData *, Triangle **triangles, size_t *n_triangles);
  * :returns: true if all data was found and meshdata is valid, false otherwise.
  */
 bool ParseMesh (const xmlDocPtr, MeshData *pData);
-
-/**
- * Arguments of MeshFaceFunc are:
- * 1. a user provided uniform object
- * 2. the number of vertices in the face
- * 3. the array of vertex pointers
- * 4. the array of texels
- */
-typedef void (*MeshFaceFunc) (void *, const int, const MeshVertex **, const MeshTexel *);
 
 // MeshObject uses MeshData, but has an animation state that can be changed.
 class MeshObject

@@ -67,8 +67,8 @@ HubScene::HubScene (App *pApp) : Scene (pApp),
     pMapperScene = new MapperScene (pApp);
 
     // Start with this scene:
-    pCurrent = pMapperScene;
-    help = 3;
+    pCurrent = pShadowScene;
+    help = 0;
 }
 HubScene::~HubScene()
 {

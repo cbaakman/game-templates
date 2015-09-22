@@ -719,10 +719,6 @@ void TangentRenderFunc (void *pObj, const int n_vertices, const MeshVertex **p_v
 
     for(i = 0; i < n_vertices; i++)
     {
-        glTexCoord2f (texels [i].u, texels [i].v);
-        glNormal3f (p_vertices [i]->n.x, p_vertices [i]->n.y, p_vertices [i]->n.z);
-        glVertex3f (p_vertices [i]->p.x, p_vertices [i]->p.y, p_vertices [i]->p.z);
-
         /*
           Calculate tangent and bitangent from neighbouring
           vertices (positions and texture coords)
@@ -745,6 +741,10 @@ void TangentRenderFunc (void *pObj, const int n_vertices, const MeshVertex **p_v
 
         glVertexAttrib3f (pSet->index_tangent, t.x, t.y, t.z);
         glVertexAttrib3f (pSet->index_bitangent, b.x, b.y, b.z);
+
+        glTexCoord2f (texels [i].u, texels [i].v);
+        glNormal3f (p_vertices [i]->n.x, p_vertices [i]->n.y, p_vertices [i]->n.z);
+        glVertex3f (p_vertices [i]->p.x, p_vertices [i]->p.y, p_vertices [i]->p.z);
     }
 
     glEnd ();
@@ -890,6 +890,9 @@ void ShadowScene::Render ()
     glUseProgram (0);
     glActiveTexture (GL_TEXTURE1);
     glBindTexture (GL_TEXTURE_2D, 0);
+    glActiveTexture (GL_TEXTURE0);
+    glBindTexture (GL_TEXTURE_2D, 0);
+
 
     glDisable (GL_DEPTH_TEST);
     glDisable (GL_LIGHTING);

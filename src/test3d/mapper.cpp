@@ -107,7 +107,7 @@ displace_fsh [] = R"shader(
 )shader";
 
 MapperScene::MapperScene (App *pApp) : Scene (pApp),
-    angleY(0), angleX(0), distCamera(10.0f),
+    angleY(0), angleX(0), distCamera(3.0f),
 
     shaderProgram (0)
 {

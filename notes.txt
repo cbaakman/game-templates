@@ -1,8 +1,9 @@
-Game templates version 1.4.1
+Game templates version 1.5.0
 
 [test3d]
 
 Contains examples of some basic 3D features:
+* displacement mapping
 * normal mapping
 * stencil shadows
 * collision detection, but triangle test still fails occasionally when the collider pushes against the edge between two triangles, causing glitches

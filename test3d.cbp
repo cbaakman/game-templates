@@ -69,6 +69,8 @@
 		<Unit filename="src/test3d/hub.h">
 			<Option target="&lt;{~None~}&gt;" />
 		</Unit>
+		<Unit filename="src/test3d/mapper.cpp" />
+		<Unit filename="src/test3d/mapper.h" />
 		<Unit filename="src/test3d/mesh.cpp" />
 		<Unit filename="src/test3d/mesh.h" />
 		<Unit filename="src/test3d/shadow.cpp" />

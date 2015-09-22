@@ -34,6 +34,7 @@ ToonScene::ToonScene (App *pApp) : App::Scene (pApp),
 
     shaderProgram (0)
 {
+    texBG.tex = 0;
 }
 ToonScene::~ToonScene ()
 {

@@ -25,19 +25,24 @@
 #include "../err.h"
 
 // Color for the help text in each of the scenes (RGB):
-const GLfloat textColors [][3] = {{1.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f, 0.0f}};
+const GLfloat textColors [][3] = {{1.0f, 1.0f, 1.0f},
+                                  {1.0f, 1.0f, 1.0f},
+                                  {0.0f, 0.0f, 0.0f},
+                                  {0.0f, 1.0f, 0.0f}};
 
 HubScene::HubScene (App *pApp) : Scene (pApp),
     pWaterScene (NULL),
     pShadowScene (NULL),
     pToonScene (NULL),
+    pMapperScene (NULL),
     pCurrent (NULL),
     alphaH(0),
     help(0)
 {
     std::string nav = "F1: Dummy Test\n"
                       "F2: Water Test\n"
-                      "F3: Toon Test";
+                      "F3: Toon Test\n"
+                      "F4: Displacement map Test";
 
     helpText [0] = "Use w,a,s,d & SPACE to move mr. Dummy around\n"
                     "Use the mouse to move the camera\n"
@@ -50,6 +55,8 @@ HubScene::HubScene (App *pApp) : Scene (pApp),
 
     helpText [2] = "Use the mouse to move the camera\n" + nav ;
 
+    helpText [3] = "Use the mouse to move the camera\n" + nav ;
+
 
     pWaterScene = new WaterScene (pApp);
 
@@ -57,15 +64,18 @@ HubScene::HubScene (App *pApp) : Scene (pApp),
 
     pToonScene = new ToonScene (pApp);
 
+    pMapperScene = new MapperScene (pApp);
+
     // Start with this scene:
-    pCurrent = pShadowScene;
-    help = 0;
+    pCurrent = pMapperScene;
+    help = 3;
 }
 HubScene::~HubScene()
 {
     delete pWaterScene;
     delete pShadowScene;
     delete pToonScene;
+    delete pMapperScene;
 }
 bool HubScene::Init ()
 {
@@ -79,6 +89,9 @@ bool HubScene::Init ()
         return false;
 
     if (!pToonScene->Init())
+        return false;
+
+    if (!pMapperScene->Init())
         return false;
 
     SDL_RWops *fontInput = SDL_RWFromZipArchive (resPath.c_str(), "Lumean.svg");
@@ -199,6 +212,12 @@ void HubScene::OnKeyPress (const SDL_KeyboardEvent *event)
         {
             pCurrent = pToonScene;
             help = 2;
+        }
+
+        if(event->keysym.sym == SDLK_F4)
+        {
+            pCurrent = pMapperScene;
+            help = 3;
         }
     }
 }

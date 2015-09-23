@@ -17,53 +17,33 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 
+#ifndef MAPPER_H
+#define MAPPER_H
 
-#ifndef HUB_H
-#define HUB_H
+#include "app.h"
+#include "../texture.h"
 
-#include "water.h"
-#include "shadow.h"
-#include "toon.h"
-#include "mapper.h"
-
-#include "../font.h"
-
-/*
-    The hub scene manager switching between scenes.
-    It's also responsible for showing help text.
- */
-class HubScene : public App::Scene{
-
+class MapperScene : public App::Scene
+{
 private:
-    WaterScene *pWaterScene;
-    ShadowScene *pShadowScene;
-    ToonScene *pToonScene;
-    MapperScene *pMapperScene;
+    GLint index_tangent,
+          index_bitangent;
 
-    // Currently rendered scene:
-    Scene *pCurrent;
+    GLuint shaderProgram;
 
-    // Font for the help text shown:
-    Font font;
+    Texture texColor, texDisplace;
 
-    // text alpha value
-    GLfloat alphaH;
+    // camera angles
+    GLfloat angleY, angleX, distCamera;
 
-    // current help string index:
-    int help;
-
-    // help strings:
-    std::string helpText [4];
 public:
-    void OnEvent (const SDL_Event *event);
+    MapperScene (App *);
+    ~MapperScene ();
 
-    HubScene (App*);
-    ~HubScene ();
-
-    bool Init(void);
-    void Update(float dt);
-    void Render(void);
-    void OnKeyPress (const SDL_KeyboardEvent *event);
+    bool Init (void);
+    void Render (void);
+    void OnMouseMove (const SDL_MouseMotionEvent *event);
+    void OnMouseWheel (const SDL_MouseWheelEvent *event);
 };
 
-#endif // HUB_H
+#endif

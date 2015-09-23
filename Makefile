@@ -23,7 +23,7 @@ bin/client: obj/geo2d.o obj/ini.o obj/client/client.o obj/util.o obj/client/conn
 	obj/client/gui.o obj/client/login.o obj/texture.o obj/io.o obj/font.o obj/xml.o
 	gcc $^ -o $@ $(CLIENTLIBS:%=-l%) $(LIBDIRS:%=-L%)
 
-bin/test3d: obj/test3d/water.o obj/ini.o obj/test3d/hub.o obj/xml.o obj/str.o obj/test3d/shadow.o obj/shader.o obj/test3d/app.o obj/random.o obj/err.o\
+bin/test3d: obj/test3d/mapper.o obj/test3d/water.o obj/ini.o obj/test3d/hub.o obj/xml.o obj/str.o obj/test3d/shadow.o obj/shader.o obj/test3d/app.o obj/random.o obj/err.o\
 	obj/io.o obj/texture.o obj/test3d/mesh.o obj/util.o obj/font.o obj/test3d/collision.o obj/test3d/toon.o
 	gcc $^ -o $@ $(TEST3DLIBS:%=-l%) $(LIBDIRS:%=-L%)
 

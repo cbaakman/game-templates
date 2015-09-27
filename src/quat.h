@@ -70,7 +70,7 @@ struct Quaternion {
         return sqrt (Length2());
     }
 
-    Quaternion operator/ (const float scalar)
+    Quaternion operator/ (const float scalar) const
     {
         Quaternion m;
         for (int i=0; i < 4; i++)
@@ -78,7 +78,7 @@ struct Quaternion {
         return m;
     }
 
-    Quaternion Unit()
+    Quaternion Unit() const
     {
         float l = Length();
         if (l > 0)
@@ -119,15 +119,9 @@ inline Quaternion operator/ (const Quaternion &q, const float scalar)
     return m;
 }
 
-inline Quaternion slerp (Quaternion start, Quaternion end, float s)
+inline Quaternion slerp (const Quaternion &start, const Quaternion &end, float s)
 {
-    if (start.Length2() != 1.0f)
-        start = start.Unit();
-
-    if (end.Length2() != 1.0f)
-        end = end.Unit();
-
-    float dot = Dot(start, end),
+    float dot = Dot (start.Unit (), end.Unit ()),
           w1, w2;
 
     if (dot > 0.9995) // too close

@@ -285,7 +285,7 @@ inline matrix4 matRotZ( const float angle ) // radians
 }
 inline matrix4 matQuat (const Quaternion &q) // also a rotation matrix
 {
-    float f = 2.0f / q.Length();
+    float f = 2.0f / q.Length2();
 
     matrix4 m;
     float y2 = q.y*q.y, z2 = q.z*q.z, x2 = q.x*q.x,

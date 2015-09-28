@@ -521,7 +521,7 @@ class Exporter (object):
                     # Register frame number, position and rotation of the bone:
 
                     q = m.toQuat()
-                    rot = self.transformRot * arm2mesh * Vector (q.x, q.y, q.z, q.w)
+                    rot = self.transformRot * arm2mesh.rotationPart().resize4x4() * Vector (q.x, q.y, q.z, q.w)
 
                     loc = self.transformLoc * arm2mesh * pose_bone.loc
 

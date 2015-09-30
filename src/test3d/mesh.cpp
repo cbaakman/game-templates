@@ -1063,7 +1063,7 @@ std::map <std::string, matrix4> GetBoneTransformations (MeshObject *pMesh, const
                   t = 1.0f - u;
 
             loc = t * pLeft->loc + u * pRight->loc;
-            rot = slerp (pLeft->rot, pRight->rot, u);
+            rot = Slerp (pLeft->rot, pRight->rot, u);
         }
 
         /*

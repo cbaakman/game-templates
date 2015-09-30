@@ -292,9 +292,9 @@ inline matrix4 matQuat (const Quaternion &q) // also a rotation matrix
           xy = q.x*q.y, xz = q.x*q.z, yz = q.y*q.z,
           xw = q.x*q.w, yw = q.y*q.w, zw = q.z*q.w;
 
-    m.m11=1.0f-f*(y2+z2); m.m12=     f*(xy+zw); m.m13=     f*(xz-yw); m.m14=0;
-    m.m21=     f*(xy-zw); m.m22=1.0f-f*(x2+z2); m.m23=     f*(yz+xw); m.m24=0;
-    m.m31=     f*(xz+yw); m.m32=     f*(yz-xw); m.m33=1.0f-f*(x2+y2); m.m34=0;
+    m.m11=1.0f-f*(y2+z2); m.m12=     f*(xy-zw); m.m13=     f*(xz+yw); m.m14=0;
+    m.m21=     f*(xy+zw); m.m22=1.0f-f*(x2+z2); m.m23=     f*(yz-xw); m.m24=0;
+    m.m31=     f*(xz-yw); m.m32=     f*(yz+xw); m.m33=1.0f-f*(x2+y2); m.m34=0;
     m.m41=     0;         m.m42=     0;         m.m43=     0;         m.m44=1;
 
     return m;

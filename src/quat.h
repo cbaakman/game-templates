@@ -22,11 +22,13 @@
 #define QUAT_H
 
 #include <math.h>
+#include <cmath>
+#include "vec.h"
 
-#define QUAT_ID Quaternion(0,0,0,1)
+#define QUAT_ID Quaternion (0.0f, 0.0f, 0.0f, 1.0f)
 
 /*
-    Quaternions are used to represent rotation.
+    Quaternions are used to represent rotations around arbitrary axes.
 
     For further info, see:
     https://en.wikipedia.org/wiki/Quaternion
@@ -45,10 +47,10 @@ struct Quaternion {
     Quaternion () {}
     Quaternion (const float _x, const float _y, const float _z, const float _w)
     {
-        x=_x;
-        y=_y;
-        z=_z;
-        w=_w;
+        x = _x;
+        y = _y;
+        z = _z;
+        w = _w;
     }
     Quaternion (const Quaternion &other)
     {
@@ -78,13 +80,28 @@ struct Quaternion {
         return m;
     }
 
-    Quaternion Unit() const
+    Quaternion Unit () const
     {
         float l = Length();
         if (l > 0)
             return (*this) / l;
         else
             return (*this);
+    }
+
+    Quaternion operator- () const
+    {
+        return Quaternion (-x, -y, -z, -w);
+    }
+
+    Quaternion Conjugate () const
+    {
+        return Quaternion (-x, -y, -z, w);
+    }
+
+    Quaternion Inverse () const
+    {
+        return Conjugate () / Length2 ();
     }
 };
 
@@ -96,6 +113,19 @@ inline float Dot (const Quaternion &q1, const Quaternion &q2)
     return v;
 }
 
+inline Quaternion Cross (const Quaternion &q1, const Quaternion &q2)
+{
+    return Quaternion (q1.y*q2.z - q1.z*q2.y + q1.x*q2.w + q1.w*q2.x,
+                       q1.z*q2.x - q1.x*q2.z + q1.y*q2.w + q1.w*q2.y,
+                       q1.x*q2.y - q1.y*q2.x + q1.z*q2.w + q1.w*q2.z,
+                       q1.w*q2.w - q1.x*q2.x - q1.y*q2.y - q1.z*q2.z);
+}
+
+inline Quaternion operator* (const Quaternion &q1, const Quaternion &q2)
+{
+    return Cross (q1, q2);
+}
+
 inline Quaternion operator+ (const Quaternion &q1, const Quaternion &q2)
 {
     Quaternion sum;
@@ -103,6 +133,7 @@ inline Quaternion operator+ (const Quaternion &q1, const Quaternion &q2)
         sum.q[i] = q1.q[i] + q2.q[i];
     return sum;
 }
+
 inline Quaternion operator* (const Quaternion &q, const float scalar)
 {
     Quaternion m;
@@ -111,38 +142,102 @@ inline Quaternion operator* (const Quaternion &q, const float scalar)
     return m;
 }
 
-inline Quaternion operator/ (const Quaternion &q, const float scalar)
+inline Quaternion operator* (const float scalar, const Quaternion &q)
 {
-    Quaternion m;
-    for (int i=0; i < 4; i++)
-        m.q[i] = q.q[i] / scalar;
-    return m;
+    return q * scalar;
 }
 
-inline Quaternion slerp (const Quaternion &start, const Quaternion &end, float s)
+/**
+ * Rotates v by q.
+ */
+inline vec3 Rotate (const Quaternion &q, const vec3 &v)
 {
-    float dot = Dot (start.Unit (), end.Unit ()),
-          w1, w2;
+    Quaternion r = (q * Quaternion (v.x, v.y, v.z, 0.0f)) * q.Inverse ();
 
-    if (dot > 0.9995) // too close
+    return vec3 (r.x, r.y, r.z);
+}
+/**
+ * Derives the rotation quaternion to
+ * get to 'to' from 'from'.
+ */
+inline Quaternion Rotation (const vec3 from, const vec3 to)
+{
+    float dot = Dot (from.Unit (), to.Unit ()),
+          a, w;
+    vec3 axis;
+
+    if (dot < -0.99999999)
+    {
+        /*
+            We can't calculate the axis if the vectors are in opposite directions.
+            So take an arbitrary orthogonal axis.
+
+            If the vectors are parallel, we won't need the axis.
+         */
+
+        if (std::abs (to.x) > std::abs (to.z))
+
+            axis = vec3 (-to.y, -to.x, 0.0f);
+        else
+            axis = vec3 (0.0f, to.z, to.y);
+
+        axis = axis.Unit ();
+        w = 0.0f;
+    }
+    else
+    {
+        a = acos (dot) / 2;
+        w = cos (a);
+
+        axis = sin (a) * Cross (from, to).Unit ();
+    }
+
+    return Quaternion (axis.x, axis.y, axis.z, w);
+}
+
+inline float Angle (const Quaternion &q1, const Quaternion &q2)
+{
+    float dot = Dot (q1.Unit (), q2.Unit ());
+
+    if (dot > 0.99999999)
+        return 0.0f;
+    else if (dot < -0.99999999)
+        return PI;
+
+    return acos (dot);
+}
+
+inline Quaternion Slerp (const Quaternion &start, const Quaternion &end, float s)
+{
+    Quaternion start_u = start.Unit (),
+               end_u = end.Unit ();
+
+    float w1, w2, theta, sTheta,
+
+          dot = Dot (start_u, end_u);
+
+    if (dot < 0.0f)
+    {
+        // assure shortest path (< 90 degrees)
+        start_u = -start_u;
+        dot = Dot (start_u, end_u);
+    }
+
+    if (dot > 0.9995) // too similar
     {
         w1 = (1.0f - s);
         w2 = s;
     }
     else
     {
-        // stay within acos domain
-        if (dot < -1.0f)
-            dot = -1.0f;
-
-        float theta = acos(dot);
-        float sTheta = sin(theta);
+        theta = acos (dot),
+        sTheta = sin (theta);
 
         w1 = sin ((1.0f - s) * theta) / sTheta;
         w2 = sin (s * theta) / sTheta;
     }
 
-    return start * w1 + end * w2;
+    return start_u * w1 + end_u * w2;
 }
 
 #endif

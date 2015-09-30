@@ -60,7 +60,8 @@ private:
     float vy;
     bool onGround, touchDown;
 
-    vec3 posPlayer, directionPlayer;
+    vec3 posPlayer;
+    Quaternion rotationPlayer;
 
     GLuint shader_normal;
 

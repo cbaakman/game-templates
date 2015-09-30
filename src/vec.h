@@ -29,8 +29,8 @@
 #define VEC_DOWN vec3(0,-1.0f,0)
 #define VEC_LEFT vec3(-1.0f,0,0)
 #define VEC_RIGHT vec3(1.0f,0,0)
-#define VEC_FORWARD vec3(0,0,-1.0f)
-#define VEC_BACK vec3(0,0,1.0f)
+#define VEC_FORWARD vec3(0,0,1.0f)
+#define VEC_BACK vec3(0,0,-1.0f)
 
 #define PI 3.1415926535897932384626433832795
 
@@ -98,7 +98,7 @@ inline vec3 operator* (const float s, const vec3 &v)
 {
     return v*s;
 }
-inline vec3 Cross(const vec3 &v1, const vec3 &v2)
+inline vec3 Cross (const vec3 &v1, const vec3 &v2)
 {
     return vec3(
         v1.y * v2.z - v2.y * v1.z,
@@ -106,19 +106,26 @@ inline vec3 Cross(const vec3 &v1, const vec3 &v2)
         v1.x * v2.y - v1.y * v2.x
         );
 }
-inline float Dot(const vec3 &v1,const vec3 &v2)
+inline float Dot (const vec3 &v1,const vec3 &v2)
 {
     return (v1.x*v2.x+v1.y*v2.y+v1.z*v2.z);
 }
-inline float Angle(const vec3 &v1,const vec3 &v2)
+inline float Angle (const vec3 &v1,const vec3 &v2)
 {
-    return acosf (Dot (v1.Unit(), v2.Unit()));
+    float dot = Dot (v1.Unit (), v2.Unit ());
+
+    if (dot > 0.99999999)
+        return 0.0f;
+    else if (dot < -0.99999999)
+        return PI;
+
+    return acos (dot);
 }//In radians
-inline vec3 Projection(const vec3& v,const vec3& on_v)
+inline vec3 Projection (const vec3& v,const vec3& on_v)
 {
     return on_v*Dot(v,on_v)/on_v.Length2();
 }
-inline vec3 ClosestPointOnLine(const vec3& l1,const vec3& l2,const vec3& point)
+inline vec3 ClosestPointOnLine (const vec3& l1,const vec3& l2,const vec3& point)
 {
     vec3 l1p = point - l1;
     vec3 l12 = l2 - l1;

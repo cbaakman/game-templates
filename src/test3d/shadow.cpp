@@ -109,7 +109,7 @@ ShadowScene::ShadowScene(App *pApp) : Scene(pApp),
     angleY (0.0f),
     distCamera (7.0f),
     posPlayer (PLAYER_START),
-    directionPlayer (0,0,1),
+    rotationPlayer (QUAT_ID),
     vy (0),
     onGround (false), touchDown (false),
     show_bones (false), show_normals (false), show_triangles (false),
@@ -356,9 +356,13 @@ void getCameraPosition( const vec3 &center,
     // Place camera at chosen distance and angle
     posCamera = center + matRotY (angleY) * matRotX (angleX) * vec3 (0, 0, -dist);
 }
+#define PLAYER_ROTATEPERSEC 2*PI
 void ShadowScene::Update(const float dt)
 {
-    vec3 posCamera, newPosPlayer = posPlayer;
+    vec3 posCamera,
+         currentDirectionPlayer = Rotate (rotationPlayer, VEC_FORWARD),
+         targetDirectionPlayer = currentDirectionPlayer,
+         newPosPlayer = posPlayer;
     bool forward = false;
 
     // Detect movement input:
@@ -386,16 +390,27 @@ void ShadowScene::Update(const float dt)
         else
             mx = 0.0f;
 
+        // Define facing direction's X and Z axis, based on the camera direction:
         vec3 camZ = posPlayer - posCamera;
         camZ.y = 0;
         camZ = camZ.Unit ();
         vec3 camX = Cross (VEC_UP, camZ);
 
-        directionPlayer = mx * camX + mz * camZ;
+        targetDirectionPlayer = (mx * camX + mz * camZ).Unit ();
 
-        newPosPlayer += 5 * directionPlayer.Unit () * dt;
+        newPosPlayer += 5 * targetDirectionPlayer * dt;
         forward = true;
     }
+
+    // Rotate 3D mesh over time, to facing direction:
+    Quaternion targetRotationPlayer = Rotation (VEC_FORWARD, targetDirectionPlayer);
+
+    float angle = Angle (rotationPlayer, targetRotationPlayer),
+          fracRotate = PLAYER_ROTATEPERSEC * dt / angle;
+    if (fracRotate > 1.0f || angle <= 0.0)
+        fracRotate = 1.0f;
+
+    rotationPlayer = Slerp (rotationPlayer, targetRotationPlayer, fracRotate);
 
     // if falling, see if player hit the ground
     onGround = (vy <= 0.0f) && TestOnGround (posPlayer, colliders, N_PLAYER_COLLIDERS, collision_triangles, n_collision_triangles);
@@ -717,7 +732,7 @@ void TangentRenderFunc (void *pObj, const int n_vertices, const MeshVertex **p_v
 
     IndexSet *pSet = (IndexSet *)pObj;
 
-    for(i = 0; i < n_vertices; i++)
+    for (i = 0; i < n_vertices; i++)
     {
         /*
           Calculate tangent and bitangent from neighbouring
@@ -869,7 +884,7 @@ void ShadowScene::Render ()
     glActiveTexture (GL_TEXTURE1);
     glBindTexture (GL_TEXTURE_2D, texDummyNormal.tex);
 
-    matrix4 transformPlayer = matTranslation (posPlayer) * matInverse (matLookAt (VEC_O, directionPlayer, VEC_UP));
+    matrix4 transformPlayer = matTranslation (posPlayer) * matQuat (rotationPlayer);
 
     glMultMatrixf (transformPlayer.m);
 

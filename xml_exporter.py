@@ -139,6 +139,15 @@ def extend2string (e):
     else:
         raise Exception ("not an extend type: %i" % e)
 
+def rotate (quat, vec):
+
+    # Copy quat first, before calling inverse.
+    # It changes the object itself!
+    inv = Quaternion (quat.w, quat.x, quat.y, quat.z)
+    inv = inv.inverse ()
+
+    return (quat * vec) * inv
+
 class Exporter (object):
 
     # Code used in this exported is based on the following documentation:
@@ -521,7 +530,17 @@ class Exporter (object):
                     # Register frame number, position and rotation of the bone:
 
                     q = m.toQuat()
-                    rot = self.transformRot * arm2mesh.rotationPart().resize4x4() * Vector (q.x, q.y, q.z, q.w)
+                    rotm = self.transformRot * arm2mesh.rotationPart().resize4x4()
+                    rot = rotm * Vector (q.x, q.y, q.z, q.w)
+                    rot = Quaternion (rot.w, rot.x, rot.y, rot.z)
+
+                    # Check for quaternion chirality flips in transformation.
+                    # If flipped, compensate:
+                    testvec = Vector (1.0, 0.5, -0.5)
+                    res1 = rotate (q, rotm * testvec)
+                    res2 = rotate (rot, testvec)
+                    if res1 != res2:
+                        rot = rot.inverse ()
 
                     loc = self.transformLoc * arm2mesh * pose_bone.loc
 

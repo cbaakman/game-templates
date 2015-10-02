@@ -1,4 +1,4 @@
-Game templates version 1.5.3
+Game templates version 1.5.4
 
 [test3d]
 

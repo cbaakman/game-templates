@@ -709,18 +709,34 @@ void RenderSprite (const vec3 &pos, const Texture *pTex,
     glEnd ();
 }
 
+enum RenderMode {RENDER_FACE, RENDER_NBT};
+
+#define NBT_SIZE 0.3f
+
 struct IndexSet
 {
     GLint index_tangent,
           index_bitangent;
+    RenderMode mode;
 };
 
 void TangentRenderFunc (void *pObj, const int n_vertices, const MeshVertex **p_vertices, const MeshTexel *texels)
 {
-    if (n_vertices == 4)
-        glBegin (GL_QUADS);
-    else if (n_vertices == 3)
-        glBegin (GL_TRIANGLES);
+    const IndexSet *pSet = (IndexSet *)pObj;
+
+    if (pSet->mode == RENDER_FACE)
+    {
+        if (n_vertices == 4)
+            glBegin (GL_QUADS);
+        else if (n_vertices == 3)
+            glBegin (GL_TRIANGLES);
+        else
+            return;
+    }
+    else if (pSet->mode == RENDER_NBT)
+    {
+        glBegin (GL_LINES);
+    }
     else
         return;
 
@@ -728,9 +744,7 @@ void TangentRenderFunc (void *pObj, const int n_vertices, const MeshVertex **p_v
 
     size_t i, j, k;
 
-    float du0, dv0, du1, dv1;
-
-    IndexSet *pSet = (IndexSet *)pObj;
+    float du0, dv0, du1, dv1, luv0, luv1, f;
 
     for (i = 0; i < n_vertices; i++)
     {
@@ -742,24 +756,64 @@ void TangentRenderFunc (void *pObj, const int n_vertices, const MeshVertex **p_v
         j = (n_vertices + i - 1) % n_vertices;
         k = (i + 1) % n_vertices;
 
-        v0 = p_vertices [j]->p - p_vertices [i]->p;
+        v0 = (p_vertices [j]->p - p_vertices [i]->p).Unit ();
         du0 = texels [j].u - texels [i].u;
         dv0 = texels [j].v - texels [i].v;
+        luv0 = sqrt (sqr (du0) + sqr (dv0));
 
-        v1 = p_vertices [k]->p - p_vertices [i]->p;
+        v1 = (p_vertices [k]->p - p_vertices [i]->p).Unit ();
         du1 = texels [k].u - texels [i].u;
         dv1 = texels [k].v - texels [i].v;
+        luv1 = sqrt (sqr (du1) + sqr (dv1));
 
-        float r = 1.0f / (du0 * dv1 - dv0 * du1);
-        t = (v0 * dv1 - v1 * dv0) * r;
-        b = (v1 * du0 - v0 * du1) * r;
+    /*
+        NOTE: There appears to be a precision error somewhere.
+              Theoretically, all tangents and bitangents should
+              be length 1.0 in the following 2 formulae, but
+              they aren't!
+     */
+    /*
+        f = 1.0f / (du0 * dv1 - du1 * dv0);
+        t = (luv0 * v0 * dv1 - luv1 * v1 * dv0) * f;
+        b = (luv1 * v1 * du0 - luv0 * v0 * du1) * f;
+     */
 
-        glVertexAttrib3f (pSet->index_tangent, t.x, t.y, t.z);
-        glVertexAttrib3f (pSet->index_bitangent, b.x, b.y, b.z);
+        // Use 'Unit' to overcome normalization errors:
+        t = (luv0 * v0 * dv1 - luv1 * v1 * dv0).Unit ();
+        b = (luv1 * v1 * du0 - luv0 * v0 * du1).Unit ();
 
-        glTexCoord2f (texels [i].u, texels [i].v);
-        glNormal3f (p_vertices [i]->n.x, p_vertices [i]->n.y, p_vertices [i]->n.z);
-        glVertex3f (p_vertices [i]->p.x, p_vertices [i]->p.y, p_vertices [i]->p.z);
+        if (pSet->mode == RENDER_FACE)
+        {
+            glVertexAttrib3f (pSet->index_tangent, t.x, t.y, t.z);
+            glVertexAttrib3f (pSet->index_bitangent, b.x, b.y, b.z);
+
+            glTexCoord2f (texels [i].u, texels [i].v);
+            glNormal3f (p_vertices [i]->n.x, p_vertices [i]->n.y, p_vertices [i]->n.z);
+            glVertex3f (p_vertices [i]->p.x, p_vertices [i]->p.y, p_vertices [i]->p.z);
+        }
+        else if (pSet->mode == RENDER_NBT)
+        {
+            // pn, pt, pb are p, moved in the direction of the normal, tangent, and bitangent
+            const vec3 p = p_vertices [i]->p,
+                       pn = p + NBT_SIZE * p_vertices [i]->n,
+                       pt = p + NBT_SIZE * t,
+                       pb = p + NBT_SIZE * b;
+
+            // Draw a line from p to pn:
+            glColor4f (0.0f, 0.0f, 1.0f, 0.0f);
+            glVertex3f (p.x, p.y, p.z);
+            glVertex3f (pn.x, pn.y, pn.z);
+
+            // Draw a line from p to pt:
+            glColor4f (1.0f, 0.0f, 0.0f, 0.0f);
+            glVertex3f (p.x, p.y, p.z);
+            glVertex3f (pt.x, pt.y, pt.z);
+
+            // Draw a line from p to pb:
+            glColor4f (0.0f, 1.0f, 0.0f, 0.0f);
+            glVertex3f (p.x, p.y, p.z);
+            glVertex3f (pb.x, pb.y, pb.z);
+        }
     }
 
     glEnd ();
@@ -768,7 +822,7 @@ void TangentRenderFunc (void *pObj, const int n_vertices, const MeshVertex **p_v
 void ShadowScene::Render ()
 {
     GLint texLoc, posLoc;
-    IndexSet set_i = {index_tangent, index_bitangent};
+    IndexSet set_i = {index_tangent, index_bitangent, RENDER_FACE};
 
     int w, h;
     SDL_GL_GetDrawableSize (pApp->GetMainWindow (), &w, &h);
@@ -920,8 +974,8 @@ void ShadowScene::Render ()
     glEnable (GL_DEPTH_TEST);
     if (show_normals)
     {
-        glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-        pMeshDummy->RenderNormals ();
+        set_i.mode = RENDER_NBT; // Render normals, bitangents, tangents
+        pMeshDummy->ThroughSubsetFaces ("0", TangentRenderFunc, &set_i);
     }
 
     // We need to have the light position in player space, because that's where the triangles are.

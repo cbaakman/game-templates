@@ -1,5 +1,21 @@
 #!BPY
 
+# Copyright (C) 2015 Coos Baakman
+# This software is provided 'as-is', without any express or implied
+# warranty. In no event will the authors be held liable for any damages
+# arising from the use of this software.
+# Permission is granted to anyone to use this software for any purpose,
+# including commercial applications, and to alter it and redistribute it
+# freely, subject to the following restrictions:
+# 1. The origin of this software must not be misrepresented; you must not
+#    claim that you wrote the original software. If you use this software
+#    in a product, an acknowledgment in the product documentation would be
+#    appreciated but is not required.
+# 2. Altered source versions must be plainly marked as such, and must not be
+#    misrepresented as being the original software.
+# 3. This notice may not be removed or altered from any source distribution.
+
+
 """
 # Name: 'xml mesh type (.xml)...'
 # Blender: 249
@@ -103,7 +119,7 @@ def findArmatureMesh (arm_obj):
 # Tells if we need to flip face direction when applying this matrix.
 def getFaceFactor (matrix):
 
-    f = 1
+    f = 1.0
     for i in range (3):
         for j in range (3):
             f *= matrix[i][j]
@@ -148,9 +164,31 @@ def rotate (quat, vec):
 
     return (quat * vec) * inv
 
+def flips_chirality (matrix):
+
+    f = 0.5 * math.sqrt (2) # 45 degrees
+
+    # Perform 3 tests:
+    for point, axis in [(Vector (1.0, 0, 0), Vector (0, 1.0, 0)),
+                        (Vector (0, 1.0, 0), Vector (0, 0, 1.0)),
+                        (Vector (0, 0, 1.0), Vector (1.0, 0, 0))]:
+
+        rot = Quaternion (f, f * axis.x, f * axis.y, f * axis.z)
+        tpoint = matrix * point
+        trot = matrix * Vector (rot.x, rot.y, rot.z, rot.w)
+        trot = Quaternion (trot.w, trot.x, trot.y, trot.z)
+
+        res1 = rotate (rot, tpoint)
+        res2 = rotate (trot, point)
+
+        if res1 != res2:
+            return True
+
+    return False
+
 class Exporter (object):
 
-    # Code used in this exported is based on the following documentation:
+    # Code used in this exporter is based on the following documentation:
     # http://www.blender.org/api/248PythonDoc/
 
     def __init__(self):
@@ -468,6 +506,12 @@ class Exporter (object):
 
         root = ET.Element ('animations')
 
+        rotm = self.transformRot * arm2mesh.rotationPart().resize4x4()
+        locm = self.transformLoc * arm2mesh
+
+        # Check for chirality flip in the rotation transformation:
+        chirality_flip = flips_chirality (rotm)
+
         # Check every action to see if it's an animation:
         for action in Armature.NLA.GetActions ().values ():
 
@@ -530,19 +574,14 @@ class Exporter (object):
                     # Register frame number, position and rotation of the bone:
 
                     q = m.toQuat()
-                    rotm = self.transformRot * arm2mesh.rotationPart().resize4x4()
                     rot = rotm * Vector (q.x, q.y, q.z, q.w)
                     rot = Quaternion (rot.w, rot.x, rot.y, rot.z)
 
-                    # Check for quaternion chirality flips in transformation.
                     # If flipped, compensate:
-                    testvec = Vector (1.0, 0.5, -0.5)
-                    res1 = rotate (q, rotm * testvec)
-                    res2 = rotate (rot, testvec)
-                    if res1 != res2:
+                    if chirality_flip:
                         rot = rot.inverse ()
 
-                    loc = self.transformLoc * arm2mesh * pose_bone.loc
+                    loc = locm * pose_bone.loc
 
                     key_tag = ET.Element ('key')
                     layer_tag.append (key_tag)

@@ -47,7 +47,7 @@ HubScene::HubScene (App *pApp) : Scene (pApp),
     helpText [0] = "Use w,a,s,d & SPACE to move mr. Dummy around\n"
                     "Use the mouse to move the camera\n"
                    "Press b to show mr. Dummy's bones\n"
-                   "Press n to show mr. Dummy's normals\n"
+                   "Press n to show mr. Dummy's normals, tangents and bitangents\n"
                    "Press z to show collision wireframe\n" + nav ;
 
     helpText [1] = "Use the arrow keys, pgUp & pgDown to move the cube.\n"

@@ -572,53 +572,6 @@ void RenderPlane()
 
     glEnd();
 }
-/**
- * Renders a 2x2 cube at the origin.
- */
-void RenderCube()
-{
-    GLfloat size = CUBESIZE / 2;
-
-    glBegin(GL_QUADS);
-
-    glNormal3f( 0, 0, 1);
-    glVertex3f(-1*size, 1*size,-1*size);
-    glVertex3f( 1*size, 1*size,-1*size);
-    glVertex3f( 1*size,-1*size,-1*size);
-    glVertex3f(-1*size,-1*size,-1*size);
-
-    glNormal3f( 0, 0,-1);
-    glVertex3f( 1*size, 1*size, 1*size);
-    glVertex3f(-1*size, 1*size, 1*size);
-    glVertex3f(-1*size,-1*size, 1*size);
-    glVertex3f( 1*size,-1*size, 1*size);
-
-    glNormal3f( 1, 0, 0);
-    glVertex3f( 1*size, 1*size,-1*size);
-    glVertex3f( 1*size, 1*size, 1*size);
-    glVertex3f( 1*size,-1*size, 1*size);
-    glVertex3f( 1*size,-1*size,-1*size);
-
-    glNormal3f(-1, 0, 0);
-    glVertex3f(-1*size, 1*size, 1*size);
-    glVertex3f(-1*size, 1*size,-1*size);
-    glVertex3f(-1*size,-1*size,-1*size);
-    glVertex3f(-1*size,-1*size, 1*size);
-
-    glNormal3f( 0, 1, 0);
-    glVertex3f(-1*size, 1*size, 1*size);
-    glVertex3f( 1*size, 1*size, 1*size);
-    glVertex3f( 1*size, 1*size,-1*size);
-    glVertex3f(-1*size, 1*size,-1*size);
-
-    glNormal3f( 0,-1, 0);
-    glVertex3f(-1*size,-1*size,-1*size);
-    glVertex3f( 1*size,-1*size,-1*size);
-    glVertex3f( 1*size,-1*size, 1*size);
-    glVertex3f(-1*size,-1*size, 1*size);
-
-    glEnd();
-}
 
 const GLfloat colorCube [] = {0.0f, 1.0f, 0.0f, 1.0f},
               colorCubeReflect [] = {0.0f, 0.8f, 0.1f, 1.0f},
@@ -703,9 +656,7 @@ void WaterScene::Render()
     glDepthFunc (GL_LEQUAL);
     glColorMask (GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     glMaterialfv (GL_FRONT, GL_AMBIENT_AND_DIFFUSE, colorCubeReflect);
-    glTranslatef (posCube.x, posCube.y, posCube.z);
-    RenderCube ();
-    glTranslatef (-posCube.x, -posCube.y, -posCube.z);
+    RenderCube (posCube, CUBESIZE);
 
     // Set stencil to 1 for everything above the water level.
     glStencilFunc (GL_ALWAYS, 1, WATER_STENCIL_MASK);
@@ -765,9 +716,8 @@ void WaterScene::Render()
         // move light and cube to their mirror position
         glScalef (1, -1, 1);
         glLightfv (GL_LIGHT0, GL_POSITION, posLight);
-        glTranslatef (posCube.x, posCube.y, posCube.z);
         glMaterialfv (GL_FRONT, GL_AMBIENT_AND_DIFFUSE, colorCubeReflect);
-        RenderCube ();
+        RenderCube (posCube, CUBESIZE);
     glPopMatrix ();
 
     // Set stencil to 1 for everything above the water level.
@@ -857,8 +807,5 @@ void WaterScene::Render()
 
     // Draw The cube at the set position
     glMaterialfv (GL_FRONT, GL_AMBIENT_AND_DIFFUSE, colorCube);
-    glPushMatrix ();
-        glTranslatef (posCube.x, posCube.y, posCube.z);
-        RenderCube ();
-    glPopMatrix ();
+    RenderCube (posCube, CUBESIZE);
 }

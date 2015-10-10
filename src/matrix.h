@@ -331,6 +331,10 @@ inline matrix4 matScale (const float x, const float y, const float z)
 
     return m;
 }
+inline matrix4 matScale (const float s)
+{
+    return matScale (s, s, s);
+}
 inline matrix4 matTranslation (const float x, const float y, const float z)
 {
     matrix4 m;
@@ -406,7 +410,10 @@ inline matrix4 matSkew (const vec3 n, float d)
     return m;
 }
 
-// Perspective projection matrix. Z-axis points into the screen.
+/**
+ * Perspective projection matrix. Z-axis points into the screen.
+ * It's left-handed, but x,z,y are like x,y,z in blender.
+ */
 inline matrix4 matPerspec (float view_angle, float aspect_ratio, float near_viewdist, float far_viewdist)
 {
     float a=0.5f*view_angle;
@@ -424,7 +431,10 @@ inline matrix4 matPerspec (float view_angle, float aspect_ratio, float near_view
 
     return m;
 }
-// Orthographic projection matrix. Arguments define screen boundaries.
+/** 
+ * Orthographic projection matrix. Arguments define screen boundaries.
+ * It's left-handed, but x,z,y are like x,y,z in blender.
+ */
 inline matrix4 matOrtho (float leftX, float rightX, float upY, float downY, float nearZ, float farZ)
 {
     float Xdiff = rightX - leftX,

@@ -78,6 +78,11 @@ void GLErrorString (char *out, GLenum status);
 void GLFrameBufferErrorString (char *out, GLenum status);
 
 /**
+ * Renders a S x S x S cube at center P, parallel to the current x, y and z axes.
+ */
+void RenderCube (const vec3 &p, const float s);
+
+/**
  * Gives a h,s,v color to OpenGL
  */
 void glColorHSV (float h, float s, float v);

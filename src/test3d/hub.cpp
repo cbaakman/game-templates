@@ -28,7 +28,8 @@
 const GLfloat textColors [][3] = {{1.0f, 1.0f, 1.0f},
                                   {1.0f, 1.0f, 1.0f},
                                   {0.0f, 0.0f, 0.0f},
-                                  {0.0f, 1.0f, 0.0f}};
+                                  {0.0f, 1.0f, 0.0f},
+                                  {1.0f, 1.0f, 1.0f}};
 
 HubScene::HubScene (App *pApp) : Scene (pApp),
     pWaterScene (NULL),
@@ -42,7 +43,8 @@ HubScene::HubScene (App *pApp) : Scene (pApp),
     std::string nav = "F1: Dummy Test\n"
                       "F2: Water Test\n"
                       "F3: Toon Test\n"
-                      "F4: Displacement map Test";
+                      "F4: Displacement map Test\n"
+                      "F5: Vector Test";
 
     helpText [0] = "Use w,a,s,d & SPACE to move mr. Dummy around\n"
                     "Use the mouse to move the camera\n"
@@ -57,6 +59,8 @@ HubScene::HubScene (App *pApp) : Scene (pApp),
 
     helpText [3] = "Use the mouse to move the camera\n" + nav ;
 
+    helpText [4] = "Press 'a' to see the axis system: x, y & z\n"
+                   "Press 'x' to see a cross product\n" + nav;
 
     pWaterScene = new WaterScene (pApp);
 
@@ -65,6 +69,8 @@ HubScene::HubScene (App *pApp) : Scene (pApp),
     pToonScene = new ToonScene (pApp);
 
     pMapperScene = new MapperScene (pApp);
+
+    pVecScene = new VecScene (pApp, &font);
 
     // Start with this scene:
     pCurrent = pShadowScene;
@@ -76,22 +82,26 @@ HubScene::~HubScene()
     delete pShadowScene;
     delete pToonScene;
     delete pMapperScene;
+    delete pVecScene;
 }
 bool HubScene::Init ()
 {
     std::string resPath = std::string(SDL_GetBasePath()) + "test3d.zip";
     bool success;
 
-    if (!pWaterScene->Init())
+    if (!pWaterScene->Init ())
         return false;
 
-    if (!pShadowScene->Init())
+    if (!pShadowScene->Init ())
         return false;
 
-    if (!pToonScene->Init())
+    if (!pToonScene->Init ())
         return false;
 
-    if (!pMapperScene->Init())
+    if (!pMapperScene->Init ())
+        return false;
+
+    if (!pVecScene->Init ())
         return false;
 
     SDL_RWops *fontInput = SDL_RWFromZipArchive (resPath.c_str(), "Lumean.svg");
@@ -218,6 +228,12 @@ void HubScene::OnKeyPress (const SDL_KeyboardEvent *event)
         {
             pCurrent = pMapperScene;
             help = 3;
+        }
+
+        if(event->keysym.sym == SDLK_F5)
+        {
+            pCurrent = pVecScene;
+            help = 4;
         }
     }
 }

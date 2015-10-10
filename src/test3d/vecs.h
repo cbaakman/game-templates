@@ -17,55 +17,35 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 
+#ifndef VECS_H
+#define VECS_H
 
-#ifndef HUB_H
-#define HUB_H
-
-#include "water.h"
-#include "shadow.h"
-#include "toon.h"
-#include "mapper.h"
-#include "vecs.h"
+#include "app.h"
 
 #include "../font.h"
 
-/*
-    The hub scene manager switching between scenes.
-    It's also responsible for showing help text.
- */
-class HubScene : public App::Scene{
+enum VecDisplayMode {DISPLAY_AXIS, DISPLAY_CROSS};
 
+class VecScene : public App::Scene
+{
 private:
-    WaterScene *pWaterScene;
-    ShadowScene *pShadowScene;
-    ToonScene *pToonScene;
-    MapperScene *pMapperScene;
-    VecScene *pVecScene;
 
-    // Currently rendered scene:
-    Scene *pCurrent;
+    // camera angles
+    GLfloat angleY, angleX, distCamera;
+    VecDisplayMode mode;
 
-    // Font for the help text shown:
-    Font font;
+    float t;
 
-    // text alpha value
-    GLfloat alphaH;
-
-    // current help string index:
-    int help;
-
-    // help strings:
-    std::string helpText [5];
+    const Font *pFont;
 public:
-    void OnEvent (const SDL_Event *event);
 
-    HubScene (App*);
-    ~HubScene ();
+    VecScene (App *, const Font *);
 
-    bool Init(void);
-    void Update(float dt);
-    void Render(void);
-    void OnKeyPress (const SDL_KeyboardEvent *event);
+    void Update (const float dt);
+    void Render (void);
+    void OnKeyPress(const SDL_KeyboardEvent *);
+    void OnMouseMove (const SDL_MouseMotionEvent *);
+    void OnMouseWheel (const SDL_MouseWheelEvent *);
 };
 
-#endif // HUB_H
+#endif // VECS_H

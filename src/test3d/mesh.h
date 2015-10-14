@@ -123,11 +123,16 @@ private:
 
 public:
     MeshTexel texels [N];
+    bool smooth;
 
     MeshFace (const MeshFace &other) : MeshFace()
     {
         for(int i = 0; i < N; i++)
-             SetVertexID(i, other.GetVertexID(i));
+        {
+             SetVertexID (i, other.GetVertexID(i));
+             texels [i] = other.texels [i];
+        }
+        smooth = other.smooth;
     }
 
     MeshFace ()
@@ -135,7 +140,10 @@ public:
         for(int i = 0; i < N; i++)
         {
             vertex_ids[i] = NULL;
+            texels [i].u = 0.0f;
+            texels [i].v = 0.0f;
         }
+        smooth = true;
     }
     ~MeshFace ()
     {

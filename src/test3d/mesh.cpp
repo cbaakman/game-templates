@@ -156,6 +156,40 @@ void ThroughUnAnimatedSubsetFaces (const MeshData *pMeshData, const std::string 
         func (pObj, 3, vs, pTriangle->texels);
     }
 }
+
+template <int N>
+void RenderFace (const std::map <std::string, MeshVertex> &vertices, const MeshFace <N> *pFace)
+{
+    const MeshTexel *t;
+    const vec3 *n, *p;
+    vec3 face_normal;
+
+    if (!pFace->smooth)
+    {
+        // Take the average of the N vertex normals as face normal.
+        face_normal = VEC_O;
+        for(size_t i = 0; i < N; i++)
+        {
+            face_normal += vertices.at (pFace->GetVertexID(i)).n;
+        }
+        face_normal /= N;
+    }
+
+    for (size_t i = 0; i < N; i++)
+    {
+        t = &pFace->texels[i];
+        n = &vertices.at (pFace->GetVertexID(i)).n;
+        p = &vertices.at (pFace->GetVertexID(i)).p;
+
+        if (!pFace->smooth)
+            n = &face_normal;
+
+        glTexCoord2f (t->u, t->v);
+        glNormal3f (n->x, n->y, n->z);
+        glVertex3f (p->x, p->y, p->z);
+    }
+}
+
 void RenderUnAnimatedSubset (const MeshData *pMeshData, const std::string &id)
 {
     if(pMeshData->subsets.find(id) == pMeshData->subsets.end())
@@ -175,30 +209,7 @@ void RenderUnAnimatedSubset (const MeshData *pMeshData, const std::string &id)
     {
         PMeshQuad pQuad = *it;
 
-        if (!pQuad->smooth)
-        {
-            // Take the average of the four vertex normals as face normal.
-            face_normal = VEC_O;
-            for(size_t j = 0; j < 4; j++)
-            {
-                face_normal += pMeshData->vertices.at (pQuad->GetVertexID(j)).n;
-            }
-            face_normal /= 4;
-        }
-
-        for (size_t j = 0; j < 4; j++)
-        {
-            t = &pQuad->texels[j];
-            n = &pMeshData->vertices.at (pQuad->GetVertexID(j)).n;
-            p = &pMeshData->vertices.at (pQuad->GetVertexID(j)).p;
-
-            if (!pQuad->smooth)
-                n = &face_normal;
-
-            glTexCoord2f(t->u, t->v);
-            glNormal3f(n->x, n->y, n->z);
-            glVertex3f(p->x, p->y, p->z);
-        }
+        RenderFace (pMeshData->vertices, pQuad);
     }
     glEnd();
 
@@ -207,30 +218,7 @@ void RenderUnAnimatedSubset (const MeshData *pMeshData, const std::string &id)
     {
         PMeshTriangle pTri = *it;
 
-        if (!pTri->smooth)
-        {
-            // Take the average of the four vertex normals as face normal.
-            face_normal = VEC_O;
-            for(size_t j = 0; j < 3; j++)
-            {
-                face_normal += pMeshData->vertices.at (pTri->GetVertexID(j)).n;
-            }
-            face_normal /= 3;
-        }
-
-        for (size_t j = 0; j < 3; j++)
-        {
-            t = &pTri->texels[j];
-            n = &pMeshData->vertices.at (pTri->GetVertexID(j)).n;
-            p = &pMeshData->vertices.at (pTri->GetVertexID(j)).p;
-
-            if (!pTri->smooth)
-                n = &face_normal;
-
-            glTexCoord2f(t->u, t->v);
-            glNormal3f(n->x, n->y, n->z);
-            glVertex3f(p->x, p->y, p->z);
-        }
+        RenderFace (pMeshData->vertices, pTri);
     }
     glEnd();
 }
@@ -254,32 +242,7 @@ void MeshObject::RenderSubset (const std::string &id)
     {
         PMeshQuad pQuad = *it;
 
-        if (!pQuad->smooth)
-        {
-            // Take the average of the four vertex normals as face normal.
-            face_normal = VEC_O;
-            for(size_t j = 0; j < 4; j++)
-            {
-                face_normal += vertexStates [pQuad->GetVertexID(j)].n;
-            }
-            face_normal /= 4;
-        }
-
-        for(size_t j = 0; j < 4; j++)
-        {
-            t = &pQuad->texels [j];
-            n = &vertexStates [pQuad->GetVertexID(j)].n;
-            p = &vertexStates [pQuad->GetVertexID(j)].p;
-
-            if (!pQuad->smooth)
-            {
-                n = &face_normal;
-            }
-
-            glTexCoord2f(t->u, t->v);
-            glNormal3f(n->x, n->y, n->z);
-            glVertex3f(p->x, p->y, p->z);
-        }
+        RenderFace (vertexStates, pQuad);
     }
     glEnd();
 
@@ -288,30 +251,7 @@ void MeshObject::RenderSubset (const std::string &id)
     {
         PMeshTriangle pTri = *it;
 
-        if (!pTri->smooth)
-        {
-            // Take the average of the three vertex normals as face normal.
-            face_normal = VEC_O;
-            for(size_t j = 0; j < 3; j++)
-            {
-                face_normal += vertexStates [pTri->GetVertexID(j)].n;
-            }
-            face_normal /= 3;
-        }
-
-        for(size_t j = 0; j < 3; j++)
-        {
-            t = &pTri->texels [j];
-            n = &vertexStates [pTri->GetVertexID(j)].n;
-            p = &vertexStates [pTri->GetVertexID(j)].p;
-
-            if (!pTri->smooth)
-                n = &face_normal;
-
-            glTexCoord2f (t->u, t->v);
-            glNormal3f (n->x, n->y, n->z);
-            glVertex3f (p->x, p->y, p->z);
-        }
+        RenderFace (vertexStates, pTri);
     }
     glEnd();
 }

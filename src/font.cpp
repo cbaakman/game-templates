@@ -97,8 +97,6 @@ bool ParseXMLUnicode (const char *repr, unicode_char *out)
  */
 const char *SVGParsePathFloats (const int n, const char *text, float outs [])
 {
-    const char *tmp = text;
-
     int i;
     for (i = 0; i < n; i++)
     {
@@ -321,7 +319,7 @@ void cairo_svg_arc (cairo_t *cr, float current_x, float current_y,
  */
 bool ParseGlyphPath (const char *d, const BBox *pBox, const float multiply, Glyph *pGlyph)
 {
-    const char *nd, *sd = d;
+    const char *nd;
     cairo_status_t status;
     cairo_surface_t *surface;
     cairo_t *cr;
@@ -783,7 +781,7 @@ bool ParseSVGFont (const xmlDocPtr pDoc, const int size, Font *pFont)
 {
     // The root tag of the xml document is svg:
     bool success;
-    xmlNodePtr pRoot = xmlDocGetRootElement(pDoc), pList, pTag;
+    xmlNodePtr pRoot = xmlDocGetRootElement(pDoc);
     if (!pRoot) {
 
         SetError ("no root element in svg doc");
@@ -800,8 +798,7 @@ bool ParseSVGFont (const xmlDocPtr pDoc, const int size, Font *pFont)
 
     xmlNode *pDefs = NULL,
             *pFnt = NULL,
-            *pChild = pRoot->children,
-            *pGlyphTag = NULL;
+            *pChild = pRoot->children;
 
     while (pChild) {
         if (StrCaseCompare((const char *) pChild->name, "defs") == 0) {
@@ -1336,7 +1333,7 @@ float NextLineWidth (const Font *pFont, const char *pUTF8, const float maxLineWi
 /**
  * ThroughTextGlyphFuncs are callbacks that will be called for each glyph
  * that ThroughText encounters on its pass through the text.
- * 
+ *
  * A ThroughTextGlyphFunc should return true if it wants the next glyph.
  * Glyph pointer is NULL for the terminating null character!
  *

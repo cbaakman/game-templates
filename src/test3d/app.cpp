@@ -236,7 +236,6 @@ void ShowError (const char *msg)
 void App::MainLoop (void)
 {
     GLenum statusGL;
-    SDL_Event event;
     Uint32 ticks0 = SDL_GetTicks(), ticks;
     float dt;
     char errorString[260];

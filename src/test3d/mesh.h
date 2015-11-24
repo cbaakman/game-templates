@@ -24,6 +24,7 @@
 #include <libxml/tree.h>
 #include "../matrix.h"
 
+#include <functional>
 #include <string>
 #include <list>
 #include <map>
@@ -213,10 +214,11 @@ struct MeshData {
  * 3. the array of vertex pointers
  * 4. the array of texels
  */
-typedef void (*MeshFaceFunc) (void *, const int, const MeshVertex **, const MeshTexel *);
+typedef std::function<void (void *, const int, const MeshVertex **, const MeshTexel *)> MeshFaceFunc;
 
-void ThroughUnAnimatedSubsetFaces (const MeshData *, const std::string &subset_id, MeshFaceFunc func, void *pObj=NULL);
-void RenderUnAnimatedSubset (const MeshData *, const std::string &subset_id);
+void ThroughSubsetFaces (const MeshData *, const std::string &subset_id, MeshFaceFunc func, void *pObj=NULL);
+void ThroughFaces (const MeshData *, MeshFaceFunc func, void *pObj=NULL);
+void RenderSubset (const MeshData *, const std::string &subset_id);
 
 // ToTriangles is useful for collision detection
 void ToTriangles (const MeshData *, Triangle **triangles, size_t *n_triangles);
@@ -227,8 +229,8 @@ void ToTriangles (const MeshData *, Triangle **triangles, size_t *n_triangles);
  */
 bool ParseMesh (const xmlDocPtr, MeshData *pData);
 
-// MeshObject uses MeshData, but has an animation state that can be changed.
-class MeshObject
+// MeshState uses MeshData, but has an animation state that can be changed.
+class MeshState
 {
 
 private:
@@ -246,14 +248,8 @@ private:
 public:
 
     // Executes func for every face in the subset
-    void ThroughSubsetFaces (const std::string &subset_id, MeshFaceFunc func, void *pObj=NULL);
-
-    // Render subset in OpenGL, could precede this with desired GL settings
-    void RenderSubset (const std::string &subset_id);
-
-    // These render functions can be usefull for debugging
-    void RenderBones ();
-    void RenderNormals ();
+    void ThroughSubsetFaces (const std::string &subset_id, MeshFaceFunc func, void *pObj=NULL) const;
+    void ThroughFaces (MeshFaceFunc func, void *pObj=NULL) const;
 
     /**
      * Puts mesh in desired animation frame.
@@ -265,11 +261,12 @@ public:
     void SetBoneAngle(const char *bone_id, const vec3 *axis, const float angle);
     void SetBoneLoc(const char *bone_id, const vec3 *loc);
 
-    const std::map<std::string, MeshVertex> &GetVertices() const { return vertexStates; }
     const MeshData *GetMeshData() const { return pMeshData; }
+    const MeshVertex *GetVertex (const std::string &vertex_id) const;
+    const MeshBoneState *GetBoneState (const std::string &bone_id) const;
 
-    MeshObject(const MeshData *data);
-    ~MeshObject();
+    MeshState(const MeshData *data);
+    ~MeshState();
 };
 
 

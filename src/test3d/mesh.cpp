@@ -23,11 +23,19 @@
 #include "../str.h"
 #include "../err.h"
 
-MeshObject::MeshObject(const MeshData *data) : pMeshData(data)
+const MeshVertex *MeshState::GetVertex (const std::string &id) const
+{
+    return &vertexStates.at (id);
+}
+const MeshBoneState *MeshState::GetBoneState (const std::string &id) const
+{
+    return &boneStates.at (id);
+}
+MeshState::MeshState(const MeshData *data) : pMeshData(data)
 {
     InitStates();
 }
-void MeshObject::InitStates()
+void MeshState::InitStates()
 {
     // Copy the mesh data's rest states to this object's vertex and bone states:
 
@@ -48,48 +56,8 @@ void MeshObject::InitStates()
         boneStates[id].posTail = pMeshData->bones.at(id).posTail;
     }
 }
-MeshObject::~MeshObject()
+MeshState::~MeshState()
 {
-}
-void MeshObject::RenderBones ()
-{
-    for (std::map<std::string, MeshBoneState>::const_iterator it = boneStates.begin(); it != boneStates.end(); it++)
-    {
-        // Draw a line from head to tail pos in the bone's current state
-
-        const std::string id = it->first;
-        const MeshBoneState *pState = &boneStates.at (id);
-
-        const vec3 *pHead = &pState->posHead,
-                   *pTail = &pState->posTail;
-
-        glBegin (GL_LINES);
-        glVertex3f (pHead->x, pHead->y, pHead->z);
-        glVertex3f (pTail->x, pTail->y, pTail->z);
-        glEnd ();
-    }
-}
-void MeshObject::RenderNormals ()
-{
-    for (std::map<std::string, MeshVertex>::const_iterator it = vertexStates.begin(); it != vertexStates.end(); it++)
-    {
-        // position and normal might be transformed by a bone, so get the current vertex state:
-
-        const std::string id = it->first;
-        const MeshVertex *pState = &vertexStates.at (id);
-
-        const float size = 0.3f;
-        const vec3 *p = &pState->p,
-                   pn = pState->p + size * pState->n;
-
-        // pn is p, moved in the direction of the normal
-
-        // Draw a line from p to pn:
-        glBegin (GL_LINES);
-        glVertex3f (p->x, p->y, p->z);
-        glVertex3f (pn.x, pn.y, pn.z);
-        glEnd ();
-    }
 }
 void ToTriangles (const MeshData *pMeshData, Triangle **pT, size_t *pN)
 {
@@ -124,18 +92,18 @@ void ToTriangles (const MeshData *pMeshData, Triangle **pT, size_t *pN)
     *pN = n_triangles;
     *pT = triangles;
 }
-void ThroughUnAnimatedSubsetFaces (const MeshData *pMeshData, const std::string &id, MeshFaceFunc func, void *pObj)
+void ThroughSubsetFaces (const MeshData *pMeshData, const std::string &id, MeshFaceFunc func, void *pObj)
 {
     if (pMeshData->subsets.find (id) == pMeshData->subsets.end ())
     {
-        SetError ("cannot render %s, no such subset", id.c_str());
+        SetError ("cannot iterate through %s, no such subset", id.c_str());
         return;
     }
     const MeshSubset *pSubset = &pMeshData->subsets.at(id);
 
     const MeshVertex *vs [4];
 
-    for(std::list<PMeshQuad>::const_iterator it = pSubset->quads.begin(); it != pSubset->quads.end(); it++)
+    for (auto it = pSubset->quads.begin(); it != pSubset->quads.end(); it++)
     {
         PMeshQuad pQuad = *it;
         for(size_t j = 0; j < 4; j++)
@@ -145,7 +113,7 @@ void ThroughUnAnimatedSubsetFaces (const MeshData *pMeshData, const std::string 
 
         func (pObj, 4, vs, pQuad->texels);
     }
-    for(std::list<PMeshTriangle>::const_iterator it = pSubset->triangles.begin(); it != pSubset->triangles.end(); it++)
+    for (auto it = pSubset->triangles.begin(); it != pSubset->triangles.end(); it++)
     {
         PMeshTriangle pTriangle = *it;
         for(size_t j = 0; j < 3; j++)
@@ -156,132 +124,83 @@ void ThroughUnAnimatedSubsetFaces (const MeshData *pMeshData, const std::string 
         func (pObj, 3, vs, pTriangle->texels);
     }
 }
-
-template <int N>
-void RenderFace (const std::map <std::string, MeshVertex> &vertices, const MeshFace <N> *pFace)
+void ThrougFaces (const MeshData *pMeshData, MeshFaceFunc func, void *pObj)
 {
-    const MeshTexel *t;
-    const vec3 *n, *p;
-    vec3 face_normal;
+    const MeshVertex *vs [4];
 
-    if (!pFace->smooth)
+    for (auto it = pMeshData->quads.begin(); it != pMeshData->quads.end(); it++)
     {
-        // Take the average of the N vertex normals as face normal.
-        face_normal = VEC_O;
-        for(size_t i = 0; i < N; i++)
+        PMeshQuad pQuad = &it->second;
+        for(size_t j = 0; j < 4; j++)
         {
-            face_normal += vertices.at (pFace->GetVertexID(i)).n;
+            vs [j] = &pMeshData->vertices.at (pQuad->GetVertexID(j));
         }
-        face_normal /= N;
+
+        func (pObj, 4, vs, pQuad->texels);
     }
-
-    for (size_t i = 0; i < N; i++)
+    for (auto it = pMeshData->triangles.begin(); it != pMeshData->triangles.end(); it++)
     {
-        t = &pFace->texels[i];
-        n = &vertices.at (pFace->GetVertexID(i)).n;
-        p = &vertices.at (pFace->GetVertexID(i)).p;
+        PMeshTriangle pTriangle = &it->second;
+        for(size_t j = 0; j < 3; j++)
+        {
+            vs [j] = &pMeshData->vertices.at (pTriangle->GetVertexID(j));
+        }
 
-        if (!pFace->smooth)
-            n = &face_normal;
-
-        glTexCoord2f (t->u, t->v);
-        glNormal3f (n->x, n->y, n->z);
-        glVertex3f (p->x, p->y, p->z);
+        func (pObj, 3, vs, pTriangle->texels);
     }
 }
-
-void RenderUnAnimatedSubset (const MeshData *pMeshData, const std::string &id)
+void MeshState::ThroughSubsetFaces (const std::string &id, MeshFaceFunc func, void *pObj) const
 {
     if(pMeshData->subsets.find(id) == pMeshData->subsets.end())
     {
-        SetError ("cannot render %s, no such subset", id.c_str());
-        return;
-    }
-    const MeshSubset *pSubset = &pMeshData->subsets.at(id);
-
-    const MeshTexel *t;
-    const vec3 *n, *p;
-    vec3 face_normal;
-
-    // Give the subset's quads and triangles to OpenGL to render:
-    glBegin(GL_QUADS);
-    for (std::list <PMeshQuad>::const_iterator it = pSubset->quads.begin(); it != pSubset->quads.end(); it++)
-    {
-        PMeshQuad pQuad = *it;
-
-        RenderFace (pMeshData->vertices, pQuad);
-    }
-    glEnd();
-
-    glBegin(GL_TRIANGLES);
-    for (std::list <PMeshTriangle>::const_iterator it = pSubset->triangles.begin(); it != pSubset->triangles.end(); it++)
-    {
-        PMeshTriangle pTri = *it;
-
-        RenderFace (pMeshData->vertices, pTri);
-    }
-    glEnd();
-}
-void MeshObject::RenderSubset (const std::string &id)
-{
-    if(pMeshData->subsets.find(id) == pMeshData->subsets.end())
-    {
-        SetError ("cannot render %s, no such subset", id.c_str());
-        return;
-    }
-    const MeshSubset *pSubset = &pMeshData->subsets.at(id);
-
-    const MeshTexel *t;
-    const vec3 *n, *p;
-    vec3 face_normal;
-
-    // Give the subset's quads and triangles to OpenGL to render:
-    // Use the vertex states here, which might be transformed.
-    glBegin(GL_QUADS);
-    for(std::list <PMeshQuad>::const_iterator it = pSubset->quads.begin(); it != pSubset->quads.end(); it++)
-    {
-        PMeshQuad pQuad = *it;
-
-        RenderFace (vertexStates, pQuad);
-    }
-    glEnd();
-
-    glBegin(GL_TRIANGLES);
-    for(std::list <PMeshTriangle>::const_iterator it = pSubset->triangles.begin(); it != pSubset->triangles.end(); it++)
-    {
-        PMeshTriangle pTri = *it;
-
-        RenderFace (vertexStates, pTri);
-    }
-    glEnd();
-}
-void MeshObject::ThroughSubsetFaces (const std::string &id, MeshFaceFunc func, void *pObj)
-{
-    if(pMeshData->subsets.find(id) == pMeshData->subsets.end())
-    {
-        SetError ("cannot render %s, no such subset", id.c_str());
+        SetError ("cannot iterate through %s, no such subset", id.c_str());
         return;
     }
     const MeshSubset *pSubset = &pMeshData->subsets.at(id);
 
     const MeshVertex *vs [4];
 
-    for(std::list<PMeshQuad>::const_iterator it = pSubset->quads.begin(); it != pSubset->quads.end(); it++)
+    for (auto it = pSubset->quads.begin(); it != pSubset->quads.end(); it++)
     {
         PMeshQuad pQuad = *it;
         for(size_t j = 0; j < 4; j++)
         {
-            vs [j] = &vertexStates [pQuad->GetVertexID(j)];
+            vs [j] = &vertexStates.at (pQuad->GetVertexID(j));
         }
 
         func (pObj, 4, vs, pQuad->texels);
     }
-    for(std::list<PMeshTriangle>::const_iterator it = pSubset->triangles.begin(); it != pSubset->triangles.end(); it++)
+    for (auto it = pSubset->triangles.begin(); it != pSubset->triangles.end(); it++)
     {
         PMeshTriangle pTriangle = *it;
         for(size_t j = 0; j < 3; j++)
         {
-            vs [j] = &vertexStates [pTriangle->GetVertexID(j)];
+            vs [j] = &vertexStates.at (pTriangle->GetVertexID(j));
+        }
+
+        func (pObj, 3, vs, pTriangle->texels);
+    }
+}
+void MeshState::ThroughFaces (MeshFaceFunc func, void *pObj) const
+{
+    const MeshVertex *vs [4];
+
+    for (auto it = pMeshData->quads.begin(); it != pMeshData->quads.end(); it++)
+    {
+        PMeshQuad pQuad = &it->second;
+        for(size_t j = 0; j < 4; j++)
+        {
+            vs [j] = &vertexStates.at (pQuad->GetVertexID(j));
+        }
+
+        func (pObj, 4, vs, pQuad->texels);
+    }
+    for (auto it = pMeshData->triangles.begin(); it != pMeshData->triangles.end(); it++)
+    {
+        PMeshTriangle pTriangle = &it->second;
+        for(size_t j = 0; j < 3; j++)
+        {
+            vs [j] = &vertexStates.at (pTriangle->GetVertexID(j));
         }
 
         func (pObj, 3, vs, pTriangle->texels);
@@ -362,7 +281,7 @@ bool ParseXYZ (const xmlNodePtr pTag, vec3 *pVec, const char *prefix = NULL)
  * Gets one float attribute from the given tag with given id (key)
  * :returns: true if float was successfully parsed, false otherwise.
  */
-bool ParseFloatAttrib(const xmlNodePtr pTag, const xmlChar *key, float *f)
+bool ParseFloatAttrib (const xmlNodePtr pTag, const xmlChar *key, float *f)
 {
     xmlChar *pF = xmlGetProp(pTag, key);
     if(!pF)
@@ -383,7 +302,7 @@ bool ParseFloatAttrib(const xmlNodePtr pTag, const xmlChar *key, float *f)
  * Gets one int attribute from the given tag with given id (key)
  * :returns: true if int was successfully parsed, false otherwise.
  */
-bool ParseIntAttrib(const xmlNodePtr pTag, const xmlChar *key, int *i)
+bool ParseIntAttrib (const xmlNodePtr pTag, const xmlChar *key, int *i)
 {
     xmlChar *pI = xmlGetProp(pTag, key);
     if(!pI)
@@ -401,7 +320,7 @@ bool ParseIntAttrib(const xmlNodePtr pTag, const xmlChar *key, int *i)
  * Gets one string attribute from the given tag with given id (key)
  * :returns: true if the attribute was found, false otherwise.
  */
-bool ParseStringAttrib(const xmlNodePtr pTag, const xmlChar *key, std::string &s)
+bool ParseStringAttrib (const xmlNodePtr pTag, const xmlChar *key, std::string &s)
 {
     xmlChar *pS = xmlGetProp(pTag, key);
     if (!pS)
@@ -418,7 +337,7 @@ bool ParseStringAttrib(const xmlNodePtr pTag, const xmlChar *key, std::string &s
 /**
  * Converts an xml vertex tag to a vertex and adds it to given map with proper id.
  */
-bool ParseVertex(const xmlNodePtr pTag, std::map<std::string, MeshVertex> &vertices)
+bool ParseVertex (const xmlNodePtr pTag, std::map<std::string, MeshVertex> &vertices)
 {
     std::string id;
     if (!ParseStringAttrib(pTag, (const xmlChar *)"id", id))
@@ -715,7 +634,7 @@ bool ParseAnimation(const xmlNodePtr pTag,
                     const std::map<std::string, MeshBone> &bones,
                     std::map<std::string, MeshAnimation> &animations)
 {
-    xmlNodePtr pChild, pLayer, pList, pKey;
+    xmlNodePtr pLayer, pKey;
 
     // the id is actually called 'name' in animation tags.
     std::string id, bone_id;
@@ -982,7 +901,7 @@ bool ParseMesh(const xmlDocPtr pDoc, MeshData *pData)
  *
  * :returns: the matrices per bone id
  */
-std::map <std::string, matrix4> GetBoneTransformations (MeshObject *pMesh, const MeshAnimation *pAnimation, const float frame, const bool loop)
+std::map <std::string, matrix4> GetBoneTransformations (MeshState *pMesh, const MeshAnimation *pAnimation, const float frame, const bool loop)
 {
     std::map<std::string, matrix4> transforms;
 
@@ -1084,7 +1003,7 @@ std::map <std::string, matrix4> GetBoneTransformations (MeshObject *pMesh, const
 
     return transforms;
 }
-void MeshObject::ApplyBoneTransformations(const std::map<std::string, matrix4> transforms)
+void MeshState::ApplyBoneTransformations(const std::map<std::string, matrix4> transforms)
 {
     // This counts how many bones modify a given vertex.
     std::map <std::string, int> bonesPerVertex;
@@ -1204,7 +1123,7 @@ void MeshObject::ApplyBoneTransformations(const std::map<std::string, matrix4> t
         }
     }
 }
-void MeshObject::SetAnimationState(const char *animation_id, float frame, bool loop)
+void MeshState::SetAnimationState(const char *animation_id, float frame, bool loop)
 {
     const MeshAnimation *pAnimation;
     if (animation_id)

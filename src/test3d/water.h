@@ -23,6 +23,7 @@
 
 #include "app.h"
 #include "../vec.h"
+#include "buffer.h"
 
 #define GRIDSIZE 100
 
@@ -41,6 +42,10 @@ private:
 
     // position of the cube
     vec3 posCube;
+
+    // vertex and index buffer to hold water grid data:
+    VertexBuffer vbo_water;
+    IndexBuffer ibo_water;
 
     // time-dependent variables for vertical movement of the water grid:
     float gridforces [GRIDSIZE][GRIDSIZE],
@@ -69,8 +74,6 @@ private:
 
     // Create a wave at point p with length l
     void MakeWave (const vec3 p, const float l);
-
-    void RenderWater ();
 
 public:
     WaterScene (App*);

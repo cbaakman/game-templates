@@ -22,6 +22,7 @@
 
 #include "app.h"
 #include "mesh.h"
+#include "buffer.h"
 #include "../texture.h"
 
 /*
@@ -45,6 +46,14 @@ private:
 
     // Handle to toon shader
     GLuint shaderProgram;
+
+    // Vertex buffers
+    VertexBuffer vbo_lines,
+                 vbo_hair,
+                 vbo_mouth,
+                 vbo_head,
+                 vbo_eyes,
+                 vbo_pupils;
 public:
 
     ToonScene (App *);

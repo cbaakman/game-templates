@@ -120,6 +120,10 @@ ShadowScene::ShadowScene(App *pApp) : Scene(pApp),
     texDummyNormal.tex = texDummy.tex =
     texBox.tex = texSky.tex = texPar.tex = 0;
 
+    std::memset (&vbo_sky, 0, sizeof (VertexBuffer));
+    std::memset (&vbo_box, 0, sizeof (VertexBuffer));
+    std::memset (&vbo_dummy, 0, sizeof (VertexBuffer));
+
     // colliders [0] = new FeetCollider (vec3 (0, -2.0f, 0));
 
     /*
@@ -145,6 +149,9 @@ ShadowScene::ShadowScene(App *pApp) : Scene(pApp),
 }
 ShadowScene::~ShadowScene()
 {
+    glDeleteBuffer (&vbo_box);
+    glDeleteBuffer (&vbo_sky);
+
     glDeleteTextures(1, &texDummyNormal.tex);
     glDeleteTextures(1, &texDummy.tex);
     glDeleteTextures(1, &texBox.tex);
@@ -160,8 +167,219 @@ ShadowScene::~ShadowScene()
     for (int i=0; i < N_PLAYER_COLLIDERS; i++)
         delete colliders [i];
 }
+void GetTangentBitangent (const int n_vertices,
+                          const MeshVertex **p_vertices,
+                          const MeshTexel *texels,
+                          const int i,
 
-bool ShadowScene::Init(void)
+                          vec3 &t, vec3 &b)
+{
+
+    /*
+      Calculate tangent and bitangent from neighbouring
+      vertices (positions and texture coords)
+     */
+
+    int j = (n_vertices + i - 1) % n_vertices,
+        k = (i + 1) % n_vertices;
+
+    float du0, dv0, du1, dv1, luv0, luv1;
+    vec3 v0, v1;
+
+    v0 = (p_vertices [j]->p - p_vertices [i]->p).Unit ();
+    du0 = texels [j].u - texels [i].u;
+    dv0 = texels [j].v - texels [i].v;
+    luv0 = sqrt (sqr (du0) + sqr (dv0));
+
+    v1 = (p_vertices [k]->p - p_vertices [i]->p).Unit ();
+    du1 = texels [k].u - texels [i].u;
+    dv1 = texels [k].v - texels [i].v;
+    luv1 = sqrt (sqr (du1) + sqr (dv1));
+
+    /*
+        NOTE: There appears to be a precision error somewhere.
+              Theoretically, all tangents and bitangents should
+              be length 1.0 in the following 2 formulae, but
+              they aren't!
+     */
+
+    // Use 'Unit' to overcome normalization errors:
+    t = (luv0 * v0 * dv1 - luv1 * v1 * dv0).Unit ();
+    b = (luv1 * v1 * du0 - luv0 * v0 * du1).Unit ();
+}
+struct NormalMapVertex
+{
+    vec3 p,
+         n, t, b; // normal, tangent, bitangent
+
+    MeshTexel tx;
+};
+void UpdateNormalMapVertices (VertexBuffer *pBuffer, const MeshState *pMesh, const std::string &subset_id)
+{
+    size_t i = 0,
+           m;
+
+    const MeshData *pData = pMesh->GetMeshData ();
+    const int triangles [][3] = {{0, 1, 2}, {0, 2, 3}};
+
+    /*
+        We must add 3 vertices to the buffer for every triangle we render. Because
+        our vertex format contains texture coordinates, which are unique per mesh face,
+        not per mesh vertex.
+     */
+
+    glBindBuffer (GL_ARRAY_BUFFER, pBuffer->handle);
+
+    NormalMapVertex* pbuf = (NormalMapVertex *)glMapBuffer (GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+    if (!pbuf)
+    {
+        glBindBuffer (GL_ARRAY_BUFFER, 0);
+        SetError ("failed to obtain buffer pointer");
+        return;
+    }
+
+    pMesh->ThroughSubsetFaces (subset_id,
+        [&] (void *, const int n_vertices, const MeshVertex **p_vertices, const MeshTexel *texels)
+        {
+            m = 0;
+            if (n_vertices >= 3)
+                m++;
+            if (n_vertices >= 4)
+                m++;
+
+            for (int u = 0; u < m; u++)
+            {
+                for (int j : triangles [u])
+                {
+                    pbuf [i].p = p_vertices [j]->p;
+                    pbuf [i].n = p_vertices [j]->n;
+
+                    GetTangentBitangent (n_vertices, p_vertices, texels, j,
+                                         pbuf [i].t, pbuf [i].b);
+
+                    pbuf [i].tx = texels [j];
+                    i ++;
+                }
+            }
+        }
+    );
+
+    glUnmapBuffer (GL_ARRAY_BUFFER);
+    glBindBuffer (GL_ARRAY_BUFFER, 0);
+}
+void RenderNormalMapVertices (const VertexBuffer *pBuffer, const int index_tangent,
+                                                           const int index_bitangent)
+{
+    glBindBuffer (GL_ARRAY_BUFFER, pBuffer->handle);
+
+    // Match the vertex format: position [3], normal [3], tangent [3], bitangent [3], texcoord [2]
+    glEnableClientState (GL_VERTEX_ARRAY);
+    glVertexPointer (3, GL_FLOAT, sizeof (NormalMapVertex), 0);
+
+    glEnableClientState (GL_NORMAL_ARRAY);
+    glNormalPointer (GL_FLOAT, sizeof (NormalMapVertex), (const GLvoid *)(sizeof (vec3)));
+
+    glEnableVertexAttribArray (index_tangent);
+    glVertexAttribPointer (index_tangent, 3, GL_FLOAT, GL_FALSE, sizeof (NormalMapVertex), (const GLvoid *)(2 * sizeof (vec3)));
+
+    glEnableVertexAttribArray (index_bitangent);
+    glVertexAttribPointer (index_bitangent, 3, GL_FLOAT, GL_FALSE, sizeof (NormalMapVertex), (const GLvoid *)(3 * sizeof (vec3)));
+
+    glEnableClientState (GL_TEXTURE_COORD_ARRAY);
+    glTexCoordPointer (2, GL_FLOAT, sizeof (NormalMapVertex), (const GLvoid *)(4 * sizeof (vec3)));
+
+    glDrawArrays (GL_TRIANGLES, 0, pBuffer->n_vertices);
+
+    glDisableVertexAttribArray (index_tangent);
+    glDisableVertexAttribArray (index_bitangent);
+    glDisableClientState (GL_VERTEX_ARRAY);
+    glDisableClientState (GL_NORMAL_ARRAY);
+    glDisableClientState (GL_TEXTURE_COORD_ARRAY);
+
+    glBindBuffer (GL_ARRAY_BUFFER, 0);
+}
+struct TexturedVertex
+{
+    MeshVertex v;
+    MeshTexel t;
+};
+bool SetTexturedVertices (VertexBuffer *pBuffer, const MeshData *pData, const std::string &subset_id)
+{
+
+    size_t i = 0,
+           m;
+
+    const int triangles [][3] = {{0, 1, 2}, {0, 2, 3}};
+
+    /*
+        We must add 3 vertices to the buffer for every triangle we render. Because
+        our vertex format contains texture coordinates, which are unique per mesh face,
+        not per mesh vertex.
+     */
+
+    pBuffer->n_vertices = 3 * (pData->quads.size () * 2 + pData->triangles.size ());
+
+
+    glBindBuffer (GL_ARRAY_BUFFER, pBuffer->handle);
+    glBufferData (GL_ARRAY_BUFFER, sizeof (TexturedVertex) * pBuffer->n_vertices, NULL, GL_STATIC_DRAW);
+
+    TexturedVertex* pbuf = (TexturedVertex *)glMapBuffer (GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+    if (!pbuf)
+    {
+        glBindBuffer (GL_ARRAY_BUFFER, 0);
+        SetError ("failed to obtain buffer pointer");
+        return false;
+    }
+
+    ThroughSubsetFaces (pData, subset_id,
+        [&](void *, const int n_vertex, const MeshVertex **p_vertices, const MeshTexel *texels)
+        {
+            m = 0;
+            if (n_vertex >= 3)
+                m++;
+            if (n_vertex >= 4)
+                m++;
+
+            for (int u = 0; u < m; u++)
+            {
+                for (int j : triangles [u])
+                {
+                    pbuf [i].v = *(p_vertices [j]);
+                    pbuf [i].t = texels [j];
+                    i ++;
+                }
+            }
+        }
+    );
+
+    glUnmapBuffer (GL_ARRAY_BUFFER);
+    glBindBuffer (GL_ARRAY_BUFFER, 0);
+
+    return true;
+}
+void RenderTexturedVertices (const VertexBuffer *pBuffer)
+{
+    glBindBuffer (GL_ARRAY_BUFFER, pBuffer->handle);
+
+    // Match the vertex format: position [3], normal [3], texcoord [2]
+    glEnableClientState (GL_VERTEX_ARRAY);
+    glVertexPointer (3, GL_FLOAT, sizeof (TexturedVertex), 0);
+
+    glEnableClientState (GL_NORMAL_ARRAY);
+    glNormalPointer (GL_FLOAT, sizeof (TexturedVertex), (const GLvoid *)(sizeof (vec3)));
+
+    glEnableClientState (GL_TEXTURE_COORD_ARRAY);
+    glTexCoordPointer (2, GL_FLOAT, sizeof (TexturedVertex), (const GLvoid *)(2 * sizeof (vec3)));
+
+    glDrawArrays (GL_TRIANGLES, 0, pBuffer->n_vertices);
+
+    glDisableClientState (GL_VERTEX_ARRAY);
+    glDisableClientState (GL_NORMAL_ARRAY);
+    glDisableClientState (GL_TEXTURE_COORD_ARRAY);
+
+    glBindBuffer (GL_ARRAY_BUFFER, 0);
+}
+bool ShadowScene::Init (void)
 {
     /*
         Load and parse all resources.
@@ -220,7 +438,7 @@ bool ShadowScene::Init(void)
 
     // Convert xml document to mesh object:
 
-    success = ParseMesh(pDoc, &meshDataDummy);
+    success = ParseMesh (pDoc, &meshDataDummy);
     xmlFreeDoc (pDoc);
 
     if (!success)
@@ -229,13 +447,26 @@ bool ShadowScene::Init(void)
         return false;
     }
 
+    /*
+        The dummy mesh is animated and will change shape every frame. However, the number of
+        vertices doesn't change, so we can allocate a vertex buffer here already.
+
+        It will be refilled every frame.
+     */
+
+    glGenBuffer (&vbo_dummy);
+    vbo_dummy.n_vertices = 3 * (meshDataDummy.quads.size () * 2 + meshDataDummy.triangles.size ());
+    glBindBuffer (GL_ARRAY_BUFFER, vbo_dummy.handle);
+    glBufferData (GL_ARRAY_BUFFER, sizeof (NormalMapVertex) * vbo_dummy.n_vertices, NULL, GL_DYNAMIC_DRAW);
+    glBindBuffer (GL_ARRAY_BUFFER, 0);
+
     // Load environment texture:
 
     f = SDL_RWFromZipArchive (resPath.c_str(), "box.png");
     if (!f)
         return false;
-    success = LoadPNG(f, &texBox);
-    f->close(f);
+    success = LoadPNG (f, &texBox);
+    f->close (f);
 
     if (!success)
     {
@@ -265,6 +496,18 @@ bool ShadowScene::Init(void)
     if (!success)
     {
         SetError ("error parsing box.xml: %s", GetError ());
+        return false;
+    }
+
+    /*
+        This mesh is not animated, so we only need to fill the vertex buffer once
+        and render from it every frame.
+     */
+
+    glGenBuffer (&vbo_box);
+    if (!SetTexturedVertices (&vbo_box, &meshDataBox, "0"))
+    {
+        SetError ("error filling vertex buffer for box");
         return false;
     }
 
@@ -307,6 +550,15 @@ bool ShadowScene::Init(void)
         return false;
     }
 
+    // The skybox mesh isn't animated either, so load into vertex buffer only once.
+
+    glGenBuffer (&vbo_sky);
+    if (!SetTexturedVertices (&vbo_sky, &meshDataSky, "0"))
+    {
+        SetError ("error filling vertex buffer for sky");
+        return false;
+    }
+
     // Load texture for the particles:
 
     f = SDL_RWFromZipArchive (resPath.c_str(), "particle.png");
@@ -339,7 +591,7 @@ bool ShadowScene::Init(void)
 
     shadowTriangles = new STriangle[meshDataDummy.triangles.size() + 2 * meshDataDummy.quads.size()];
 
-    pMeshDummy = new MeshObject (&meshDataDummy);
+    pMeshDummy = new MeshState (&meshDataDummy);
     ToTriangles (&meshDataBox, &collision_triangles, &n_collision_triangles);
 
     // Put the player on the ground we just generated
@@ -357,7 +609,7 @@ void getCameraPosition( const vec3 &center,
     posCamera = center + matRotY (angleY) * matRotX (angleX) * vec3 (0, 0, -dist);
 }
 #define PLAYER_ROTATEPERSEC 2*PI
-void ShadowScene::Update(const float dt)
+void ShadowScene::Update (const float dt)
 {
     vec3 posCamera,
          currentDirectionPlayer = Rotate (rotationPlayer, VEC_FORWARD),
@@ -471,6 +723,8 @@ void ShadowScene::Update(const float dt)
             pMeshDummy->SetAnimationState (NULL, 0);
     }
 
+    // Update the new animation pose to the vertex buffer:
+    UpdateNormalMapVertices (&vbo_dummy, pMeshDummy, "0");
 
     // Move the particles, according to time passed.
     for (int i = 0; i < N_PARTICLES; i++)
@@ -487,43 +741,36 @@ const vec3 posLight (0.0f, 10.0f, 0.0f);
 /*
  * Extract STriangle objects from a mesh to compute drop shadows from.
  */
-int GetTriangles(const MeshObject *pMesh, STriangle *triangles)
+int GetTriangles (const MeshState *pMesh, STriangle *triangles)
 {
-    const MeshData *pData = pMesh->GetMeshData();
-    const std::map<std::string, MeshVertex> &vertices = pMesh->GetVertices();
+    const int triangle_indices [][3] = {{0, 1, 2}, {0, 2, 3}};
 
-    int i = 0;
-    for (std::map<std::string, MeshQuad>::const_iterator it = pData->quads.begin(); it != pData->quads.end(); it++)
-    {
-        const MeshQuad *pQuad = &it->second;
+    int i = 0,
+        m;
+    pMesh->ThroughFaces (
+        [&](void *, const int n_vertex, const MeshVertex **p_vertices, const MeshTexel *texels)
+        {
+            m = 0;
+            if (n_vertex >= 3)
+                m++;
+            if (n_vertex >= 4)
+                m++;
 
-        /*
-            Converting quads to triangles might not be exactly right,
-            unless the quads are completely flat of coarse.
-         */
+            /*
+                Splitting up quads into triangles might not be exactly right,
+                unless the quads are completely flat of coarse.
+             */
 
-        triangles[i].p[0] = &vertices.at (pQuad->GetVertexID(0)).p;
-        triangles[i].p[1] = &vertices.at (pQuad->GetVertexID(1)).p;
-        triangles[i].p[2] = &vertices.at (pQuad->GetVertexID(2)).p;
-
-        i++;
-
-        triangles[i].p[0] = &vertices.at (pQuad->GetVertexID(2)).p;
-        triangles[i].p[1] = &vertices.at (pQuad->GetVertexID(3)).p;
-        triangles[i].p[2] = &vertices.at (pQuad->GetVertexID(0)).p;
-
-        i++;
-    }
-    for (std::map<std::string, MeshTriangle>::const_iterator it = pData->triangles.begin(); it != pData->triangles.end(); it++)
-    {
-        const MeshTriangle *pTri = &it->second;
-
-        triangles[i].p[0] = &vertices.at (pTri->GetVertexID(0)).p;
-        triangles[i].p[1] = &vertices.at (pTri->GetVertexID(1)).p;
-        triangles[i].p[2] = &vertices.at (pTri->GetVertexID(2)).p;
-
-        i++;
-    }
+            for (int u = 0; u < m; u++)
+            {
+                for (int j = 0; j < 3; j++)
+                {
+                    triangles[i].p [j] = &p_vertices [triangle_indices [u][j]]->p;
+                }
+                i ++;
+            }
+        }
+    );
 
     return i;
 }
@@ -574,7 +821,7 @@ void GetShadowEdges(const int n_triangles, const STriangle *triangles, std::list
     */
     bool use_edge [3];
 
-    int i, j, x, y, n, x2, y2;
+    int i, j, x, y, x2, y2;
     for (i = 0; i < n_triangles; i++)
     {
         // no need to check the edges of invisible triangles:
@@ -672,6 +919,26 @@ void ShadowPass(const std::list<Edge> &edges, const vec3 &posLight)
         glEnd();
     }
 }
+void RenderBones (const MeshState *pMesh)
+{
+    const MeshData *pData = pMesh->GetMeshData ();
+
+    for (auto it = pData->bones.begin(); it != pData->bones.end(); it++)
+    {
+        // Draw a line from head to tail pos in the bone's current state
+
+        const std::string id = it->first;
+        const MeshBoneState *pState = pMesh->GetBoneState (id);
+
+        const vec3 *pHead = &pState->posHead,
+                   *pTail = &pState->posTail;
+
+        glBegin (GL_LINES);
+        glVertex3f (pHead->x, pHead->y, pHead->z);
+        glVertex3f (pTail->x, pTail->y, pTail->z);
+        glEnd ();
+    }
+}
 void RenderSprite (const vec3 &pos, const Texture *pTex,
                    const float tx1, const float ty1, const float tx2, const float ty2, // texture coordinates (in pixels)
                    const float size = 1.0f)
@@ -713,107 +980,43 @@ enum RenderMode {RENDER_FACE, RENDER_NBT};
 
 #define NBT_SIZE 0.3f
 
-struct IndexSet
+/**
+ * Renders Normal, Tangent and Bitangent for debugging
+ */
+void RenderNBT (void *, const int n_vertices, const MeshVertex **p_vertices, const MeshTexel *texels)
 {
-    GLint index_tangent,
-          index_bitangent;
-    RenderMode mode;
-};
-
-void TangentRenderFunc (void *pObj, const int n_vertices, const MeshVertex **p_vertices, const MeshTexel *texels)
-{
-    const IndexSet *pSet = (IndexSet *)pObj;
-
-    if (pSet->mode == RENDER_FACE)
-    {
-        if (n_vertices == 4)
-            glBegin (GL_QUADS);
-        else if (n_vertices == 3)
-            glBegin (GL_TRIANGLES);
-        else
-            return;
-    }
-    else if (pSet->mode == RENDER_NBT)
-    {
-        glBegin (GL_LINES);
-    }
-    else
-        return;
+    glBegin (GL_LINES);
 
     vec3 t, b, v0, v1;
 
-    size_t i, j, k;
-
-    float du0, dv0, du1, dv1, luv0, luv1, f;
+    size_t i;
 
     for (i = 0; i < n_vertices; i++)
     {
-        /*
-          Calculate tangent and bitangent from neighbouring
-          vertices (positions and texture coords)
-         */
+        GetTangentBitangent (n_vertices, p_vertices, texels, i,
+                             t, b);
 
-        j = (n_vertices + i - 1) % n_vertices;
-        k = (i + 1) % n_vertices;
 
-        v0 = (p_vertices [j]->p - p_vertices [i]->p).Unit ();
-        du0 = texels [j].u - texels [i].u;
-        dv0 = texels [j].v - texels [i].v;
-        luv0 = sqrt (sqr (du0) + sqr (dv0));
+        // pn, pt, pb are p, moved in the direction of the normal, tangent, and bitangent
+        const vec3 p = p_vertices [i]->p,
+                   pn = p + NBT_SIZE * p_vertices [i]->n,
+                   pt = p + NBT_SIZE * t,
+                   pb = p + NBT_SIZE * b;
 
-        v1 = (p_vertices [k]->p - p_vertices [i]->p).Unit ();
-        du1 = texels [k].u - texels [i].u;
-        dv1 = texels [k].v - texels [i].v;
-        luv1 = sqrt (sqr (du1) + sqr (dv1));
+        // Draw a line from p to pn:
+        glColor4f (0.0f, 0.0f, 1.0f, 0.0f);
+        glVertex3f (p.x, p.y, p.z);
+        glVertex3f (pn.x, pn.y, pn.z);
 
-    /*
-        NOTE: There appears to be a precision error somewhere.
-              Theoretically, all tangents and bitangents should
-              be length 1.0 in the following 2 formulae, but
-              they aren't!
-     */
-    /*
-        f = 1.0f / (du0 * dv1 - du1 * dv0);
-        t = (luv0 * v0 * dv1 - luv1 * v1 * dv0) * f;
-        b = (luv1 * v1 * du0 - luv0 * v0 * du1) * f;
-     */
+        // Draw a line from p to pt:
+        glColor4f (1.0f, 0.0f, 0.0f, 0.0f);
+        glVertex3f (p.x, p.y, p.z);
+        glVertex3f (pt.x, pt.y, pt.z);
 
-        // Use 'Unit' to overcome normalization errors:
-        t = (luv0 * v0 * dv1 - luv1 * v1 * dv0).Unit ();
-        b = (luv1 * v1 * du0 - luv0 * v0 * du1).Unit ();
-
-        if (pSet->mode == RENDER_FACE)
-        {
-            glVertexAttrib3f (pSet->index_tangent, t.x, t.y, t.z);
-            glVertexAttrib3f (pSet->index_bitangent, b.x, b.y, b.z);
-
-            glTexCoord2f (texels [i].u, texels [i].v);
-            glNormal3f (p_vertices [i]->n.x, p_vertices [i]->n.y, p_vertices [i]->n.z);
-            glVertex3f (p_vertices [i]->p.x, p_vertices [i]->p.y, p_vertices [i]->p.z);
-        }
-        else if (pSet->mode == RENDER_NBT)
-        {
-            // pn, pt, pb are p, moved in the direction of the normal, tangent, and bitangent
-            const vec3 p = p_vertices [i]->p,
-                       pn = p + NBT_SIZE * p_vertices [i]->n,
-                       pt = p + NBT_SIZE * t,
-                       pb = p + NBT_SIZE * b;
-
-            // Draw a line from p to pn:
-            glColor4f (0.0f, 0.0f, 1.0f, 0.0f);
-            glVertex3f (p.x, p.y, p.z);
-            glVertex3f (pn.x, pn.y, pn.z);
-
-            // Draw a line from p to pt:
-            glColor4f (1.0f, 0.0f, 0.0f, 0.0f);
-            glVertex3f (p.x, p.y, p.z);
-            glVertex3f (pt.x, pt.y, pt.z);
-
-            // Draw a line from p to pb:
-            glColor4f (0.0f, 1.0f, 0.0f, 0.0f);
-            glVertex3f (p.x, p.y, p.z);
-            glVertex3f (pb.x, pb.y, pb.z);
-        }
+        // Draw a line from p to pb:
+        glColor4f (0.0f, 1.0f, 0.0f, 0.0f);
+        glVertex3f (p.x, p.y, p.z);
+        glVertex3f (pb.x, pb.y, pb.z);
     }
 
     glEnd ();
@@ -821,8 +1024,7 @@ void TangentRenderFunc (void *pObj, const int n_vertices, const MeshVertex **p_v
 #define SHADOW_STENCIL_MASK 0xFFFFFFFFL
 void ShadowScene::Render ()
 {
-    GLint texLoc, posLoc;
-    IndexSet set_i = {index_tangent, index_bitangent, RENDER_FACE};
+    GLint texLoc;
 
     int w, h;
     SDL_GL_GetDrawableSize (pApp->GetMainWindow (), &w, &h);
@@ -879,9 +1081,9 @@ void ShadowScene::Render ()
     glBindTexture (GL_TEXTURE_2D, texSky.tex);
     // Render two half spheres, one is mirror image
     glDisable (GL_CULL_FACE);
-    RenderUnAnimatedSubset (&meshDataSky, "0");
+    RenderTexturedVertices (&vbo_sky);
     glScalef(1.0f, -1.0f, 1.0f);
-    RenderUnAnimatedSubset (&meshDataSky, "0");
+    RenderTexturedVertices (&vbo_sky);
 
     glLoadMatrixf(matCameraView.m);
 
@@ -906,29 +1108,29 @@ void ShadowScene::Render ()
     glActiveTexture (GL_TEXTURE0);
     glBindTexture (GL_TEXTURE_2D, texBox.tex);
 
-    RenderUnAnimatedSubset (&meshDataBox, "0");
+    RenderTexturedVertices (&vbo_box);
 
     glDisable (GL_BLEND);
     glDisable (GL_TEXTURE_2D);
 
     if (show_triangles)
     {
-        glDisable(GL_DEPTH_TEST);
-        glColor4f(0.8f, 0.0f, 0.0f, 1.0f);
+        glDisable (GL_DEPTH_TEST);
+        glColor4f (0.8f, 0.0f, 0.0f, 1.0f);
         for (int i = 0; i < n_collision_triangles; i++)
         {
-            glBegin(GL_LINES);
+            glBegin (GL_LINES);
             for (int j=0; j < 3; j++)
             {
                 int k = (j + 1) % 3;
                 glVertex3f(collision_triangles[i].p[j].x, collision_triangles[i].p[j].y, collision_triangles[i].p[j].z);
                 glVertex3f(collision_triangles[i].p[k].x, collision_triangles[i].p[k].y, collision_triangles[i].p[k].z);
             }
-            glEnd();
+            glEnd ();
         }
 
-        glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-        glEnable(GL_DEPTH_TEST);
+        glColor4f (1.0f, 1.0f, 1.0f, 1.0f);
+        glEnable (GL_DEPTH_TEST);
     }
 
     // Render player (and bones/normals if requested)
@@ -954,7 +1156,8 @@ void ShadowScene::Render ()
     glBindAttribLocation (shader_normal, index_tangent, "tangent");
     glBindAttribLocation (shader_normal, index_bitangent, "bitangent");
 
-    pMeshDummy->ThroughSubsetFaces ("0", TangentRenderFunc, &set_i);
+    // Send the vertex buffer contents to the shader:
+    RenderNormalMapVertices (&vbo_dummy, index_tangent, index_bitangent);
 
     glUseProgram (0);
     glActiveTexture (GL_TEXTURE1);
@@ -969,13 +1172,12 @@ void ShadowScene::Render ()
     if (show_bones)
     {
         glColor4f(0.0f, 1.0f, 1.0f, 1.0f);
-        pMeshDummy->RenderBones ();
+        RenderBones (pMeshDummy);
     }
     glEnable (GL_DEPTH_TEST);
     if (show_normals)
     {
-        set_i.mode = RENDER_NBT; // Render normals, bitangents, tangents
-        pMeshDummy->ThroughSubsetFaces ("0", TangentRenderFunc, &set_i);
+        pMeshDummy->ThroughSubsetFaces ("0", RenderNBT);
     }
 
     // We need to have the light position in player space, because that's where the triangles are.
@@ -1006,7 +1208,7 @@ void ShadowScene::Render ()
     // Set the stencil pixels to zero where the dummy is drawn and where nothing is drawn (background)
     glFrontFace (GL_CW);
     glStencilOp (GL_KEEP, GL_KEEP, GL_ZERO);
-    pMeshDummy->RenderSubset ("0");
+    RenderNormalMapVertices (&vbo_dummy, index_tangent, index_bitangent);
 
     glLoadIdentity ();
 

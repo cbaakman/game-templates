@@ -32,12 +32,25 @@ ToonScene::ToonScene (App *pApp) : App::Scene (pApp),
 
     angleY(0), angleX(0), distCamera(10.0f),
 
-    shaderProgram (0)
+    shaderProgram(0)
 {
     texBG.tex = 0;
+    std::memset (&vbo_lines, 0, sizeof (VertexBuffer));
+    std::memset (&vbo_hair, 0, sizeof (VertexBuffer));
+    std::memset (&vbo_head, 0, sizeof (VertexBuffer));
+    std::memset (&vbo_eyes, 0, sizeof (VertexBuffer));
+    std::memset (&vbo_pupils, 0, sizeof (VertexBuffer));
+    std::memset (&vbo_mouth, 0, sizeof (VertexBuffer));
 }
 ToonScene::~ToonScene ()
 {
+    glDeleteBuffer (&vbo_lines);
+    glDeleteBuffer (&vbo_hair);
+    glDeleteBuffer (&vbo_head);
+    glDeleteBuffer (&vbo_eyes);
+    glDeleteBuffer (&vbo_pupils);
+    glDeleteBuffer (&vbo_mouth);
+
     glDeleteTextures (1, &texBG.tex);
     glDeleteProgram (shaderProgram);
 }
@@ -88,6 +101,99 @@ toon_fsh [] = R"shader(
     }
 
 )shader";
+
+bool SetToonVertices (VertexBuffer *pBuffer, const MeshData *pMeshData, const std::list<std::string> &subset_ids,
+                  const GLfloat extension=0.0f)
+{
+    /*
+        Almost the same as a default mesh rendering,
+        except that the vertices are moved along their normals.
+        This makes the rendered mesh a bit larger than the original.
+     */
+
+    size_t i = 0, m;
+    vec3 p;
+
+    const int triangles [][3] = {{0, 1, 2}, {0, 2, 3}};
+
+    pBuffer->n_vertices = 0;
+    for (auto id : subset_ids)
+    {
+        if(pMeshData->subsets.find(id) == pMeshData->subsets.end ())
+        {
+            SetError ("cannot render %s, no such subset", id.c_str ());
+            return false;
+        }
+        const MeshSubset *pSubset = &pMeshData->subsets.at (id);
+
+        pBuffer->n_vertices += 3 * (pSubset->quads.size () * 2 + pSubset->triangles.size ());
+    }
+
+    glBindBuffer (GL_ARRAY_BUFFER, pBuffer->handle);
+    glBufferData (GL_ARRAY_BUFFER, sizeof (MeshVertex) * pBuffer->n_vertices, NULL, GL_STATIC_DRAW);
+
+    MeshVertex *pbuf = (MeshVertex *)glMapBuffer (GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+    if (!pbuf)
+    {
+        glBindBuffer (GL_ARRAY_BUFFER, 0);
+        SetError ("unable to acquire buffer pointer");
+        return false;
+    }
+
+    for (auto id : subset_ids)
+
+        ThroughSubsetFaces (pMeshData, id,
+            [&] (void *, const int n_vertex, const MeshVertex **p_vertices, const MeshTexel *texels)
+            {
+                m = 0;
+                if (n_vertex >= 3)
+                    m++;
+                if (n_vertex >= 4)
+                    m++;
+
+                for (int u = 0; u < m; u++)
+                {
+                    for (int j : triangles [u])
+                    {
+                        pbuf [i].p = p_vertices [j]->p + extension * p_vertices [j]->n;
+                        pbuf [i].n = p_vertices [j]->n;
+                        i ++;
+                    }
+                }
+            }
+        );
+
+
+    glUnmapBuffer (GL_ARRAY_BUFFER);
+    glBindBuffer (GL_ARRAY_BUFFER, 0);
+
+    return true;
+}
+bool SetToonVertices (VertexBuffer *pBuffer, const MeshData *pMeshData, const std::string &subset_id)
+{
+    std::list<std::string> subset_ids;
+    subset_ids.push_back (subset_id);
+
+    return SetToonVertices (pBuffer, pMeshData, subset_ids);
+}
+void RenderToonVertices (const VertexBuffer *pBuffer)
+{
+    glBindBuffer (GL_ARRAY_BUFFER, pBuffer->handle);
+
+    // Match the vertex format: position [3], normal [3]
+    glEnableClientState (GL_VERTEX_ARRAY);
+    glVertexPointer (3, GL_FLOAT, sizeof (MeshVertex), 0);
+
+    glEnableClientState (GL_NORMAL_ARRAY);
+    glNormalPointer (GL_FLOAT, sizeof (MeshVertex), (const GLvoid *)(3 * sizeof (float)));
+
+    glDrawArrays (GL_TRIANGLES, 0, pBuffer->n_vertices);
+
+    glDisableClientState (GL_VERTEX_ARRAY);
+    glDisableClientState (GL_NORMAL_ARRAY);
+
+    glBindBuffer (GL_ARRAY_BUFFER, 0);
+}
 bool ToonScene::Init ()
 {
     std::string resPath = std::string(SDL_GetBasePath()) + "test3d.zip";
@@ -140,62 +246,63 @@ bool ToonScene::Init ()
         return false;
     }
 
-    return true;
-}
-void RenderUnAnimatedSubsetExtension (const MeshData *pMeshData, std::string id, const GLfloat howmuch)
-{
     /*
-        Almost the same as a normal mesh rendering,
-        except that the vertices are moved along their normals.
-        This makes the rendered mesh a bit larger than the original.
+        This mesh is not animated, so we only need to fill the vertex buffer once
+        and render from it every frame.
      */
 
-    if(pMeshData->subsets.find(id) == pMeshData->subsets.end())
+    const GLfloat lineThickness = 0.1f;
+    glGenBuffer (&vbo_lines);
+    std::list <std::string> subsets;
+
+    // head black lines:
+    subsets.push_back ("0");
+
+    // hair black lines:
+    subsets.push_back ("2");
+
+    if (!SetToonVertices (&vbo_lines, &meshDataHead, subsets, lineThickness))
     {
-        SetError ("cannot render %s, no such subset", id.c_str());
-        return;
+        SetError ("error setting line vertices to buffer: %s", GetError ());
+        return false;
     }
-    const MeshSubset *pSubset = &pMeshData->subsets.at(id);
 
-    const MeshTexel *t;
-    const vec3 *n;
-    vec3 p;
-
-    // Give OpenGL all quads:
-    glBegin(GL_QUADS);
-    for (std::list <PMeshQuad>::const_iterator it = pSubset->quads.begin(); it != pSubset->quads.end(); it++)
+    glGenBuffer (&vbo_head);
+    if (!SetToonVertices (&vbo_head, &meshDataHead, "0"))
     {
-        PMeshQuad pQuad = *it;
-        for (size_t j = 0; j < 4; j++)
-        {
-            t = &pQuad->texels[j];
-            n = &pMeshData->vertices.at (pQuad->GetVertexID(j)).n;
-            p = pMeshData->vertices.at (pQuad->GetVertexID(j)).p + howmuch * (*n);
-
-            glTexCoord2f (t->u, t->v);
-            glNormal3f (n->x, n->y, n->z);
-            glVertex3f (p.x, p.y, p.z);
-        }
+        SetError ("error setting head vertices to buffer: %s", GetError ());
+        return false;
     }
-    glEnd();
 
-    // Give OpenGL all triangles:
-    glBegin(GL_TRIANGLES);
-    for (std::list <PMeshTriangle>::const_iterator it = pSubset->triangles.begin(); it != pSubset->triangles.end(); it++)
+    glGenBuffer (&vbo_eyes);
+    if (!SetToonVertices (&vbo_eyes, &meshDataHead, "1"))
     {
-        PMeshTriangle pTri = *it;
-        for (size_t j = 0; j < 3; j++)
-        {
-            t = &pTri->texels[j];
-            n = &pMeshData->vertices.at (pTri->GetVertexID(j)).n;
-            p = pMeshData->vertices.at (pTri->GetVertexID(j)).p + howmuch * (*n);
-
-            glTexCoord2f (t->u, t->v);
-            glNormal3f (n->x, n->y, n->z);
-            glVertex3f (p.x, p.y, p.z);
-        }
+        SetError ("error setting eyes vertices to buffer: %s", GetError ());
+        return false;
     }
-    glEnd();
+
+    glGenBuffer (&vbo_hair);
+    if (!SetToonVertices (&vbo_hair, &meshDataHead, "2"))
+    {
+        SetError ("error setting hair vertices to buffer: %s", GetError ());
+        return false;
+    }
+
+    glGenBuffer (&vbo_mouth);
+    if (!SetToonVertices (&vbo_mouth, &meshDataHead, "3"))
+    {
+        SetError ("error setting mouth vertices to buffer: %s", GetError ());
+        return false;
+    }
+
+    glGenBuffer (&vbo_pupils);
+    if (!SetToonVertices (&vbo_pupils, &meshDataHead, "4"))
+    {
+        SetError ("error setting pupils vertices to buffer: %s", GetError ());
+        return false;
+    }
+
+    return true;
 }
 
 GLfloat lightAmbient [] = {0.5f, 0.5f, 0.5f, 1.0f},
@@ -277,8 +384,6 @@ void ToonScene::Render ()
     matrix4 rotateHead = matRotY (angleY) * matRotX (angleX);
     glMultMatrixf (rotateHead.m);
 
-    const GLfloat lineThickness = 0.1f;
-
     glCullFace (GL_FRONT);
     glEnable (GL_DEPTH_TEST);
     glDepthMask (GL_FALSE); // no depth values, we need to draw inside it.
@@ -286,9 +391,7 @@ void ToonScene::Render ()
     glStencilOp (GL_KEEP, GL_KEEP, GL_REPLACE);
 
     glColor4f (0.0f, 0.0f, 0.0f, 1.0f);
-    RenderUnAnimatedSubsetExtension (&meshDataHead, "0", lineThickness); // head black lines
-
-    RenderUnAnimatedSubsetExtension (&meshDataHead, "2", lineThickness); // hair black lines
+    RenderToonVertices (&vbo_lines);
 
     glUseProgram(shaderProgram);
 
@@ -301,25 +404,25 @@ void ToonScene::Render ()
     glFrontFace (GL_CCW);
 
     glColor4fv (meshDataHead.subsets.at("0").diffuse);
-    RenderUnAnimatedSubset (&meshDataHead, "0"); // head
+    RenderToonVertices (&vbo_head);
 
     // The face is inside the head, but drawn over it
     glDisable (GL_DEPTH_TEST);
 
     glColor4fv (meshDataHead.subsets.at("1").diffuse);
-    RenderUnAnimatedSubset (&meshDataHead, "1"); // eyes
+    RenderToonVertices (&vbo_eyes);
 
     glColor4fv (meshDataHead.subsets.at("4").diffuse);
-    RenderUnAnimatedSubset (&meshDataHead, "4"); // pupils
+    RenderToonVertices (&vbo_pupils);
 
     glColor4fv (meshDataHead.subsets.at("3").diffuse);
-    RenderUnAnimatedSubset (&meshDataHead, "3"); // mouth
+    RenderToonVertices (&vbo_mouth);
 
     glEnable (GL_DEPTH_TEST);
 
     // Hair must be drawn over the face:
     glColor4fv (meshDataHead.subsets.at("2").diffuse);
-    RenderUnAnimatedSubset (&meshDataHead, "2"); // hair
+    RenderToonVertices (&vbo_hair);
 
     glUseProgram (NULL);
 }

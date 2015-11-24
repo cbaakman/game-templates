@@ -65,6 +65,9 @@ WaterScene::WaterScene (App *pApp) : Scene(pApp),
             gridforces[x][z] = 0.0f;
         }
     }
+
+    std::memset (&vbo_water, 0, sizeof (VertexBuffer));
+    std::memset (&ibo_water, 0, sizeof (VertexBuffer));
 }
 
 const char
@@ -148,6 +151,14 @@ water_fsh [] = R"shader(
 
 )shader";
 
+struct WaterVertex
+{
+    vec3 p, n;
+};
+unsigned int GridIndexOf (const int x, const int z)
+{
+    return x * GRIDSIZE + z;
+}
 bool WaterScene::Init()
 {
     int w, h;
@@ -247,20 +258,126 @@ bool WaterScene::Init()
         return false;
     }
 
+    /*
+        The surface of the water has a fixed number of grid points, but
+        they move all the time. Thus allocate a dynamic vertex buffer and
+        update it every frame.
+
+        The connections between the grid points don't change, so the index buffer
+        can be static and initialized at the beginning.
+     */
+
+    glGenBuffer (&ibo_water);
+    ibo_water.n_indices = 6 * (GRIDSIZE - 1) * (GRIDSIZE - 1);
+    glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, ibo_water.handle);
+    glBufferData (GL_ELEMENT_ARRAY_BUFFER, sizeof (unsigned int) * ibo_water.n_indices, NULL, GL_STATIC_DRAW);
+
+    // Fill up with indices, connecting the grid points:
+    unsigned int *pbuf = (unsigned int *)glMapBuffer (GL_ELEMENT_ARRAY_BUFFER, GL_WRITE_ONLY);
+    if (!pbuf)
+    {
+        glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, 0);
+        SetError ("unable to acquire index buffer pointer");
+        return false;
+    }
+
+    int i = 0, x, z;
+    for (x = 0; x < (GRIDSIZE - 1); x ++)
+    {
+        for (z = 0; z < (GRIDSIZE - 1); z ++)
+        {
+            // glDrawElements accepts only triangles, not quads
+
+            pbuf [i] = GridIndexOf (x, z + 1);
+            i ++;
+            pbuf [i] = GridIndexOf (x + 1, z + 1);
+            i ++;
+            pbuf [i] = GridIndexOf (x + 1, z);
+            i ++;
+
+            pbuf [i] = GridIndexOf (x, z + 1);
+            i ++;
+            pbuf [i] = GridIndexOf (x + 1, z);
+            i ++;
+            pbuf [i] = GridIndexOf (x, z);
+            i ++;
+        }
+    }
+    glUnmapBuffer (GL_ELEMENT_ARRAY_BUFFER);
+    glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, 0);
+
+    // Allocate dynamic vertex buffer:
+
+    glGenBuffer (&vbo_water);
+    vbo_water.n_vertices = GRIDSIZE * GRIDSIZE;
+    glBindBuffer (GL_ARRAY_BUFFER, vbo_water.handle);
+    glBufferData (GL_ARRAY_BUFFER, sizeof (WaterVertex) * vbo_water.n_vertices, NULL, GL_DYNAMIC_DRAW);
+    glBindBuffer (GL_ARRAY_BUFFER, 0);
+
     return true;
 }
 WaterScene::~WaterScene()
 {
-    glDeleteProgram(shaderProgramWater);
-    glDeleteProgram(shaderProgramDepth);
+    glDeleteBuffer (&vbo_water);
+    glDeleteBuffer (&ibo_water);
 
-    glDeleteTextures(1, &texReflection);
-    glDeleteTextures(1, &texRefraction);
-    glDeleteTextures(1, &texReflecDepth);
-    glDeleteTextures(1, &texRefracDepth);
+    glDeleteProgram (shaderProgramWater);
+    glDeleteProgram (shaderProgramDepth);
 
-    glDeleteFramebuffers(1, &fbReflection);
-    glDeleteFramebuffers(1, &fbRefraction);
+    glDeleteTextures (1, &texReflection);
+    glDeleteTextures (1, &texRefraction);
+    glDeleteTextures (1, &texReflecDepth);
+    glDeleteTextures (1, &texRefracDepth);
+
+    glDeleteFramebuffers (1, &fbReflection);
+    glDeleteFramebuffers (1, &fbRefraction);
+}
+void UpdateWaterVertices (VertexBuffer *pBuffer, const vec3 gridpoints [][GRIDSIZE],
+                                                 const vec3 gridnormals [][GRIDSIZE])
+{
+    glBindBuffer (GL_ARRAY_BUFFER, pBuffer->handle);
+    WaterVertex *pbuf = (WaterVertex *)glMapBuffer (GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+    if (!pbuf)
+    {
+        glBindBuffer (GL_ARRAY_BUFFER, 0);
+        SetError ("unable to acquire vertex buffer pointer");
+        return;
+    }
+
+    int x, z, i;
+    for (x = 0; x < GRIDSIZE; x++)
+    {
+        for (z = 0; z < GRIDSIZE; z++)
+        {
+            i = GridIndexOf (x, z);
+            pbuf [i].p = gridpoints [x][z];
+            pbuf [i].n = gridnormals [x][z];
+        }
+    }
+
+    glUnmapBuffer (GL_ARRAY_BUFFER);
+    glBindBuffer (GL_ARRAY_BUFFER, 0);
+}
+void RenderWaterVertices (const VertexBuffer *pVBO, const IndexBuffer *pIBO)
+{
+    glBindBuffer (GL_ARRAY_BUFFER, pVBO->handle);
+
+    // Match the vertex format: position [3], normal [3]
+    glEnableClientState (GL_VERTEX_ARRAY);
+    glVertexPointer (3, GL_FLOAT, sizeof (WaterVertex), 0);
+
+    glEnableClientState (GL_NORMAL_ARRAY);
+    glNormalPointer (GL_FLOAT, sizeof (WaterVertex), (const GLvoid *)(sizeof (vec3)));
+
+    glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, pIBO->handle);
+
+    glDrawElements (GL_TRIANGLES, pIBO->n_indices, GL_UNSIGNED_INT, 0);
+
+    glDisableClientState (GL_VERTEX_ARRAY);
+    glDisableClientState (GL_NORMAL_ARRAY);
+
+    glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, 0);
+    glBindBuffer (GL_ARRAY_BUFFER, 0);
 }
 void WaterScene::UpdateWaterNormals()
 {
@@ -516,61 +633,8 @@ void WaterScene::Update(float dt)
     // CubeBlockWaves ();
 
     // Adjust normals to new grid points:
-    UpdateWaterNormals();
-}
-void WaterScene::RenderWater()
-{
-    // Draw quads between the grid points
-
-    glBegin(GL_QUADS);
-
-    vec3 p1,p2,p3,p4,n1,n2,n3,n4;
-    for(int x=0; x<GRIDSIZE-1; x++)
-    {
-        for(int z=0; z<GRIDSIZE-1; z++)
-        {
-            p1=gridpoints[x][z];
-            p2=gridpoints[x+1][z];
-            p3=gridpoints[x+1][z+1];
-            p4=gridpoints[x][z+1];
-            n1=gridnormals[x][z];
-            n2=gridnormals[x+1][z];
-            n3=gridnormals[x+1][z+1];
-            n4=gridnormals[x][z+1];
-
-            glNormal3f(n4.x, n4.y, n4.z);
-            glVertex3f(p4.x, p4.y, p4.z);
-
-            glNormal3f(n3.x, n3.y, n3.z);
-            glVertex3f(p3.x, p3.y, p3.z);
-
-            glNormal3f(n2.x, n2.y, n2.z);
-            glVertex3f(p2.x, p2.y, p2.z);
-
-            glNormal3f(n1.x, n1.y, n1.z);
-            glVertex3f(p1.x, p1.y, p1.z);
-        }
-    }
-
-    glEnd();
-}
-
-/**
- * Renders a square 40x40 plane at the origin, with normal pointing up.
- */
-void RenderPlane()
-{
-    GLfloat size = 20.0f;
-
-    glBegin(GL_QUADS);
-
-    glNormal3f( 0, 1, 0);
-    glVertex3f(-1*size, 0, 1*size);
-    glVertex3f( 1*size, 0, 1*size);
-    glVertex3f( 1*size, 0,-1*size);
-    glVertex3f(-1*size, 0,-1*size);
-
-    glEnd();
+    UpdateWaterNormals ();
+    UpdateWaterVertices (&vbo_water, gridpoints, gridnormals);
 }
 
 const GLfloat colorCube [] = {0.0f, 1.0f, 0.0f, 1.0f},
@@ -666,7 +730,7 @@ void WaterScene::Render()
     glDepthMask (GL_FALSE);
     glColorMask (GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
     glTranslatef (0, WATER_LINE_MARGE, 0);
-    RenderWater ();
+    RenderWaterVertices (&vbo_water, &ibo_water);
     glTranslatef (0, -WATER_LINE_MARGE, 0);
 
     // Set the depth value 1.0 and water color for all pixels with stencil 1.
@@ -728,7 +792,7 @@ void WaterScene::Render()
     glDepthMask (GL_FALSE);
     glColorMask (GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
     glTranslatef (0, WATER_LINE_MARGE, 0);
-    RenderWater ();
+    RenderWaterVertices (&vbo_water, &ibo_water);
     glTranslatef (0, -WATER_LINE_MARGE, 0);
 
     // Set the depth value 1.0 and water color for all pixels with stencil 1.
@@ -794,7 +858,7 @@ void WaterScene::Render()
     texLoc = glGetUniformLocation (shaderProgramWater, "tex_refract_depth");
     glUniform1i (texLoc, 3);
 
-    RenderWater();
+    RenderWaterVertices (&vbo_water, &ibo_water);
     glUseProgram(0);
 
     // Set active texture back to 0 and disable

@@ -23,6 +23,7 @@
 
 #include "app.h"
 #include "mesh.h"
+#include "buffer.h"
 #include "collision.h"
 #include "../texture.h"
 
@@ -65,6 +66,10 @@ private:
 
     GLuint shader_normal;
 
+    VertexBuffer vbo_box,
+                 vbo_sky,
+                 vbo_dummy;
+
     // indices for tangent and bitangent vertex attributes:
     GLint index_tangent,
           index_bitangent;
@@ -100,7 +105,7 @@ private:
              meshDataBox, // environment: ground and walls
              meshDataSky; // skybox, half a sphere
 
-    MeshObject *pMeshDummy; // animatable object, representing the player
+    MeshState *pMeshDummy; // animatable object, representing the player
 
 public:
     ShadowScene (App*);

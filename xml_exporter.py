@@ -390,8 +390,6 @@ class Exporter (object):
         if face_factor < 0:
             order.reverse()
 
-        tag_face.attrib ['smooth'] = str (face.smooth)
-
         for i in order:
             tag_corner = ET.Element('corner')
             tag_face.append (tag_corner)
@@ -417,8 +415,8 @@ class Exporter (object):
         tag_vertex = ET.Element ('vertex')
 
         tag_vertex.attrib ['id'] = str (vertex.index)
-        co = self.transformLoc * vertex.co
-        no = self.transformRot * vertex.no
+        co = self.transformVertex * vertex.co
+        no = self.transformVertex * vertex.no
 
         # Vertex position in space:
         tag_pos = ET.Element ('pos')

@@ -75,8 +75,6 @@
 		<Unit filename="src/test3d/mesh.h" />
 		<Unit filename="src/test3d/shadow.cpp" />
 		<Unit filename="src/test3d/shadow.h" />
-		<Unit filename="src/test3d/vecs.cpp" />
-		<Unit filename="src/test3d/vec2.h" />
 		<Unit filename="src/test3d/toon.cpp" />
 		<Unit filename="src/test3d/toon.h" />
 		<Unit filename="src/test3d/water.cpp" />

@@ -9,8 +9,10 @@ MANAGERLIBS = crypto ncurses SDL2
 TEST3DLIBS = GL SDL2 GLEW png xml2 cairo unzip
 
 CFLAGS = -std=c++11
-ifeq ($(DEBUG),1)
-CFLAGS += -g -D DEBUG -O3
+ifdef DEBUG
+CFLAGS += -g -D DEBUG
+else
+CFLAGS += -O3
 endif
 
 include make.config

@@ -159,13 +159,10 @@ unsigned int GridIndexOf (const int x, const int z)
 {
     return x * GRIDSIZE + z;
 }
-bool WaterScene::Init()
+void WaterScene::AddAll (Loader *pLoader)
 {
     int w, h;
     SDL_GL_GetDrawableSize (pApp->GetMainWindow (), &w, &h);
-
-    GLenum status;
-    char errBuf [100];
 
     /*
         Build two framebuffers for reflection and refraction.
@@ -174,89 +171,118 @@ bool WaterScene::Init()
         The color and depth values will be used by the pixel shader.
         The stencil buffer is needed during render to texture.
      */
+    pLoader->Add (
+        [this, w, h] ()
+        {
+            glGenFramebuffers (1, &fbReflection);
+            glGenFramebuffers (1, &fbRefraction);
 
-    glGenFramebuffers (1, &fbReflection);
-    glGenFramebuffers (1, &fbRefraction);
+            glGenTextures (1, &texReflection);
+            glGenTextures (1, &texRefraction);
+            glGenTextures (1, &texReflecDepth);
+            glGenTextures (1, &texRefracDepth);
 
-    glGenTextures (1, &texReflection);
-    glGenTextures (1, &texRefraction);
-    glGenTextures (1, &texReflecDepth);
-    glGenTextures (1, &texRefracDepth);
+            glBindFramebuffer (GL_FRAMEBUFFER, fbReflection);
 
-    glBindFramebuffer (GL_FRAMEBUFFER, fbReflection);
+            glBindTexture(GL_TEXTURE_2D, texReflection);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 
-    glBindTexture(GL_TEXTURE_2D, texReflection);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+            glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, texReflection, 0);
 
-    glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, texReflection, 0);
+            glBindTexture(GL_TEXTURE_2D, texReflecDepth);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, w, h, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, NULL);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-    glBindTexture(GL_TEXTURE_2D, texReflecDepth);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, w, h, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, texReflecDepth, 0);
 
-    glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, texReflecDepth, 0);
+            GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 
-    status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            if (status != GL_FRAMEBUFFER_COMPLETE)
+            {
+                char errBuf [100];
+                GLFrameBufferErrorString (errBuf, status);
 
-    if (status != GL_FRAMEBUFFER_COMPLETE)
-    {
-        GLFrameBufferErrorString (errBuf, status);
+                SetError ("error, reflection framebuffer is not complete: %s", errBuf);
+                return false;
+            }
 
-        SetError ("error, reflection framebuffer is not complete: %s", errBuf);
-        return false;
-    }
+            return true;
+        }
+    );
 
-    glBindFramebuffer (GL_FRAMEBUFFER, fbRefraction);
+     pLoader->Add (
+        [this, w, h] ()
+        {
+            glBindFramebuffer (GL_FRAMEBUFFER, fbRefraction);
 
-    glBindTexture (GL_TEXTURE_2D, texRefraction);
-    glTexImage2D (GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-    glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-    glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+            glBindTexture (GL_TEXTURE_2D, texRefraction);
+            glTexImage2D (GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+            glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+            glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 
-    glFramebufferTexture (GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, texRefraction, 0);
+            glFramebufferTexture (GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, texRefraction, 0);
 
-    glBindTexture (GL_TEXTURE_2D, texRefracDepth);
-    glTexImage2D (GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, w, h, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glBindTexture (GL_TEXTURE_2D, texRefracDepth);
+            glTexImage2D (GL_TEXTURE_2D, 0, GL_DEPTH24_STENCIL8, w, h, 0, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, NULL);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-    glFramebufferTexture (GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, texRefracDepth, 0);
+            glFramebufferTexture (GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, texRefracDepth, 0);
 
-    status = glCheckFramebufferStatus (GL_FRAMEBUFFER);
+            GLenum status = glCheckFramebufferStatus (GL_FRAMEBUFFER);
 
-    glBindFramebuffer (GL_FRAMEBUFFER, 0);
+            glBindFramebuffer (GL_FRAMEBUFFER, 0);
 
-    if (status != GL_FRAMEBUFFER_COMPLETE)
-    {
-        GLFrameBufferErrorString (errBuf, status);
+            if (status != GL_FRAMEBUFFER_COMPLETE)
+            {
+                char errBuf [100];
+                GLFrameBufferErrorString (errBuf, status);
 
-        SetError ("error, refraction framebuffer is not complete: %s", errBuf);
-        return false;
-    }
+                SetError ("error, refraction framebuffer is not complete: %s", errBuf);
+                return false;
+            }
 
-    // Create shader program:
-    shaderProgramWater = CreateShaderProgram (water_vsh, water_fsh);
-    if (!shaderProgramWater)
-    {
-        SetError ("error creating water shader program : %s", GetError ());
-        return false;
-    }
+            return true;
+        }
+    );
 
-    shaderProgramDepth = CreateShaderProgram (srcClipVertex, srcDepth1Fragment);
-    if (!shaderProgramDepth)
-    {
-        SetError ("error creating depth shader program: %s", GetError ());
-        return false;
-    }
+    // Create shader programs:
+    pLoader->Add (
+        [this] ()
+        {
+            shaderProgramWater = CreateShaderProgram (water_vsh, water_fsh);
+            if (!shaderProgramWater)
+            {
+                SetError ("error creating water shader program : %s", GetError ());
+                return false;
+            }
+
+            return true;
+        }
+    );
+
+    pLoader->Add (
+        [this] ()
+        {
+            shaderProgramDepth = CreateShaderProgram (srcClipVertex, srcDepth1Fragment);
+            if (!shaderProgramDepth)
+            {
+                SetError ("error creating depth shader program: %s", GetError ());
+                return false;
+            }
+
+            return true;
+        }
+    );
 
     /*
         The surface of the water has a fixed number of grid points, but
@@ -267,54 +293,67 @@ bool WaterScene::Init()
         can be static and initialized at the beginning.
      */
 
-    glGenBuffer (&ibo_water);
-    ibo_water.n_indices = 6 * (GRIDSIZE - 1) * (GRIDSIZE - 1);
-    glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, ibo_water.handle);
-    glBufferData (GL_ELEMENT_ARRAY_BUFFER, sizeof (unsigned int) * ibo_water.n_indices, NULL, GL_STATIC_DRAW);
-
-    // Fill up with indices, connecting the grid points:
-    unsigned int *pbuf = (unsigned int *)glMapBuffer (GL_ELEMENT_ARRAY_BUFFER, GL_WRITE_ONLY);
-    if (!pbuf)
-    {
-        glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, 0);
-        SetError ("unable to acquire index buffer pointer");
-        return false;
-    }
-
-    int i = 0, x, z;
-    for (x = 0; x < (GRIDSIZE - 1); x ++)
-    {
-        for (z = 0; z < (GRIDSIZE - 1); z ++)
+    pLoader->Add (
+        [this] ()
         {
-            // glDrawElements accepts only triangles, not quads
+            glGenBuffer (&ibo_water);
+            ibo_water.n_indices = 6 * (GRIDSIZE - 1) * (GRIDSIZE - 1);
+            glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, ibo_water.handle);
+            glBufferData (GL_ELEMENT_ARRAY_BUFFER, sizeof (unsigned int) * ibo_water.n_indices, NULL, GL_STATIC_DRAW);
 
-            pbuf [i] = GridIndexOf (x, z + 1);
-            i ++;
-            pbuf [i] = GridIndexOf (x + 1, z + 1);
-            i ++;
-            pbuf [i] = GridIndexOf (x + 1, z);
-            i ++;
+            // Fill up with indices, connecting the grid points:
+            unsigned int *pbuf = (unsigned int *)glMapBuffer (GL_ELEMENT_ARRAY_BUFFER, GL_WRITE_ONLY);
+            if (!pbuf)
+            {
+                glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, 0);
+                SetError ("unable to acquire index buffer pointer");
+                return false;
+            }
 
-            pbuf [i] = GridIndexOf (x, z + 1);
-            i ++;
-            pbuf [i] = GridIndexOf (x + 1, z);
-            i ++;
-            pbuf [i] = GridIndexOf (x, z);
-            i ++;
+            int i = 0, x, z;
+            for (x = 0; x < (GRIDSIZE - 1); x ++)
+            {
+                for (z = 0; z < (GRIDSIZE - 1); z ++)
+                {
+                    // glDrawElements accepts only triangles, not quads
+
+                    pbuf [i] = GridIndexOf (x, z + 1);
+                    i ++;
+                    pbuf [i] = GridIndexOf (x + 1, z + 1);
+                    i ++;
+                    pbuf [i] = GridIndexOf (x + 1, z);
+                    i ++;
+
+                    pbuf [i] = GridIndexOf (x, z + 1);
+                    i ++;
+                    pbuf [i] = GridIndexOf (x + 1, z);
+                    i ++;
+                    pbuf [i] = GridIndexOf (x, z);
+                    i ++;
+                }
+            }
+            glUnmapBuffer (GL_ELEMENT_ARRAY_BUFFER);
+            glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, 0);
+
+            return true;
         }
-    }
-    glUnmapBuffer (GL_ELEMENT_ARRAY_BUFFER);
-    glBindBuffer (GL_ELEMENT_ARRAY_BUFFER, 0);
+    );
 
     // Allocate dynamic vertex buffer:
 
-    glGenBuffer (&vbo_water);
-    vbo_water.n_vertices = GRIDSIZE * GRIDSIZE;
-    glBindBuffer (GL_ARRAY_BUFFER, vbo_water.handle);
-    glBufferData (GL_ARRAY_BUFFER, sizeof (WaterVertex) * vbo_water.n_vertices, NULL, GL_DYNAMIC_DRAW);
-    glBindBuffer (GL_ARRAY_BUFFER, 0);
+    pLoader->Add (
+        [this] ()
+        {
 
-    return true;
+            glGenBuffer (&vbo_water);
+            vbo_water.n_vertices = GRIDSIZE * GRIDSIZE;
+            glBindBuffer (GL_ARRAY_BUFFER, vbo_water.handle);
+            glBufferData (GL_ARRAY_BUFFER, sizeof (WaterVertex) * vbo_water.n_vertices, NULL, GL_DYNAMIC_DRAW);
+            glBindBuffer (GL_ARRAY_BUFFER, 0);
+
+            return true;
+        }
+    );
 }
 WaterScene::~WaterScene()
 {

@@ -62,9 +62,9 @@ public:
     HubScene (App*);
     ~HubScene ();
 
-    bool Init(void);
-    void Update(float dt);
-    void Render(void);
+    void AddAll (Loader *);
+    void Update (float dt);
+    void Render (void);
     void OnKeyPress (const SDL_KeyboardEvent *event);
 };
 

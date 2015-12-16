@@ -143,7 +143,7 @@ bool SetToonVertices (VertexBuffer *pBuffer, const MeshData *pMeshData, const st
     for (auto id : subset_ids)
 
         ThroughSubsetFaces (pMeshData, id,
-            [&] (void *, const int n_vertex, const MeshVertex **p_vertices, const MeshTexel *texels)
+            [&] (const int n_vertex, const MeshVertex **p_vertices, const MeshTexel *texels)
             {
                 m = 0;
                 if (n_vertex >= 3)
@@ -194,115 +194,137 @@ void RenderToonVertices (const VertexBuffer *pBuffer)
 
     glBindBuffer (GL_ARRAY_BUFFER, 0);
 }
-bool ToonScene::Init ()
+void ToonScene::AddAll (Loader *pLoader)
 {
-    std::string resPath = std::string(SDL_GetBasePath()) + "test3d.zip";
+    const std::string resPath = std::string (SDL_GetBasePath()) + "test3d.zip";
 
-    SDL_RWops *f;
-    bool success;
-    xmlDocPtr pDoc;
+    pLoader->Add (
+        [&, resPath] ()
+        {
+            SDL_RWops *f;
+            bool success;
+            xmlDocPtr pDoc;
 
-    // Load head mesh:
-    f = SDL_RWFromZipArchive (resPath.c_str(), "head.xml");
-    if (!f)
-        return false;
-    pDoc = ParseXML (f);
-    f->close(f);
+            // Load head mesh:
+            f = SDL_RWFromZipArchive (resPath.c_str(), "head.xml");
+            if (!f)
+                return false;
+            pDoc = ParseXML (f);
+            f->close(f);
 
-    if (!pDoc)
-    {
-        SetError ("error parsing head.xml: %s", GetError ());
-        return false;
-    }
+            if (!pDoc)
+            {
+                SetError ("error parsing head.xml: %s", GetError ());
+                return false;
+            }
 
-    // Convert xml to mesh:
-    success = ParseMesh (pDoc, &meshDataHead);
-    xmlFreeDoc (pDoc);
+            // Convert xml to mesh:
+            success = ParseMesh (pDoc, &meshDataHead);
+            xmlFreeDoc (pDoc);
 
-    if (!success)
-    {
-        SetError ("error parsing head.xml: %s", GetError ());
-        return false;
-    }
+            if (!success)
+            {
+                SetError ("error parsing head.xml: %s", GetError ());
+                return false;
+            }
 
-    // Load background image:
-    f = SDL_RWFromZipArchive (resPath.c_str(), "toonbg.png");
-    if (!f)
-        return false;
-    success = LoadPNG(f, &texBG);
-    f->close(f);
+            /*
+                This mesh is not animated, so we only need to fill the vertex buffer once
+                and render from it every frame.
+             */
 
-    if (!success)
-    {
-        SetError ("error parsing toonbg.png: %s", GetError ());
-        return false;
-    }
+            const GLfloat lineThickness = 0.1f;
+            glGenBuffer (&vbo_lines);
+            std::list <std::string> subsets;
 
-    // Create shader from sources:
-    shaderProgram = CreateShaderProgram (toon_vsh, toon_fsh);
-    if (!shaderProgram)
-    {
-        SetError ("error creating toon shader program: %s", GetError ());
-        return false;
-    }
+            // head black lines:
+            subsets.push_back ("0");
 
-    /*
-        This mesh is not animated, so we only need to fill the vertex buffer once
-        and render from it every frame.
-     */
+            // hair black lines:
+            subsets.push_back ("2");
 
-    const GLfloat lineThickness = 0.1f;
-    glGenBuffer (&vbo_lines);
-    std::list <std::string> subsets;
+            if (!SetToonVertices (&vbo_lines, &meshDataHead, subsets, lineThickness))
+            {
+                SetError ("error setting line vertices to buffer: %s", GetError ());
+                return false;
+            }
 
-    // head black lines:
-    subsets.push_back ("0");
+            glGenBuffer (&vbo_head);
+            if (!SetToonVertices (&vbo_head, &meshDataHead, "0"))
+            {
+                SetError ("error setting head vertices to buffer: %s", GetError ());
+                return false;
+            }
 
-    // hair black lines:
-    subsets.push_back ("2");
+            glGenBuffer (&vbo_eyes);
+            if (!SetToonVertices (&vbo_eyes, &meshDataHead, "1"))
+            {
+                SetError ("error setting eyes vertices to buffer: %s", GetError ());
+                return false;
+            }
 
-    if (!SetToonVertices (&vbo_lines, &meshDataHead, subsets, lineThickness))
-    {
-        SetError ("error setting line vertices to buffer: %s", GetError ());
-        return false;
-    }
+            glGenBuffer (&vbo_hair);
+            if (!SetToonVertices (&vbo_hair, &meshDataHead, "2"))
+            {
+                SetError ("error setting hair vertices to buffer: %s", GetError ());
+                return false;
+            }
 
-    glGenBuffer (&vbo_head);
-    if (!SetToonVertices (&vbo_head, &meshDataHead, "0"))
-    {
-        SetError ("error setting head vertices to buffer: %s", GetError ());
-        return false;
-    }
+            glGenBuffer (&vbo_mouth);
+            if (!SetToonVertices (&vbo_mouth, &meshDataHead, "3"))
+            {
+                SetError ("error setting mouth vertices to buffer: %s", GetError ());
+                return false;
+            }
 
-    glGenBuffer (&vbo_eyes);
-    if (!SetToonVertices (&vbo_eyes, &meshDataHead, "1"))
-    {
-        SetError ("error setting eyes vertices to buffer: %s", GetError ());
-        return false;
-    }
+            glGenBuffer (&vbo_pupils);
+            if (!SetToonVertices (&vbo_pupils, &meshDataHead, "4"))
+            {
+                SetError ("error setting pupils vertices to buffer: %s", GetError ());
+                return false;
+            }
 
-    glGenBuffer (&vbo_hair);
-    if (!SetToonVertices (&vbo_hair, &meshDataHead, "2"))
-    {
-        SetError ("error setting hair vertices to buffer: %s", GetError ());
-        return false;
-    }
+            return true;
+        }
+    );
 
-    glGenBuffer (&vbo_mouth);
-    if (!SetToonVertices (&vbo_mouth, &meshDataHead, "3"))
-    {
-        SetError ("error setting mouth vertices to buffer: %s", GetError ());
-        return false;
-    }
+    pLoader->Add (
+        [&, resPath] ()
+        {
+            SDL_RWops *f;
+            bool success;
 
-    glGenBuffer (&vbo_pupils);
-    if (!SetToonVertices (&vbo_pupils, &meshDataHead, "4"))
-    {
-        SetError ("error setting pupils vertices to buffer: %s", GetError ());
-        return false;
-    }
+            // Load background image:
+            f = SDL_RWFromZipArchive (resPath.c_str(), "toonbg.png");
+            if (!f)
+                return false;
+            success = LoadPNG(f, &texBG);
+            f->close(f);
 
-    return true;
+            if (!success)
+            {
+                SetError ("error parsing toonbg.png: %s", GetError ());
+                return false;
+            }
+
+            return true;
+        }
+    );
+
+    pLoader->Add (
+        [&] ()
+        {
+            // Create shader from sources:
+            shaderProgram = CreateShaderProgram (toon_vsh, toon_fsh);
+            if (!shaderProgram)
+            {
+                SetError ("error creating toon shader program: %s", GetError ());
+                return false;
+            }
+
+            return true;
+        }
+    );
 }
 
 GLfloat lightAmbient [] = {0.5f, 0.5f, 0.5f, 1.0f},

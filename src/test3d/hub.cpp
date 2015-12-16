@@ -84,51 +84,46 @@ HubScene::~HubScene()
     delete pMapperScene;
     delete pVecScene;
 }
-bool HubScene::Init ()
+void HubScene::AddAll (Loader *pLoader)
 {
-    std::string resPath = std::string(SDL_GetBasePath()) + "test3d.zip";
-    bool success;
+    pLoader->Add (
+        [this] ()
+        {
+            const std::string resPath = std::string (SDL_GetBasePath()) + "test3d.zip";
 
-    if (!pWaterScene->Init ())
-        return false;
+            SDL_RWops *fontInput = SDL_RWFromZipArchive (resPath.c_str(), "Lumean.svg");
+            if (!fontInput) // file or archive missing
+                return false;
 
-    if (!pShadowScene->Init ())
-        return false;
+            // Parse the svg as xml document:
+            xmlDocPtr pDoc = ParseXML (fontInput);
+            fontInput->close (fontInput);
 
-    if (!pToonScene->Init ())
-        return false;
+            if (!pDoc)
+            {
+                SetError ("error parsing Lumean.svg: %s", GetError ());
+                return false;
+            }
 
-    if (!pMapperScene->Init ())
-        return false;
+            // Convert xml to font object:
+            bool success = ParseSVGFont (pDoc, 16, &font);
+            xmlFreeDoc (pDoc);
 
-    if (!pVecScene->Init ())
-        return false;
+            if (!success)
+            {
+                SetError ("error parsing Lumean.svg: %s", GetError ());
+                return false;
+            }
 
-    SDL_RWops *fontInput = SDL_RWFromZipArchive (resPath.c_str(), "Lumean.svg");
-    if (!fontInput) // file or archive missing
-        return false;
+            return true;
+        }
+    );
 
-    // Parse the svg as xml document:
-    xmlDocPtr pDoc = ParseXML (fontInput);
-    fontInput->close (fontInput);
-
-    if (!pDoc)
-    {
-        SetError ("error parsing Lumean.svg: %s", GetError ());
-        return false;
-    }
-
-    // Convert xml to font object:
-    success = ParseSVGFont (pDoc, 16, &font);
-    xmlFreeDoc (pDoc);
-
-    if (!success)
-    {
-        SetError ("error parsing Lumean.svg: %s", GetError ());
-        return false;
-    }
-
-    return true;
+    pWaterScene->AddAll (pLoader);
+    pShadowScene->AddAll (pLoader);
+    pToonScene->AddAll (pLoader);
+    pMapperScene->AddAll (pLoader);
+    pVecScene->AddAll (pLoader);
 }
 void HubScene::Update (float dt)
 {

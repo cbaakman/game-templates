@@ -24,6 +24,8 @@
 #include "water.h"
 #include "../util.h"
 
+#include "../thread.h"
+#include "../load.h"
 #include "../random.h"
 #include "../err.h"
 
@@ -38,7 +40,7 @@
 #endif
 
 // Constructor
-App::App(void) : pScene(0), done(false), fullscreen (false)
+App::App (void) : pScene(0), done(false), fullscreen (false)
 {
 #ifdef _WIN32
     icon = NULL;
@@ -47,27 +49,113 @@ App::App(void) : pScene(0), done(false), fullscreen (false)
     settings_path [0] = NULL;
 }
 // Destructor
-App::~App(void)
+App::~App (void)
 {
     Cleanup();
 }
-void App::ShutDown(void)
+void App::ShutDown (void)
 {
     done = true;
 }
 
-App :: Scene :: Scene (App *p)
+App :: Scene :: Scene (App *p) : pApp (p)
 {
-    pApp = p;
 }
+
+#define LOAD_BAR_WIDTH 200.0f
+#define LOAD_BAR_HEIGHT 20.0f
+#define LOAD_BAR_EDGE 3.0f
+int ProgressLoop (SDL_Window *pWindow, Progress *pProgress)
+{
+    /*
+        Since this function runs in a separate thread, we need
+        to use a different rendering context.
+
+        Attach it to the same window:
+     */
+    SDL_GLContext glContext = SDL_GL_CreateContext (pWindow);
+
+    /*
+        rect order: x1, y1, x2, y2
+        rect 1 is most outside, rect 3 is most inside
+     */
+    float rects [3][4],
+          f, x1, x2;
+    for (int i = 0; i < 3; i++)
+    {
+        f = 2 - i;
+
+        rects [i][0] = -(f * LOAD_BAR_EDGE + LOAD_BAR_WIDTH / 2);
+        rects [i][1] = -(f * LOAD_BAR_EDGE + LOAD_BAR_HEIGHT / 2);
+        rects [i][2] = f * LOAD_BAR_EDGE + LOAD_BAR_WIDTH / 2;
+        rects [i][3] = f * LOAD_BAR_EDGE + LOAD_BAR_HEIGHT / 2;
+    }
+
+    std::size_t total, passed;
+    do
+    {
+        total = pProgress->GetTotal ();
+        passed = pProgress->GetPassed ();
+
+        int w, h;
+        SDL_GL_GetDrawableSize (pWindow, &w, &h);
+        glViewport (0, 0, w, h);
+
+        glMatrixMode (GL_PROJECTION);
+        matrix4 matScreen = matOrtho (-float (w) / 2, float (w) / 2, -float (h) / 2, float (h) / 2, -1.0f, 1.0f);
+        glLoadMatrixf (matScreen.m);
+
+        glMatrixMode (GL_MODELVIEW);
+        glLoadIdentity ();
+
+        glClearColor (0,0,0,1);
+        glClear (GL_COLOR_BUFFER_BIT);
+
+        glColor4f (1,1,1,1);
+        glDisable (GL_CULL_FACE);
+        glDisable (GL_LIGHTING);
+
+        // Outer line:
+        glBegin (GL_QUAD_STRIP);
+        glVertex2f (rects [0][0], rects [0][1]);
+        glVertex2f (rects [1][0], rects [1][1]);
+        glVertex2f (rects [0][2], rects [0][1]);
+        glVertex2f (rects [1][2], rects [1][1]);
+        glVertex2f (rects [0][2], rects [0][3]);
+        glVertex2f (rects [1][2], rects [1][3]);
+        glVertex2f (rects [0][0], rects [0][3]);
+        glVertex2f (rects [1][0], rects [1][3]);
+        glVertex2f (rects [0][0], rects [0][1]);
+        glVertex2f (rects [1][0], rects [1][1]);
+        glEnd ();
+
+        // progress bar
+        f = float (passed) / total;
+        x1 = rects [2][0];
+        x2 = x1 + f * (rects [2][2] - rects [2][0]);
+        glBegin (GL_QUADS);
+        glVertex2f (x1, rects [2][1]);
+        glVertex2f (x2, rects [2][1]);
+        glVertex2f (x2, rects [2][3]);
+        glVertex2f (x1, rects [2][3]);
+        glEnd ();
+
+        SDL_GL_SwapWindow (pWindow);
+    }
+    while (passed < total); // keep rendering until all jobs are done
+
+    SDL_GL_DeleteContext (glContext);
+
+    return 0;
+}
+
+// Initialization functions
 
 #define SETTINGS_FILE "settings.ini"
 
 #define FULLSCREEN_SETTING "fullscreen"
 #define SCREENWIDTH_SETTING "screenwidth"
 #define SCREENHEIGHT_SETTING "screenheight"
-
-// Initialization functions
 bool App::InitApp (void)
 {
     strcpy (settings_path, (std::string (SDL_GetBasePath()) + SETTINGS_FILE).c_str());
@@ -85,22 +173,54 @@ bool App::InitApp (void)
 
     fullscreen = LoadSetting (settings_path, FULLSCREEN_SETTING) > 0 ? true : false;
 
-    // Create a window.
+    // Create a window:
     if (!InitializeSDL(w, h))
         return false;
 
+    // Create a rendering context in the window:
     if (!InitializeGL())
         return false;
 
-    pScene = new HubScene(this);
+    pScene = new HubScene (this);
 
     RandomSeed ();
 
-    if (!pScene->Init())
+    Progress progress;
+    Loader loader;
+
+    // Collect jobs to be done:
+    pScene->AddAll (&loader);
+
+    // Progress bar is rendered in a different thread while the scene loads:
+    SDL_Thread* progressThread = MakeSDLThread (
+                                    [&] () { return ProgressLoop (mainWindow, &progress); },
+                                    "progress"
+                                 );
+    if (!progressThread)
+    {
+        SetError ("failed to create progress thread: %s", SDL_GetError());
+        return false;
+    }
+
+    /*
+        Do all jobs while the progress bar is rendered.
+        Some of them depend on the current thread's rendering context.
+     */
+    if (!loader.LoadAll (&progress))
         return false;
 
-    if (!CheckGLOK("scene init"))
+    // Check for other errors:
+    if (!CheckGLOK ("scene init"))
         return false;
+
+    // Wait for progress display thread to finish:
+    int progressReturn;
+    SDL_WaitThread (progressThread, &progressReturn);
+    if (progressReturn != 0)
+    {
+        SetError ("progress thread returned exit code %d", progressReturn);
+        return false;
+    }
 
     return true;
 }

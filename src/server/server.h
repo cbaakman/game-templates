@@ -89,7 +89,7 @@ struct ChatEntry
 class Server
 {
 private:
-    enum MessageType {INFO, ERROR};
+    enum MessageType {SERVER_MSG_INFO, SERVER_MSG_ERROR};
 
     struct User // created after login, identified by IP-adress
     {
@@ -158,11 +158,11 @@ private:
 
 public:
 
-    Server();
-    ~Server();
+    Server ();
+    ~Server ();
 
-    bool Init();
-    void CleanUp();
+    bool Init ();
+    void CleanUp ();
 };
 
 #endif // SERVER_H

@@ -21,6 +21,8 @@
 #include "geo2d.h"
 #include <math.h>
 
+# define M_PI 3.14159265358979323846
+
 vec2::vec2(){}
 vec2::vec2(float _x, float _y)
 {

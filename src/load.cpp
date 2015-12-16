@@ -17,52 +17,37 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 
-#ifndef TOON_H
-#define TOON_H
+#include "load.h"
 
-#include "app.h"
-#include "mesh.h"
-#include "buffer.h"
-#include "../texture.h"
-
-/*
-    Demonstrates:
-    - toon shader
-    - black lines around meshes
-
- */
-class ToonScene : public App::Scene
+void Loader::Add (LoadFunc load)
 {
-private:
+    toLoad.push_back (load);
+}
+void Loader::Add (Loadable *pLoadable)
+{
+    // Wrap up the object in a LoadFunc
+    toLoad.push_back
+    (
+        [pLoadable]
+        {
+            return pLoadable->Load ();
+        }
+    );
+}
+bool Loader::LoadAll (Progress *pProgress)
+{
+    if (pProgress)
+        pProgress->AddTotal (toLoad.size ());
 
-    // camera angles
-    GLfloat angleY, angleX, distCamera;
+    for (LoadFunc load : toLoad)
+    {
+        // A single failing jobs leads to failure of the entire load process:
+        if (!load ())
+            return false;
 
-    // Background texture:
-    Texture texBG;
+        if (pProgress)
+            pProgress->AddPassed (1);
+    }
 
-    // Head mesh
-    MeshData meshDataHead;
-
-    // Handle to toon shader
-    GLuint shaderProgram;
-
-    // Vertex buffers
-    VertexBuffer vbo_lines,
-                 vbo_hair,
-                 vbo_mouth,
-                 vbo_head,
-                 vbo_eyes,
-                 vbo_pupils;
-public:
-
-    ToonScene (App *);
-    ~ToonScene ();
-
-    void AddAll (Loader *);
-    void Render (void);
-    void OnMouseMove (const SDL_MouseMotionEvent *event);
-    void OnMouseWheel (const SDL_MouseWheelEvent *event);
-};
-
-#endif // TOON_H
+    return true;
+}

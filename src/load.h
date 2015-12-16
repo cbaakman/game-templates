@@ -17,52 +17,48 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 
-#ifndef TOON_H
-#define TOON_H
+#ifndef LOAD_H
+#define LOAD_H
 
-#include "app.h"
-#include "mesh.h"
-#include "buffer.h"
-#include "../texture.h"
+#include <functional>
+#include <list>
+#include "progress.h"
 
-/*
-    Demonstrates:
-    - toon shader
-    - black lines around meshes
-
+/**
+ * These functions represent jobs to be done.
+ * Must return 'true' one success or 'false' on failure.
  */
-class ToonScene : public App::Scene
+typedef std::function <bool (void)> LoadFunc;
+
+/**
+ * This could represent a resource.
+ */
+class Loadable
 {
 private:
-
-    // camera angles
-    GLfloat angleY, angleX, distCamera;
-
-    // Background texture:
-    Texture texBG;
-
-    // Head mesh
-    MeshData meshDataHead;
-
-    // Handle to toon shader
-    GLuint shaderProgram;
-
-    // Vertex buffers
-    VertexBuffer vbo_lines,
-                 vbo_hair,
-                 vbo_mouth,
-                 vbo_head,
-                 vbo_eyes,
-                 vbo_pupils;
+    LoadFunc load;
 public:
-
-    ToonScene (App *);
-    ~ToonScene ();
-
-    void AddAll (Loader *);
-    void Render (void);
-    void OnMouseMove (const SDL_MouseMotionEvent *event);
-    void OnMouseWheel (const SDL_MouseWheelEvent *event);
+    virtual bool Load (void) = 0; // works like LoadFunc
 };
 
-#endif // TOON_H
+/**
+ * Split up the preparation of the scene in small units of work and
+ * pass them on to the loader as functions or loadable objects.
+ *
+ * First add jobs to the loader with 'Add' and then call 'LoadAll'.
+ */
+class Loader
+{
+private:
+    std::list <LoadFunc> toLoad;
+public:
+    void Add (LoadFunc);
+    void Add (Loadable *); // object must not be deleted before loading
+
+    /**
+     * If a progress object is given, loading progress will be reported to it.
+     */
+    bool LoadAll (Progress *pProgress=NULL);
+};
+
+#endif // LOAD_H

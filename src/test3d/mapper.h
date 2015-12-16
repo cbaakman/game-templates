@@ -40,7 +40,7 @@ public:
     MapperScene (App *);
     ~MapperScene ();
 
-    bool Init (void);
+    void AddAll (Loader *);
     void Render (void);
     void OnMouseMove (const SDL_MouseMotionEvent *event);
     void OnMouseWheel (const SDL_MouseWheelEvent *event);

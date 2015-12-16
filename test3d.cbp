@@ -22,7 +22,7 @@
 				<Option type="0" />
 				<Option compiler="gcc" />
 				<Compiler>
-					<Add option="-O2" />
+					<Add option="-O3" />
 				</Compiler>
 				<Linker>
 					<Add option="-s" />
@@ -53,7 +53,11 @@
 		<Unit filename="src/ini.h" />
 		<Unit filename="src/io.cpp" />
 		<Unit filename="src/io.h" />
+		<Unit filename="src/load.cpp" />
+		<Unit filename="src/load.h" />
 		<Unit filename="src/matrix.h" />
+		<Unit filename="src/progress.cpp" />
+		<Unit filename="src/progress.h" />
 		<Unit filename="src/random.cpp" />
 		<Unit filename="src/random.h" />
 		<Unit filename="src/shader.cpp" />
@@ -77,6 +81,8 @@
 		<Unit filename="src/test3d/shadow.h" />
 		<Unit filename="src/test3d/toon.cpp" />
 		<Unit filename="src/test3d/toon.h" />
+		<Unit filename="src/test3d/vecs.cpp" />
+		<Unit filename="src/test3d/vecs.h" />
 		<Unit filename="src/test3d/water.cpp" />
 		<Unit filename="src/test3d/water.h" />
 		<Unit filename="src/test3d/winres.h" />
@@ -85,6 +91,8 @@
 		</Unit>
 		<Unit filename="src/texture.cpp" />
 		<Unit filename="src/texture.h" />
+		<Unit filename="src/thread.cpp" />
+		<Unit filename="src/thread.h" />
 		<Unit filename="src/util.cpp" />
 		<Unit filename="src/util.h" />
 		<Unit filename="src/vec.h" />

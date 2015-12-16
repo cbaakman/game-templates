@@ -17,52 +17,36 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 
-#ifndef TOON_H
-#define TOON_H
+#ifndef PROGRESS_H
+#define PROGRESS_H
 
-#include "app.h"
-#include "mesh.h"
-#include "buffer.h"
-#include "../texture.h"
+#include <cstddef>
+#include <SDL2/SDL.h>
 
-/*
-    Demonstrates:
-    - toon shader
-    - black lines around meshes
-
+/**
+ * Progress objects are thread safe and can be used to communicate progress
+ * to another thread.
  */
-class ToonScene : public App::Scene
+class Progress
 {
-private:
-
-    // camera angles
-    GLfloat angleY, angleX, distCamera;
-
-    // Background texture:
-    Texture texBG;
-
-    // Head mesh
-    MeshData meshDataHead;
-
-    // Handle to toon shader
-    GLuint shaderProgram;
-
-    // Vertex buffers
-    VertexBuffer vbo_lines,
-                 vbo_hair,
-                 vbo_mouth,
-                 vbo_head,
-                 vbo_eyes,
-                 vbo_pupils;
 public:
 
-    ToonScene (App *);
-    ~ToonScene ();
+    Progress ();
+    ~Progress ();
 
-    void AddAll (Loader *);
-    void Render (void);
-    void OnMouseMove (const SDL_MouseMotionEvent *event);
-    void OnMouseWheel (const SDL_MouseWheelEvent *event);
+    void AddTotal (const std::size_t n);
+    void AddPassed (const std::size_t n);
+
+    std::size_t GetPassed ();
+    std::size_t GetTotal ();
+
+private:
+
+    SDL_mutex *pPassedMutex,
+              *pTotalMutex;
+
+    std::size_t n_total,
+                n_passed;
 };
 
-#endif // TOON_H
+#endif // PROGRESS_H

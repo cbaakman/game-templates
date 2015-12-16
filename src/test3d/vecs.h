@@ -17,52 +17,35 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 
-#ifndef TOON_H
-#define TOON_H
+#ifndef VECS_H
+#define VECS_H
 
 #include "app.h"
-#include "mesh.h"
-#include "buffer.h"
-#include "../texture.h"
 
-/*
-    Demonstrates:
-    - toon shader
-    - black lines around meshes
+#include "../font.h"
 
- */
-class ToonScene : public App::Scene
+enum VecDisplayMode {DISPLAY_AXIS, DISPLAY_CROSS};
+
+class VecScene : public App::Scene
 {
 private:
 
     // camera angles
     GLfloat angleY, angleX, distCamera;
+    VecDisplayMode mode;
 
-    // Background texture:
-    Texture texBG;
+    float t;
 
-    // Head mesh
-    MeshData meshDataHead;
-
-    // Handle to toon shader
-    GLuint shaderProgram;
-
-    // Vertex buffers
-    VertexBuffer vbo_lines,
-                 vbo_hair,
-                 vbo_mouth,
-                 vbo_head,
-                 vbo_eyes,
-                 vbo_pupils;
+    const Font *pFont;
 public:
 
-    ToonScene (App *);
-    ~ToonScene ();
+    VecScene (App *, const Font *);
 
-    void AddAll (Loader *);
+    void Update (const float dt);
     void Render (void);
-    void OnMouseMove (const SDL_MouseMotionEvent *event);
-    void OnMouseWheel (const SDL_MouseWheelEvent *event);
+    void OnKeyPress(const SDL_KeyboardEvent *);
+    void OnMouseMove (const SDL_MouseMotionEvent *);
+    void OnMouseWheel (const SDL_MouseWheelEvent *);
 };
 
-#endif // TOON_H
+#endif // VECS_H

@@ -110,6 +110,51 @@ bool ReadAll (SDL_RWops *io, std::string &out)
     return true;
 }
 
+void RenderCube (const vec3 &p, const float sz)
+{
+    GLfloat size = sz / 2;
+
+    glBegin (GL_QUADS);
+
+    glNormal3f (0.0f, 0.0f, 1.0f);
+    glVertex3f (p.x - size, p.y + size, p.z - size);
+    glVertex3f (p.x + size, p.y + size, p.z - size);
+    glVertex3f (p.x + size, p.y - size, p.z - size);
+    glVertex3f (p.x - size, p.y - size, p.z - size);
+
+    glNormal3f (0.0f, 0.0f, -1.0f);
+    glVertex3f (p.x + size, p.y + size, p.z + size);
+    glVertex3f (p.x - size, p.y + size, p.z + size);
+    glVertex3f (p.x - size, p.y - size, p.z + size);
+    glVertex3f (p.x + size, p.y - size, p.z + size);
+
+    glNormal3f (1.0f, 0.0f, 0.0f);
+    glVertex3f (p.x + size, p.y + size, p.z - size);
+    glVertex3f (p.x + size, p.y + size, p.z + size);
+    glVertex3f (p.x + size, p.y - size, p.z + size);
+    glVertex3f (p.x + size, p.y - size, p.z - size);
+
+    glNormal3f (-1.0f, 0.0f, 0.0f);
+    glVertex3f (p.x - size, p.y + size, p.z + size);
+    glVertex3f (p.x - size, p.y + size, p.z - size);
+    glVertex3f (p.x - size, p.y - size, p.z - size);
+    glVertex3f (p.x - size, p.y - size, p.z + size);
+
+    glNormal3f (0.0f, 1.0f, 0.0f);
+    glVertex3f (p.x - size, p.y + size, p.z + size);
+    glVertex3f (p.x + size, p.y + size, p.z + size);
+    glVertex3f (p.x + size, p.y + size, p.z - size);
+    glVertex3f (p.x - size, p.y + size, p.z - size);
+
+    glNormal3f (0.0f, -1.0f, 0.0f);
+    glVertex3f (p.x - size, p.y - size, p.z - size);
+    glVertex3f (p.x + size, p.y - size, p.z - size);
+    glVertex3f (p.x + size, p.y - size, p.z + size);
+    glVertex3f (p.x - size, p.y - size, p.z + size);
+
+    glEnd();
+}
+
 char GetKeyChar (const SDL_KeyboardEvent *event)
 {
     const SDL_Keycode sym = event->keysym.sym;

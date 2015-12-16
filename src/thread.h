@@ -17,52 +17,15 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 
-#ifndef TOON_H
-#define TOON_H
+#ifndef THREAD_H
+#define THREAD_H
 
-#include "app.h"
-#include "mesh.h"
-#include "buffer.h"
-#include "../texture.h"
+#include <functional>
+#include <SDL2/SDL.h>
 
-/*
-    Demonstrates:
-    - toon shader
-    - black lines around meshes
+typedef std::function <int ()> PlainThreadFunction;
 
- */
-class ToonScene : public App::Scene
-{
-private:
+// This allows us to use SDL threads for c++ functions
+SDL_Thread* MakeSDLThread (const PlainThreadFunction &func, const char *name);
 
-    // camera angles
-    GLfloat angleY, angleX, distCamera;
-
-    // Background texture:
-    Texture texBG;
-
-    // Head mesh
-    MeshData meshDataHead;
-
-    // Handle to toon shader
-    GLuint shaderProgram;
-
-    // Vertex buffers
-    VertexBuffer vbo_lines,
-                 vbo_hair,
-                 vbo_mouth,
-                 vbo_head,
-                 vbo_eyes,
-                 vbo_pupils;
-public:
-
-    ToonScene (App *);
-    ~ToonScene ();
-
-    void AddAll (Loader *);
-    void Render (void);
-    void OnMouseMove (const SDL_MouseMotionEvent *event);
-    void OnMouseWheel (const SDL_MouseWheelEvent *event);
-};
-
-#endif // TOON_H
+#endif

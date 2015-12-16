@@ -24,6 +24,7 @@
 #include <libxml/tree.h>
 #include "../matrix.h"
 
+#include <functional>
 #include <string>
 #include <list>
 #include <map>
@@ -123,11 +124,16 @@ private:
 
 public:
     MeshTexel texels [N];
+    bool smooth;
 
     MeshFace (const MeshFace &other) : MeshFace()
     {
         for(int i = 0; i < N; i++)
-             SetVertexID(i, other.GetVertexID(i));
+        {
+             SetVertexID (i, other.GetVertexID(i));
+             texels [i] = other.texels [i];
+        }
+        smooth = other.smooth;
     }
 
     MeshFace ()
@@ -135,7 +141,10 @@ public:
         for(int i = 0; i < N; i++)
         {
             vertex_ids[i] = NULL;
+            texels [i].u = 0.0f;
+            texels [i].v = 0.0f;
         }
+        smooth = true;
     }
     ~MeshFace ()
     {
@@ -200,15 +209,15 @@ struct MeshData {
 
 /**
  * Arguments of MeshFaceFunc are:
- * 1. a user provided uniform object
- * 2. the number of vertices in the face
- * 3. the array of vertex pointers
- * 4. the array of texels
+ * 1. the number of vertices in the face
+ * 2. the array of vertex pointers
+ * 3. the array of texels
  */
-typedef void (*MeshFaceFunc) (void *, const int, const MeshVertex **, const MeshTexel *);
+typedef std::function<void (const int, const MeshVertex **, const MeshTexel *)> MeshFaceFunc;
 
-void ThroughUnAnimatedSubsetFaces (const MeshData *, const std::string &subset_id, MeshFaceFunc func, void *pObj=NULL);
-void RenderUnAnimatedSubset (const MeshData *, const std::string &subset_id);
+void ThroughSubsetFaces (const MeshData *, const std::string &subset_id, MeshFaceFunc func);
+void ThroughFaces (const MeshData *, MeshFaceFunc func);
+void RenderSubset (const MeshData *, const std::string &subset_id);
 
 // ToTriangles is useful for collision detection
 void ToTriangles (const MeshData *, Triangle **triangles, size_t *n_triangles);
@@ -219,8 +228,8 @@ void ToTriangles (const MeshData *, Triangle **triangles, size_t *n_triangles);
  */
 bool ParseMesh (const xmlDocPtr, MeshData *pData);
 
-// MeshObject uses MeshData, but has an animation state that can be changed.
-class MeshObject
+// MeshState uses MeshData, but has an animation state that can be changed.
+class MeshState
 {
 
 private:
@@ -238,14 +247,8 @@ private:
 public:
 
     // Executes func for every face in the subset
-    void ThroughSubsetFaces (const std::string &subset_id, MeshFaceFunc func, void *pObj=NULL);
-
-    // Render subset in OpenGL, could precede this with desired GL settings
-    void RenderSubset (const std::string &subset_id);
-
-    // These render functions can be usefull for debugging
-    void RenderBones ();
-    void RenderNormals ();
+    void ThroughSubsetFaces (const std::string &subset_id, MeshFaceFunc func) const;
+    void ThroughFaces (MeshFaceFunc func) const;
 
     /**
      * Puts mesh in desired animation frame.
@@ -257,11 +260,12 @@ public:
     void SetBoneAngle(const char *bone_id, const vec3 *axis, const float angle);
     void SetBoneLoc(const char *bone_id, const vec3 *loc);
 
-    const std::map<std::string, MeshVertex> &GetVertices() const { return vertexStates; }
     const MeshData *GetMeshData() const { return pMeshData; }
+    const MeshVertex *GetVertex (const std::string &vertex_id) const;
+    const MeshBoneState *GetBoneState (const std::string &bone_id) const;
 
-    MeshObject(const MeshData *data);
-    ~MeshObject();
+    MeshState(const MeshData *data);
+    ~MeshState();
 };
 
 

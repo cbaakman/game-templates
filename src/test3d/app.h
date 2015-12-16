@@ -29,6 +29,8 @@
 
 #include <stdio.h>
 
+#include "../load.h"
+
 class App
 {
 public:
@@ -42,7 +44,14 @@ public:
         Scene (App *);
         virtual void OnEvent (const SDL_Event *event);
 
-        virtual bool Init (void) { return true; }
+        /**
+         * Rather than doing all the time consuming work by itself,
+         * the scene can add jobs to a central loader object.
+         * The scene's 'Update' and 'Render' methods may not be called
+         * until the loader has finished its jobs.
+         */
+        virtual void AddAll (Loader *) {}
+
         virtual void Update (float dt) {}
         virtual void Render (void) = 0;
 

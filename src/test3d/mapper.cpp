@@ -159,13 +159,25 @@ void MapperScene::AddAll (Loader *pLoader)
     pLoader->Add (
         [&] ()
         {
-            shaderProgram = CreateShaderProgram (displace_vsh, displace_fsh);
-            if (!shaderProgram)
+            GLuint vsh, fsh;
+
+            vsh = CreateShader (displace_vsh, GL_VERTEX_SHADER);
+            fsh = CreateShader (displace_fsh, GL_FRAGMENT_SHADER);
+            if (!(fsh && vsh))
             {
-                SetError ("error creating mapper shader program: %s", GetError ());
+                glDeleteShader (vsh);
+                glDeleteShader (fsh);
                 return false;
             }
 
+            shaderProgram = CreateShaderProgram (vsh, fsh);
+
+            // schedule for deletion:
+            glDeleteShader (vsh);
+            glDeleteShader (fsh);
+
+            if (!shaderProgram)
+                return false;
 
             // Pick tangent and bitangent index:
             GLint max_attribs;

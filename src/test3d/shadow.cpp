@@ -539,12 +539,25 @@ void ShadowScene::AddAll (Loader *pLoader)
     pLoader->Add (
         [this] ()
         {
-            shader_normal = CreateShaderProgram (normal_vsh, normal_fsh);
-            if (!shader_normal)
+            GLuint vsh, fsh;
+
+            vsh = CreateShader (normal_vsh, GL_VERTEX_SHADER);
+            fsh = CreateShader (normal_fsh, GL_FRAGMENT_SHADER);
+            if (!(fsh && vsh))
             {
-                SetError ("error creating normal shader program: %s", GetError ());
+                glDeleteShader (vsh);
+                glDeleteShader (fsh);
                 return false;
             }
+
+            shader_normal = CreateShaderProgram (vsh, fsh);
+
+            // schedule for deletion:
+            glDeleteShader (vsh);
+            glDeleteShader (fsh);
+
+            if (!shader_normal)
+                return false;
 
             // Pick tangent and bitangent index:
             GLint max_attribs;

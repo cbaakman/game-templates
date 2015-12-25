@@ -314,13 +314,26 @@ void ToonScene::AddAll (Loader *pLoader)
     pLoader->Add (
         [&] ()
         {
-            // Create shader from sources:
-            shaderProgram = CreateShaderProgram (toon_vsh, toon_fsh);
-            if (!shaderProgram)
+            GLuint vsh, fsh;
+
+            vsh = CreateShader (toon_vsh, GL_VERTEX_SHADER);
+            fsh = CreateShader (toon_fsh, GL_FRAGMENT_SHADER);
+            if (!(fsh && vsh))
             {
-                SetError ("error creating toon shader program: %s", GetError ());
+                glDeleteShader (vsh);
+                glDeleteShader (fsh);
                 return false;
             }
+
+            // Create shader from sources:
+            shaderProgram = CreateShaderProgram (vsh, fsh);
+
+            // schedule for deletion:
+            glDeleteShader (vsh);
+            glDeleteShader (fsh);
+
+            if (!shaderProgram)
+                return false;
 
             return true;
         }

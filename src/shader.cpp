@@ -19,6 +19,7 @@
 
 
 #include <string>
+#include <list>
 #include <stdio.h>
 #include <cstring>
 
@@ -52,11 +53,6 @@ void GetShaderTypeName (GLenum type, char *pOut)
     };
 }
 
-/**
- * Compile either the source of a vertex or fragment shader.
- * :param type: either GL_VERTEX_SHADER or GL_FRAGMENT_SHADER
- * :returns: OpenGL handle to shader, or 0 on error
- */
 GLuint CreateShader(const std::string& source, GLenum type)
 {
     char typeName [100];
@@ -64,7 +60,7 @@ GLuint CreateShader(const std::string& source, GLenum type)
 
     if (!typeName [0])
     {
-        SetError ("Incorrect shader type: %.4X", type);
+        SetError ("Unknown shader type: %.4X", type);
         return 0;
     }
 
@@ -96,52 +92,90 @@ GLuint CreateShader(const std::string& source, GLenum type)
 
     return shader;
 }
-GLuint CreateShaderProgram (const char *sourceVertex, const char *sourceFragment)
+GLuint CreateShaderProgram (const std::list <GLuint>& shaders);
+GLuint CreateShaderProgram (const GLuint s1)
 {
-    return CreateShaderProgram (std::string (sourceVertex), std::string (sourceFragment));
+    std::list <GLuint> shaders;
+    shaders.push_back (s1);
+    return CreateShaderProgram (shaders);
 }
-GLuint CreateShaderProgram (const std::string& sourceVertex, const std::string& sourceFragment)
+GLuint CreateShaderProgram (const GLuint s1, const GLuint s2)
+{
+    std::list <GLuint> shaders;
+    shaders.push_back (s1);
+    shaders.push_back (s2);
+    return CreateShaderProgram (shaders);
+}
+GLuint CreateShaderProgram (const GLuint s1, const GLuint s2, const GLuint s3)
+{
+    std::list <GLuint> shaders;
+    shaders.push_back (s1);
+    shaders.push_back (s2);
+    shaders.push_back (s3);
+    return CreateShaderProgram (shaders);
+}
+GLuint CreateShaderProgram (const GLuint s1, const GLuint s2, const GLuint s3,
+                            const GLuint s4)
+{
+    std::list <GLuint> shaders;
+    shaders.push_back (s1);
+    shaders.push_back (s2);
+    shaders.push_back (s3);
+    shaders.push_back (s4);
+    return CreateShaderProgram (shaders);
+}
+GLuint CreateShaderProgram (const GLuint s1, const GLuint s2, const GLuint s3,
+                            const GLuint s4, const GLuint s5)
+{
+    std::list <GLuint> shaders;
+    shaders.push_back (s1);
+    shaders.push_back (s2);
+    shaders.push_back (s3);
+    shaders.push_back (s4);
+    shaders.push_back (s5);
+    return CreateShaderProgram (shaders);
+}
+GLuint CreateShaderProgram (const GLuint s1, const GLuint s2, const GLuint s3,
+                            const GLuint s4, const GLuint s5, const GLuint s6)
+{
+    std::list <GLuint> shaders;
+    shaders.push_back (s1);
+    shaders.push_back (s2);
+    shaders.push_back (s3);
+    shaders.push_back (s4);
+    shaders.push_back (s5);
+    shaders.push_back (s6);
+    return CreateShaderProgram (shaders);
+}
+GLuint CreateShaderProgram (const std::list <GLuint>& shaders)
 {
     GLint result = GL_FALSE;
     int logLength;
-    GLuint program=0, vertexShader, fragmentShader;
+    GLuint program=0;
 
-    // Compile the sources:
-    vertexShader = CreateShader (sourceVertex, GL_VERTEX_SHADER);
-    fragmentShader = CreateShader (sourceFragment, GL_FRAGMENT_SHADER);
+    // Combine the compiled shaders into a program:
+    program = glCreateProgram();
 
-    if (vertexShader && fragmentShader)
+    for (auto shader : shaders)
+        glAttachShader (program, shader);
+
+    glLinkProgram (program);
+
+    glGetProgramiv (program, GL_LINK_STATUS, &result);
+    if (result != GL_TRUE)
     {
-        // Combine the compiled shaders into a program:
-        program = glCreateProgram();
+        // Error occurred, get log:
 
-        glAttachShader (program, vertexShader);
-        glAttachShader (program, fragmentShader);
+        glGetProgramiv(program, GL_INFO_LOG_LENGTH, &logLength);
 
-        glLinkProgram (program);
+        char *errorString = new char [logLength];
+        glGetProgramInfoLog (program, logLength, NULL, errorString);
+        SetError ("Error linking shader program: %s", errorString);
+        delete [] errorString;
 
-        glGetProgramiv (program, GL_LINK_STATUS, &result);
-        if (result != GL_TRUE)
-        {
-            // Error occurred, get log:
-
-            glGetProgramiv(program, GL_INFO_LOG_LENGTH, &logLength);
-
-            char *errorString = new char [logLength];
-            glGetProgramInfoLog (program, logLength, NULL, errorString);
-            SetError ("Error linking shader program: %s", errorString);
-            delete [] errorString;
-
-            glDeleteShader (vertexShader);
-            glDeleteShader (fragmentShader);
-            glDeleteProgram (program);
-            return 0;
-        }
+        glDeleteProgram (program);
+        return 0;
     }
-
-    // Not needed anymore at this point:
-    glDeleteShader (vertexShader);
-    glDeleteShader (fragmentShader);
 
     return program;
 }

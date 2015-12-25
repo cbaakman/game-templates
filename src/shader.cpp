@@ -20,18 +20,49 @@
 
 #include <string>
 #include <stdio.h>
+#include <cstring>
 
 #include "err.h"
 #include "shader.h"
+
+void GetShaderTypeName (GLenum type, char *pOut)
+{
+    switch (type)
+    {
+    case GL_VERTEX_SHADER:
+        strcpy (pOut, "vertex");
+        break;
+    case GL_FRAGMENT_SHADER:
+        strcpy (pOut, "fragment");
+        break;
+    case GL_GEOMETRY_SHADER:
+        strcpy (pOut, "geometry");
+        break;
+    case GL_COMPUTE_SHADER:
+        strcpy (pOut, "compute");
+        break;
+    case GL_TESS_CONTROL_SHADER:
+        strcpy (pOut, "tessellation control");
+        break;
+    case GL_TESS_EVALUATION_SHADER:
+        strcpy (pOut, "tessellation evaluation");
+        break;
+    default:
+        strcpy (pOut, "");
+    };
+}
 
 /**
  * Compile either the source of a vertex or fragment shader.
  * :param type: either GL_VERTEX_SHADER or GL_FRAGMENT_SHADER
  * :returns: OpenGL handle to shader, or 0 on error
  */
-GLuint CreateShader(const std::string& source, int type)
+GLuint CreateShader(const std::string& source, GLenum type)
 {
-    if(type != GL_VERTEX_SHADER && type != GL_FRAGMENT_SHADER)
+    char typeName [100];
+    GetShaderTypeName (type, typeName);
+
+    if (!typeName [0])
     {
         SetError ("Incorrect shader type: %.4X", type);
         return 0;
@@ -55,13 +86,7 @@ GLuint CreateShader(const std::string& source, int type)
         char *errorString = new char [logLength + 1];
         glGetShaderInfoLog (shader, logLength, NULL, errorString);
 
-        if (type == GL_VERTEX_SHADER)
-
-            SetError ("Error compiling vertex shader: %s", errorString);
-
-        else if (type == GL_FRAGMENT_SHADER)
-
-            SetError ("Error compiling fragment shader: %s", errorString);
+        SetError ("Error compiling %s shader: %s", typeName, errorString);
 
         delete [] errorString;
 

@@ -69,6 +69,8 @@
 		<Unit filename="src/test3d/collision.cpp" />
 		<Unit filename="src/test3d/collision.h" />
 		<Unit filename="src/test3d/dummy-icon.ico" />
+		<Unit filename="src/test3d/grass.cpp" />
+		<Unit filename="src/test3d/grass.h" />
 		<Unit filename="src/test3d/hub.cpp" />
 		<Unit filename="src/test3d/hub.h">
 			<Option target="&lt;{~None~}&gt;" />

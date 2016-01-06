@@ -28,7 +28,7 @@
 
 /**
  * Compile the source of a shader.
- * :param type: GL_COMPUTE_SHADER, GL_VERTEX_SHADER, GL_TESS_CONTROL_SHADER, GL_TESS_EVALUATION_SHADER, GL_GEOMETRY_SHADER, or GL_FRAGMENT_SHADER.
+ * :param type: GL_VERTEX_SHADER, GL_TESS_CONTROL_SHADER, GL_TESS_EVALUATION_SHADER, GL_GEOMETRY_SHADER, or GL_FRAGMENT_SHADER.
  * :returns: OpenGL handle to shader, or 0 on error
  */
 GLuint CreateShader (const std::string& source, GLenum type);

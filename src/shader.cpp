@@ -39,9 +39,6 @@ void GetShaderTypeName (GLenum type, char *pOut)
     case GL_GEOMETRY_SHADER:
         strcpy (pOut, "geometry");
         break;
-    case GL_COMPUTE_SHADER:
-        strcpy (pOut, "compute");
-        break;
     case GL_TESS_CONTROL_SHADER:
         strcpy (pOut, "tessellation control");
         break;

@@ -29,6 +29,7 @@ const GLfloat textColors [][3] = {{1.0f, 1.0f, 1.0f},
                                   {1.0f, 1.0f, 1.0f},
                                   {0.0f, 0.0f, 0.0f},
                                   {0.0f, 1.0f, 0.0f},
+                                  {0.0f, 0.0f, 0.0f},
                                   {1.0f, 1.0f, 1.0f}};
 
 HubScene::HubScene (App *pApp) : Scene (pApp),
@@ -44,7 +45,8 @@ HubScene::HubScene (App *pApp) : Scene (pApp),
                       "F2: Water Test\n"
                       "F3: Toon Test\n"
                       "F4: Displacement map Test\n"
-                      "F5: Vector Test";
+                      "F5: Grass Test\n"
+                      "F6: Vector Test";
 
     helpText [0] = "Use w,a,s,d & SPACE to move mr. Dummy around\n"
                     "Use the mouse to move the camera\n"
@@ -59,7 +61,9 @@ HubScene::HubScene (App *pApp) : Scene (pApp),
 
     helpText [3] = "Use the mouse to move the camera\n" + nav ;
 
-    helpText [4] = "Press 'a' to see the axis system: x, y & z\n"
+    helpText [4] = "" + nav ;
+
+    helpText [5] = "Press 'a' to see the axis system: x, y & z\n"
                    "Press 'x' to see a cross product\n" + nav;
 
     pWaterScene = new WaterScene (pApp);
@@ -72,6 +76,8 @@ HubScene::HubScene (App *pApp) : Scene (pApp),
 
     pVecScene = new VecScene (pApp, &font);
 
+    pGrassScene = new GrassScene (pApp);
+
     // Start with this scene:
     pCurrent = pShadowScene;
     help = 0;
@@ -83,52 +89,49 @@ HubScene::~HubScene()
     delete pToonScene;
     delete pMapperScene;
     delete pVecScene;
+    delete pGrassScene;
 }
-bool HubScene::Init ()
+void HubScene::AddAll (Loader *pLoader)
 {
-    std::string resPath = std::string(SDL_GetBasePath()) + "test3d.zip";
-    bool success;
+    pLoader->Add (
+        [this] ()
+        {
+            const std::string resPath = std::string (SDL_GetBasePath()) + "test3d.zip";
 
-    if (!pWaterScene->Init ())
-        return false;
+            SDL_RWops *fontInput = SDL_RWFromZipArchive (resPath.c_str(), "Lumean.svg");
+            if (!fontInput) // file or archive missing
+                return false;
 
-    if (!pShadowScene->Init ())
-        return false;
+            // Parse the svg as xml document:
+            xmlDocPtr pDoc = ParseXML (fontInput);
+            fontInput->close (fontInput);
 
-    if (!pToonScene->Init ())
-        return false;
+            if (!pDoc)
+            {
+                SetError ("error parsing Lumean.svg: %s", GetError ());
+                return false;
+            }
 
-    if (!pMapperScene->Init ())
-        return false;
+            // Convert xml to font object:
+            bool success = ParseSVGFont (pDoc, 16, &font);
+            xmlFreeDoc (pDoc);
 
-    if (!pVecScene->Init ())
-        return false;
+            if (!success)
+            {
+                SetError ("error parsing Lumean.svg: %s", GetError ());
+                return false;
+            }
 
-    SDL_RWops *fontInput = SDL_RWFromZipArchive (resPath.c_str(), "Lumean.svg");
-    if (!fontInput) // file or archive missing
-        return false;
+            return true;
+        }
+    );
 
-    // Parse the svg as xml document:
-    xmlDocPtr pDoc = ParseXML (fontInput);
-    fontInput->close (fontInput);
-
-    if (!pDoc)
-    {
-        SetError ("error parsing Lumean.svg: %s", GetError ());
-        return false;
-    }
-
-    // Convert xml to font object:
-    success = ParseSVGFont (pDoc, 16, &font);
-    xmlFreeDoc (pDoc);
-
-    if (!success)
-    {
-        SetError ("error parsing Lumean.svg: %s", GetError ());
-        return false;
-    }
-
-    return true;
+    pWaterScene->AddAll (pLoader);
+    pShadowScene->AddAll (pLoader);
+    pToonScene->AddAll (pLoader);
+    pMapperScene->AddAll (pLoader);
+    pVecScene->AddAll (pLoader);
+    pGrassScene->AddAll (pLoader);
 }
 void HubScene::Update (float dt)
 {
@@ -232,8 +235,14 @@ void HubScene::OnKeyPress (const SDL_KeyboardEvent *event)
 
         if(event->keysym.sym == SDLK_F5)
         {
-            pCurrent = pVecScene;
+            pCurrent = pGrassScene;
             help = 4;
+        }
+
+        if(event->keysym.sym == SDLK_F6)
+        {
+            pCurrent = pVecScene;
+            help = 5;
         }
     }
 }

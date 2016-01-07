@@ -45,12 +45,12 @@ void Server::OnMessage (Server::MessageType type, const char *format, ...)
 
     switch (type)
     {
-    case INFO:
+    case SERVER_MSG_INFO:
         fprintf (stdout, "INFO: ");
         vfprintf (stdout, format, args);
         fprintf (stdout, "\n");
     break;
-    case ERROR:
+    case SERVER_MSG_ERROR:
         fprintf (stderr, "ERROR: ");
         vfprintf (stderr, format, args);
         fprintf (stderr, "\n");
@@ -340,7 +340,7 @@ void Server::OnChatMessage (const User *user, const char *msg)
 
     chat_history.push_back (e);
 
-    OnMessage (INFO, "%s said: %s", user->accountName, msg);
+    OnMessage (SERVER_MSG_INFO, "%s said: %s", user->accountName, msg);
 
     // Tell everybody about this chat message:
 
@@ -389,7 +389,7 @@ void Server::OnLogout(Server::User* user)
     OnPlayerRemove (user);
     DelUser (user);
 
-    OnMessage (INFO, "%s just logged out", user->accountName);
+    OnMessage (SERVER_MSG_INFO, "%s just logged out", user->accountName);
 }
 void Server::OnRequest(const IPaddress& clientAddress, Uint8*data, int len)
 {
@@ -528,7 +528,7 @@ void Server::OnAuthenticate(const IPaddress& clientAddress, LoginParams* params)
             SendToClient (clientAddress,data,len);
             delete data;
 
-            OnMessage (INFO, "%s just logged in", user->accountName);
+            OnMessage (SERVER_MSG_INFO, "%s just logged in", user->accountName);
 
             // Tell other users about this new user:
             for(Uint64 i = 0; i < maxUsers; i++)

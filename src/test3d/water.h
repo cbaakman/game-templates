@@ -79,7 +79,7 @@ public:
     WaterScene (App*);
     ~WaterScene ();
 
-    bool Init (void);
+    void AddAll (Loader *);
     void Update (const float dt);
     void Render (void);
     void OnMouseMove (const SDL_MouseMotionEvent *event);

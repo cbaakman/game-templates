@@ -209,15 +209,14 @@ struct MeshData {
 
 /**
  * Arguments of MeshFaceFunc are:
- * 1. a user provided uniform object
- * 2. the number of vertices in the face
- * 3. the array of vertex pointers
- * 4. the array of texels
+ * 1. the number of vertices in the face
+ * 2. the array of vertex pointers
+ * 3. the array of texels
  */
-typedef std::function<void (void *, const int, const MeshVertex **, const MeshTexel *)> MeshFaceFunc;
+typedef std::function<void (const int, const MeshVertex **, const MeshTexel *)> MeshFaceFunc;
 
-void ThroughSubsetFaces (const MeshData *, const std::string &subset_id, MeshFaceFunc func, void *pObj=NULL);
-void ThroughFaces (const MeshData *, MeshFaceFunc func, void *pObj=NULL);
+void ThroughSubsetFaces (const MeshData *, const std::string &subset_id, MeshFaceFunc func);
+void ThroughFaces (const MeshData *, MeshFaceFunc func);
 void RenderSubset (const MeshData *, const std::string &subset_id);
 
 // ToTriangles is useful for collision detection
@@ -248,8 +247,8 @@ private:
 public:
 
     // Executes func for every face in the subset
-    void ThroughSubsetFaces (const std::string &subset_id, MeshFaceFunc func, void *pObj=NULL) const;
-    void ThroughFaces (MeshFaceFunc func, void *pObj=NULL) const;
+    void ThroughSubsetFaces (const std::string &subset_id, MeshFaceFunc func) const;
+    void ThroughFaces (MeshFaceFunc func) const;
 
     /**
      * Puts mesh in desired animation frame.

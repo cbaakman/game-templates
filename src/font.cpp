@@ -28,6 +28,7 @@
 #include <cctype>
 #include <math.h>
 #include <algorithm>
+#include <functional>
 
 /**
  * Picks one utf8 character from the byte array and returns
@@ -1341,7 +1342,7 @@ float NextLineWidth (const Font *pFont, const char *pUTF8, const float maxLineWi
  * string_pos is the index of the character, starting from 0
  * the last argument is the object inserted as pObject in ThroughText.
  */
-typedef bool (*ThroughTextGlyphFunc)(const Font *, const Glyph*, const float x, const float y, const int string_pos, void*);
+typedef std::function <bool (const Glyph*, const float x, const float y, const int string_pos)> ThroughTextGlyphFunc;
 
 /*
  * ThroughText passes through the given utf8 string with given text formatting.
@@ -1350,7 +1351,7 @@ typedef bool (*ThroughTextGlyphFunc)(const Font *, const Glyph*, const float x, 
  * in each call.
  */
 void ThroughText (const Font *pFont, const char *pUTF8,
-                  ThroughTextGlyphFunc GlyphFunc, void *pObject,
+                  ThroughTextGlyphFunc GlyphFunc,
                   const int align, float maxWidth)
 {
     int i = 0, n, halign = align & 0x0f;
@@ -1407,7 +1408,7 @@ void ThroughText (const Font *pFont, const char *pUTF8,
             glyph_x = x - lineWidth;
 
         // Call the given ThroughTextGlyphFunc and break out if it returns false
-        if (!GlyphFunc (pFont, pGlyph, glyph_x, y, i, pObject))
+        if (!GlyphFunc (pGlyph, glyph_x, y, i))
             return;
 
         // move on to the x after the glyph and update the index:
@@ -1425,23 +1426,8 @@ void ThroughText (const Font *pFont, const char *pUTF8,
 
         glyph_x = x - lineWidth;
 
-    // Call GlyphFunc for the terminating null:
-    GlyphFunc (pFont, NULL, glyph_x, y, i, pObject);
-}
-bool glRenderTextCallBack (const Font *pFont, const Glyph *pGlyph, const float x, const float y, const int string_pos, void *p)
-{
-    if (!pGlyph)
-        return true;
-
-    // Render the glyph with its origin at the given x,y
-
-    float ori_x, ori_y;
-    GetGlyphOrigin (pFont, pGlyph, ori_x, ori_y);
-
-    if (pGlyph->tex)
-        glRenderGlyph (pFont, pGlyph, x - ori_x, y - ori_y);
-
-    return true;
+    // Call GlyphFunc for the terminating null, with the rightmost x value:
+    GlyphFunc (NULL, glyph_x, y, i);
 }
 void glRenderText (const Font *pFont, const char *pUTF8, const int align, float maxWidth)
 {
@@ -1450,72 +1436,22 @@ void glRenderText (const Font *pFont, const char *pUTF8, const int align, float 
     glEnable (GL_TEXTURE_2D);
 
     ThroughText (pFont, pUTF8,
-                 glRenderTextCallBack, NULL,
-                 align, maxWidth);
-}
-struct TextRectObject {
-    int from, to;
-    float start_x, current_y, end_x;
-};
-bool glRenderTextAsRectsCallBack (const Font *pFont, const Glyph *pGlyph, const float x, const float y, const int string_pos, void *p)
-{
-    TextRectObject *pO = (TextRectObject *)p;
-    if (string_pos < pO->from)
-    {
-        return true; // no rects yet, wait till after 'from'
-    }
+        [&] (const Glyph *pGlyph, const float x, const float y, const int string_pos)
+        {
+            if (!pGlyph)
+                return true;
 
-    float ori_x, ori_y;
-    GetGlyphOrigin (pFont, pGlyph, ori_x, ori_y);
+            // Render the glyph with its origin at the given x,y
 
-    const GLfloat w = GetHAdv (pFont, pGlyph),
-                  h = GetLineSpacing (pFont);
+            float ori_x, ori_y;
+            GetGlyphOrigin (pFont, pGlyph, ori_x, ori_y);
 
-    bool end_render = string_pos >= pO->to,
-         first_glyph = string_pos <= pO->from,
+            if (pGlyph->tex)
+                glRenderGlyph (pFont, pGlyph, x - ori_x, y - ori_y);
 
-         // If the y value has changed, means a new line started
-         new_line = abs ((y - ori_y) - pO->current_y) >= h,
-
-         // A rect ends when we've passed 'to' or a new line is started
-         end_prev_rect = end_render || new_line,
-
-         // A rect starts when we're at the first glyph or a new line is started
-         start_new_rect = new_line || first_glyph;
-
-    if (end_prev_rect)
-    {
-        // Render a quad from start to previous glyph
-
-        GLfloat x1, y1, x2, y2;
-
-        x1 = pO->start_x;
-        x2 = pO->end_x;
-        y1 = pO->current_y;
-        y2 = y1 + h;
-
-        glBegin (GL_QUADS);
-        glVertex2f (x1, y1);
-        glVertex2f (x2, y1);
-        glVertex2f (x2, y2);
-        glVertex2f (x1, y2);
-        glEnd ();
-    }
-    if (start_new_rect)
-    {
-        // Remember the start x,y
-
-        pO->start_x = x - ori_x;
-        pO->current_y = y - ori_y;
-    }
-
-    if (end_render)
-        return false;
-
-    // Remember the ending x of the last rect-included glyph
-    pO->end_x = x - ori_x + w;
-
-    return true;
+            return true;
+        },
+        align, maxWidth);
 }
 void glRenderTextAsRects (const Font *pFont, const char *pUTF8,
                           const int from, const int to,
@@ -1524,77 +1460,74 @@ void glRenderTextAsRects (const Font *pFont, const char *pUTF8,
     if (from >= to || from < 0)
         return; // nothing to do
 
-    TextRectObject o;
-    o.from = from;
-    o.to = to;
+    float start_x, current_y, end_x;
 
     glFrontFace (GL_CW);
     glActiveTexture (GL_TEXTURE0);
 
     ThroughText (pFont, pUTF8,
-                 glRenderTextAsRectsCallBack, &o,
-                 align, maxWidth);
-}
-
-struct GlyphAtObject
-{
-    int pos,
-        leftmost_pos,
-        rightmost_pos;
-    float px, py;
-};
-bool WhichGlyphAtCallBack (const Font *pFont, const Glyph *pGlyph, const float x, const float y, const int string_pos, void *p)
-{
-    GlyphAtObject *pO = (GlyphAtObject *)p;
-
-    // Calculate glyph bounding box:
-    float ori_x,
-          ori_y,
-          h_adv;
-
-    GetGlyphOrigin (pFont, pGlyph, ori_x, ori_y);
-
-    h_adv = GetHAdv (pFont, pGlyph);
-
-    float x1 = x - ori_x,
-          x2 = x1 + h_adv,
-          y1 = y - ori_y,
-          y2 = y1 + GetLineSpacing (pFont);
-
-    // See if px,py hits the bounding box:
-
-    if (pO->py < y1)
-    {
-        // point is above this line, we will not encounter it anymore in the upcoming lines
-
-        return false;
-    }
-    else if (pO->py > y1 && pO->py < y2)
-    {
-        // point is on this line
-
-        if (pO->px >= x1 && pO->px < x2) // point is inside the glyph's box
+        [&] (const Glyph *pGlyph, const float x, const float y, const int string_pos)
         {
-            pO->pos = string_pos;
+            if (string_pos < from)
+            {
+                return true; // no rects yet, wait till after 'from'
+            }
 
-            return true; // we might want the next glyph, after kerning
-        }
-        else if (pO->px < x1 && pO->leftmost_pos < 0) // leftmost_pos not yet set and point is to the left of the glyph
-        {
-            pO->leftmost_pos = string_pos;
+            float ori_x, ori_y;
+            GetGlyphOrigin (pFont, pGlyph, ori_x, ori_y);
+
+            const GLfloat w = GetHAdv (pFont, pGlyph),
+                          h = GetLineSpacing (pFont);
+
+            bool end_render = string_pos >= to,
+                 first_glyph = string_pos <= from,
+
+                 // If the y value has changed, means a new line started
+                 new_line = abs ((y - ori_y) - current_y) >= h,
+
+                 // A rect ends when we've passed 'to' or a new line is started
+                 end_prev_rect = end_render || new_line,
+
+                 // A rect starts when we're at the first glyph or a new line is started
+                 start_new_rect = new_line || first_glyph;
+
+            if (end_prev_rect)
+            {
+                // Render a quad from start to previous glyph
+
+                GLfloat x1, y1, x2, y2;
+
+                x1 = start_x;
+                x2 = end_x;
+                y1 = current_y;
+                y2 = y1 + h;
+
+                glBegin (GL_QUADS);
+                glVertex2f (x1, y1);
+                glVertex2f (x2, y1);
+                glVertex2f (x2, y2);
+                glVertex2f (x1, y2);
+                glEnd ();
+            }
+            if (start_new_rect)
+            {
+                // Remember the start x,y
+
+                start_x = x - ori_x;
+                current_y = y - ori_y;
+            }
+
+            if (end_render)
+                return false;
+
+            // Remember the ending x of the last rect-included glyph
+            end_x = x - ori_x + w;
 
             return true;
-        }
-        else if (pO->px > x2 && pO->pos < 0) // pos is not yet set and point is to the right of the glyph
-        {
-            pO->rightmost_pos = string_pos;
-
-            return true;
-        }
-    }
-
-    return (pO->pos < 0); // as long as index is -1, keep checking the next glyph
+        },
+        align, maxWidth);
 }
+
 int WhichGlyphAt (const Font *pFont, const char *pUTF8,
                   const float px, const float py,
                   const int align, float maxWidth)
@@ -1603,90 +1536,98 @@ int WhichGlyphAt (const Font *pFont, const char *pUTF8,
         Important! Index positions must be set to a negative number at start.
         Negative is interpreted as 'unset'.
      */
-    GlyphAtObject o;
-    o.pos = -1;
-    o.leftmost_pos = -1;
-    o.rightmost_pos = -1;
-    o.px = px;
-    o.py = py;
+    int pos = -1,
+        leftmost_pos = -1,
+        rightmost_pos = -1;
 
     ThroughText (pFont, pUTF8,
-                 WhichGlyphAtCallBack, &o,
-                 align, maxWidth);
+        [&] (const Glyph *pGlyph, const float x, const float y, const int string_pos)
+        {
+            // Calculate glyph bounding box:
+            float ori_x,
+                  ori_y,
+                  h_adv;
 
-    if (o.pos < 0) // no exact match, but maybe the point is on the same line
+            GetGlyphOrigin (pFont, pGlyph, ori_x, ori_y);
+
+            h_adv = GetHAdv (pFont, pGlyph);
+
+            float x1 = x - ori_x,
+                  x2 = x1 + h_adv,
+                  y1 = y - ori_y,
+                  y2 = y1 + GetLineSpacing (pFont);
+
+            // See if px,py hits the bounding box:
+
+            if (py < y1)
+            {
+                // point is above this line, we will not encounter it anymore in the upcoming lines
+
+                return false;
+            }
+            else if (py > y1 && py < y2)
+            {
+                // point is on this line
+
+                if (px >= x1 && px < x2) // point is inside the glyph's box
+                {
+                    pos = string_pos;
+
+                    return true; // we might want the next glyph, after kerning
+                }
+                else if (px < x1 && leftmost_pos < 0) // leftmost_pos not yet set and point is to the left of the glyph
+                {
+                    leftmost_pos = string_pos;
+
+                    return true;
+                }
+                else if (px > x2 && pos < 0) // pos is not yet set and point is to the right of the glyph
+                {
+                    rightmost_pos = string_pos;
+
+                    return true;
+                }
+            }
+
+            return (pos < 0); // as long as index is -1, keep checking the next glyph
+        },
+        align, maxWidth);
+
+    if (pos < 0) // no exact match, but maybe the point is on the same line
     {
-        if (o.leftmost_pos >= 0)
+        if (leftmost_pos >= 0)
 
-            return o.leftmost_pos;
+            return leftmost_pos;
 
-        else if (o.rightmost_pos >= 0)
+        else if (rightmost_pos >= 0)
 
-            return o.rightmost_pos;
+            return rightmost_pos;
     }
 
-    return o.pos;
-}
-bool CoordsOfGlyphCallBack (const Font *pFont, const Glyph *pGlyph, const float x, const float y, const int string_pos, void *p)
-{
-    GlyphAtObject *pO = (GlyphAtObject *)p;
-
-    if (pO->pos == string_pos) // is this the glyph we were looking for?
-    {
-        float ori_x,
-              ori_y;
-        GetGlyphOrigin (pFont, pGlyph, ori_x, ori_y);
-
-        // Return its position
-        pO->px = x - ori_x;
-        pO->py = y - ori_y;
-
-        return false;
-    }
-    return true;
+    return pos;
 }
 void CoordsOfGlyph (const Font *pFont, const char *pUTF8, const int pos,
                          float &outX, float &outY,
                          const int align, float maxWidth)
 {
-    GlyphAtObject o;
-    o.pos = pos;
-
-    // Default returned coords:
-    o.px = 0;
-    o.py = 0;
-
     ThroughText (pFont, pUTF8,
-                 CoordsOfGlyphCallBack, &o,
-                 align, maxWidth);
+        [&] (const Glyph *pGlyph, const float x, const float y, const int string_pos)
+        {
+            if (pos == string_pos) // is this the glyph we were looking for?
+            {
+                float ori_x,
+                      ori_y;
+                GetGlyphOrigin (pFont, pGlyph, ori_x, ori_y);
 
-    outX = o.px;
-    outY = o.py;
-}
-struct DimensionsTracker
-{
-    float minX, maxX, minY, maxY;
-};
-bool DimensionsOfTextCallBack (const Font *pFont, const Glyph *pGlyph, const float x, const float y, const int string_pos, void *p)
-{
-    DimensionsTracker *pT = (DimensionsTracker *)p;
+                // Return its position
+                outX = x - ori_x;
+                outY = y - ori_y;
 
-    // Calculate glyph bounding box:
-    float ori_x, ori_y, h_adv;
-    GetGlyphOrigin (pFont, pGlyph, ori_x, ori_y);
-
-    h_adv = GetHAdv (pFont, pGlyph);
-
-    float x1 = x - ori_x, x2 = x1 + h_adv,
-          y1 = y - ori_y, y2 = y1 + GetLineSpacing (pFont);
-
-    // Expand text bounding box with glyph's bounding box:
-    pT->minX = std::min (x1, pT->minX);
-    pT->minY = std::min (y1, pT->minY);
-    pT->maxX = std::max (x2, pT->maxX);
-    pT->maxY = std::max (y2, pT->maxY);
-
-    return true;
+                return false;
+            }
+            return true;
+        },
+        align, maxWidth);
 }
 void DimensionsOfText (const Font *pFont, const char *pUTF8,
                        float &outX1, float &outY1, float &outX2, float &outY2,
@@ -1704,16 +1645,34 @@ void DimensionsOfText (const Font *pFont, const char *pUTF8,
         and the maxima to unrealistically negative numbers. That way, we
         know for sure that they'll be overruled by the glyphs in the text.
      */
-    DimensionsTracker t;
-    t.minX = t.minY = 1.0e+15f;
-    t.maxX = t.maxY = -1.0e+15f;
+    float minX, maxX, minY, maxY;
+    minX = minY = 1.0e+15f;
+    maxX = maxY = -1.0e+15f;
 
     ThroughText (pFont, pUTF8,
-                 DimensionsOfTextCallBack, &t,
-                 align, maxWidth);
+        [&] (const Glyph *pGlyph, const float x, const float y, const int string_pos)
+        {
+            // Calculate glyph bounding box:
+            float ori_x, ori_y, h_adv;
+            GetGlyphOrigin (pFont, pGlyph, ori_x, ori_y);
 
-    outX1 = t.minX;
-    outX2 = t.maxX;
-    outY1 = t.minY;
-    outY2 = t.maxY;
+            h_adv = GetHAdv (pFont, pGlyph);
+
+            float x1 = x - ori_x, x2 = x1 + h_adv,
+                  y1 = y - ori_y, y2 = y1 + GetLineSpacing (pFont);
+
+            // Expand text bounding box with glyph's bounding box:
+            minX = std::min (x1, minX);
+            minY = std::min (y1, minY);
+            maxX = std::max (x2, maxX);
+            maxY = std::max (y2, maxY);
+
+            return true;
+        },
+        align, maxWidth);
+
+    outX1 = minX;
+    outX2 = maxX;
+    outY1 = minY;
+    outY2 = maxY;
 }

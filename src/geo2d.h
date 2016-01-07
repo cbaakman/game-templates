@@ -27,8 +27,13 @@
 
 struct vec2
 {
-    // coordinates:
-    float x, y;
+    // coordinates, y is the same as z:
+    float x;
+    union
+    {
+        float y;
+        float z;
+    };
 
     /*
         vec2 objects can be added on, subtracted and
@@ -41,6 +46,8 @@ struct vec2
     vec2 operator- (const vec2 &v2) const;
     void operator+= (const vec2 &v2);
     void operator-= (const vec2 &v2);
+    void operator/= (const float v);
+    void operator*= (const float v);
     bool operator== (const vec2 &other) const;
     vec2 operator- () const;
 
@@ -48,18 +55,18 @@ struct vec2
         length2 is the squared length, it's
         computationally less expensive than Length
      */
-    float length2 () const;
-    float length () const;
+    float Length2 () const;
+    float Length () const;
 
-    float angle () const; // with x-axis
+    float Angle () const; // with x-axis
 
-    vec2 unit () const; // the unit vector has length 1.0
+    vec2 Unit () const; // the unit vector has length 1.0
 
     /**
      * Rotates this vector in counter clockwise direction.
      * :param angle: angle in radians
      */
-    vec2 rotate (float angle) const;
+    vec2 Rotate (const float angle) const;
 
     vec2 ();
     vec2 (float x, float y);
@@ -70,22 +77,22 @@ vec2 operator* (const float &f, const vec2 &v);
     distance2 is squared distance, it's
     computationally less expensive than distance.
  */
-float distance2(const vec2 &v1, const vec2 &v2);
-float distance(const vec2 &v1, const vec2 &v2);
+float Distance2(const vec2 &v1, const vec2 &v2);
+float Distance(const vec2 &v1, const vec2 &v2);
 
-float dot (const vec2 &v1, const vec2 &v2);
+float Dot (const vec2 &v1, const vec2 &v2);
 
 // angle between two vectors, in radians:
-float angle (const vec2 &v1, const vec2 &v2);
+float Angle (const vec2 &v1, const vec2 &v2);
 
 // projects on vector on the other:
-vec2 projection(const vec2& v,const vec2& on_v);
+vec2 Projection(const vec2& v,const vec2& on_v);
 
 /**
  * Gets the intersection between line a (from a1 to a2)
  * and line b (from b1 to b2).
  */
-vec2 lineIntersection (const vec2& a1, const vec2& a2, const vec2& b1, const vec2& b2);
+vec2 LineIntersection (const vec2& a1, const vec2& a2, const vec2& b1, const vec2& b2);
 
 /**
  * Calculates the position for a point on a bezier curve.
@@ -96,6 +103,6 @@ vec2 lineIntersection (const vec2& a1, const vec2& a2, const vec2& b1, const vec
  * For more information, see:
  *  https://en.wikipedia.org/wiki/B%C3%A9zier_curve
  */
-vec2 pointOnBezierCurve (float t, const vec2& p0, const vec2& p1, const vec2& p2, const vec2& p3);
+vec2 PointOnBezierCurve (float t, const vec2& p0, const vec2& p1, const vec2& p2, const vec2& p3);
 
 #endif

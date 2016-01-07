@@ -121,57 +121,74 @@ MapperScene::~MapperScene ()
 
     glDeleteProgram (shaderProgram);
 }
-bool MapperScene::Init (void)
+LoadFunc GetMapperTextureLoadFunc (const std::string &zipPath, const std::string &pngPath, Texture *pTexture)
 {
-    std::string resPath = std::string(SDL_GetBasePath()) + "test3d.zip";
+    return [zipPath, pngPath, pTexture] ()
+    {
+        SDL_RWops *f;
+        bool success;
 
-    SDL_RWops *f;
-    bool success;
+        // Load color texture
+        f = SDL_RWFromZipArchive (zipPath.c_str(), pngPath.c_str());
+        if (!f)
+            return false;
+
+        success = LoadPNG (f, pTexture);
+        f->close(f);
+
+        if (!success)
+        {
+            SetError ("error parsing %s: %s", pngPath.c_str(), GetError ());
+            return false;
+        }
+
+        return true;
+    };
+}
+void MapperScene::AddAll (Loader *pLoader)
+{
+    const std::string resPath = std::string (SDL_GetBasePath()) + "test3d.zip";
 
     // Load color texture
-    f = SDL_RWFromZipArchive (resPath.c_str(), "granite.png");
-    if (!f)
-        return false;
-    success = LoadPNG(f, &texColor);
-    f->close(f);
-
-    if (!success)
-    {
-        SetError ("error parsing granite.png: %s", GetError ());
-        return false;
-    }
+    pLoader->Add (GetMapperTextureLoadFunc (resPath, "granite.png", &texColor));
 
     // Load displace texture
-    f = SDL_RWFromZipArchive (resPath.c_str(), "granite_d.png");
-    if (!f)
-        return false;
-    success = LoadPNG(f, &texDisplace);
-    f->close(f);
-
-    if (!success)
-    {
-        SetError ("error parsing granite_d.png: %s", GetError ());
-        return false;
-    }
+    pLoader->Add (GetMapperTextureLoadFunc (resPath, "granite_d.png", &texDisplace));
 
     // Create shader from sources:
-    shaderProgram = CreateShaderProgram (displace_vsh, displace_fsh);
-    if (!shaderProgram)
-    {
-        SetError ("error creating mapper shader program: %s", GetError ());
-        return false;
-    }
+    pLoader->Add (
+        [&] ()
+        {
+            GLuint vsh, fsh;
 
+            vsh = CreateShader (displace_vsh, GL_VERTEX_SHADER);
+            fsh = CreateShader (displace_fsh, GL_FRAGMENT_SHADER);
+            if (!(fsh && vsh))
+            {
+                glDeleteShader (vsh);
+                glDeleteShader (fsh);
+                return false;
+            }
 
-    // Pick tangent and bitangent index:
-    GLint max_attribs;
-    glGetIntegerv (GL_MAX_VERTEX_ATTRIBS, &max_attribs);
+            shaderProgram = CreateShaderProgram (vsh, fsh);
 
-    index_tangent = max_attribs - 2;
-    index_bitangent = max_attribs - 1;
+            // schedule for deletion:
+            glDeleteShader (vsh);
+            glDeleteShader (fsh);
 
+            if (!shaderProgram)
+                return false;
 
-    return true;
+            // Pick tangent and bitangent index:
+            GLint max_attribs;
+            glGetIntegerv (GL_MAX_VERTEX_ATTRIBS, &max_attribs);
+
+            index_tangent = max_attribs - 2;
+            index_bitangent = max_attribs - 1;
+
+            return true;
+        }
+    );
 }
 void MapperScene::Render (void)
 {

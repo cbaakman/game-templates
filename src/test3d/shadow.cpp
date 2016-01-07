@@ -239,7 +239,7 @@ void UpdateNormalMapVertices (VertexBuffer *pBuffer, const MeshState *pMesh, con
     }
 
     pMesh->ThroughSubsetFaces (subset_id,
-        [&] (void *, const int n_vertices, const MeshVertex **p_vertices, const MeshTexel *texels)
+        [&] (const int n_vertices, const MeshVertex **p_vertices, const MeshTexel *texels)
         {
             m = 0;
             if (n_vertices >= 3)
@@ -332,7 +332,7 @@ bool SetTexturedVertices (VertexBuffer *pBuffer, const MeshData *pData, const st
     }
 
     ThroughSubsetFaces (pData, subset_id,
-        [&](void *, const int n_vertex, const MeshVertex **p_vertices, const MeshTexel *texels)
+        [&](const int n_vertex, const MeshVertex **p_vertices, const MeshTexel *texels)
         {
             m = 0;
             if (n_vertex >= 3)
@@ -379,226 +379,196 @@ void RenderTexturedVertices (const VertexBuffer *pBuffer)
 
     glBindBuffer (GL_ARRAY_BUFFER, 0);
 }
-bool ShadowScene::Init (void)
+LoadFunc GetShTextureLoadFunc (const std::string &zipPath, const std::string &pngPath, Texture *pTexture)
+{
+    return [zipPath, pngPath, pTexture] ()
+    {
+        SDL_RWops *f = SDL_RWFromZipArchive (zipPath.c_str(), pngPath.c_str ());
+        if (!f) // file or archive missing
+            return false;
+
+        bool success = LoadPNG(f, pTexture);
+        f->close(f);
+
+        if (!success)
+        {
+            SetError ("error parsing %s: %s", pngPath.c_str (), GetError ());
+            return false;
+        }
+
+        return true;
+    };
+}
+bool LoadMesh (const std::string &zipPath, const std::string &xmlPath, MeshData *pData)
+{
+    // Load mesh as xml:
+
+    SDL_RWops *f = SDL_RWFromZipArchive (zipPath.c_str(), xmlPath.c_str ());
+    if (!f)
+        return false;
+
+    xmlDocPtr  pDoc = ParseXML (f);
+    f->close(f);
+
+    if (!pDoc)
+    {
+        SetError ("error parsing %s: %s", xmlPath.c_str (), GetError ());
+        return false;
+    }
+
+    // Convert xml to mesh:
+
+    bool success = ParseMesh (pDoc, pData);
+    xmlFreeDoc (pDoc);
+
+    if (!success)
+    {
+        SetError ("error parsing %s: %s", xmlPath.c_str (), GetError ());
+        return false;
+    }
+
+    return true;
+}
+void ShadowScene::AddAll (Loader *pLoader)
 {
     /*
         Load and parse all resources.
         On failure, set the error message and return false.
      */
 
-    std::string resPath = std::string(SDL_GetBasePath()) + "test3d.zip";
-
-    SDL_RWops *f;
-    bool success;
-    xmlDocPtr pDoc;
+    const std::string resPath = std::string (SDL_GetBasePath()) + "test3d.zip";
 
     // Load dummy texture:
-
-    f = SDL_RWFromZipArchive (resPath.c_str(), "dummy.png");
-    if (!f) // file or archive missing
-        return false;
-
-    success = LoadPNG(f, &texDummy);
-    f->close(f);
-
-    if (!success)
-    {
-        SetError ("error parsing dummy.png: %s", GetError ());
-        return false;
-    }
+    pLoader->Add (GetShTextureLoadFunc (resPath, "dummy.png", &texDummy));
 
     // Load dummy normal texture:
-
-    f = SDL_RWFromZipArchive (resPath.c_str(), "dummy_n.png");
-    if (!f) // file or archive missing
-        return false;
-
-    success = LoadPNG(f, &texDummyNormal);
-    f->close(f);
-
-    if (!success)
-    {
-        SetError ("error parsing dummy_n.png: %s", GetError ());
-        return false;
-    }
+    pLoader->Add (GetShTextureLoadFunc (resPath, "dummy_n.png", &texDummyNormal));
 
     // Load dummy mesh as xml document:
+    pLoader->Add (
+        [resPath, this] ()
+        {
+            if (!LoadMesh (resPath, "dummy.xml", &meshDataDummy))
+                return false;
 
-    f = SDL_RWFromZipArchive (resPath.c_str(), "dummy.xml");
-    if (!f)
-        return false;
-    pDoc = ParseXML(f);
-    f->close(f);
+            pMeshDummy = new MeshState (&meshDataDummy);
 
-    if (!pDoc)
-    {
-        SetError ("error parsing dummy.xml: %s", GetError ());
-        return false;
-    }
+            /*
+                The dummy mesh is animated and will change shape every frame. However, the number of
+                vertices doesn't change, so we can allocate a vertex buffer here already.
 
-    // Convert xml document to mesh object:
+                It will be refilled every frame.
+             */
 
-    success = ParseMesh (pDoc, &meshDataDummy);
-    xmlFreeDoc (pDoc);
+            glGenBuffer (&vbo_dummy);
+            vbo_dummy.n_vertices = 3 * (meshDataDummy.quads.size () * 2 + meshDataDummy.triangles.size ());
+            glBindBuffer (GL_ARRAY_BUFFER, vbo_dummy.handle);
+            glBufferData (GL_ARRAY_BUFFER, sizeof (NormalMapVertex) * vbo_dummy.n_vertices, NULL, GL_DYNAMIC_DRAW);
+            glBindBuffer (GL_ARRAY_BUFFER, 0);
 
-    if (!success)
-    {
-        SetError ("error parsing dummy.xml: %s", GetError ());
-        return false;
-    }
+            // Derive shadow objects from dummy mesh:
+            shadowTriangles = new STriangle [meshDataDummy.triangles.size() + 2 * meshDataDummy.quads.size()];
 
-    /*
-        The dummy mesh is animated and will change shape every frame. However, the number of
-        vertices doesn't change, so we can allocate a vertex buffer here already.
-
-        It will be refilled every frame.
-     */
-
-    glGenBuffer (&vbo_dummy);
-    vbo_dummy.n_vertices = 3 * (meshDataDummy.quads.size () * 2 + meshDataDummy.triangles.size ());
-    glBindBuffer (GL_ARRAY_BUFFER, vbo_dummy.handle);
-    glBufferData (GL_ARRAY_BUFFER, sizeof (NormalMapVertex) * vbo_dummy.n_vertices, NULL, GL_DYNAMIC_DRAW);
-    glBindBuffer (GL_ARRAY_BUFFER, 0);
+            return true;
+        }
+    );
 
     // Load environment texture:
-
-    f = SDL_RWFromZipArchive (resPath.c_str(), "box.png");
-    if (!f)
-        return false;
-    success = LoadPNG (f, &texBox);
-    f->close (f);
-
-    if (!success)
-    {
-        SetError ("error parsing box.png: %s", GetError ());
-        return false;
-    }
+    pLoader->Add (GetShTextureLoadFunc (resPath, "box.png", &texBox));
 
     // Load environment mesh as xml:
+    pLoader->Add (
+        [resPath, this] ()
+        {
+            if (!LoadMesh (resPath, "box.xml", &meshDataBox))
+                return false;
 
-    f = SDL_RWFromZipArchive (resPath.c_str(), "box.xml");
-    if (!f)
-        return false;
-    pDoc = ParseXML(f);
-    f->close(f);
+            /*
+                This mesh is not animated, so we only need to fill the vertex buffer once
+                and render from it every frame.
+             */
 
-    if (!pDoc)
-    {
-        SetError ("error parsing box.xml: %s", GetError ());
-        return false;
-    }
+            glGenBuffer (&vbo_box);
+            if (!SetTexturedVertices (&vbo_box, &meshDataBox, "0"))
+            {
+                SetError ("error filling vertex buffer for box");
+                return false;
+            }
 
-    // Convert xml to mesh:
+            // Derive collision objects from mesh:
+            ToTriangles (&meshDataBox, &collision_triangles, &n_collision_triangles);
 
-    success = ParseMesh(pDoc, &meshDataBox);
-    xmlFreeDoc (pDoc);
+            // Put the player on the ground we just generated:
+            posPlayer = CollisionMove (posPlayer, vec3 (posPlayer.x, -1000.0f, posPlayer.z),
+                                       colliders, N_PLAYER_COLLIDERS, collision_triangles, n_collision_triangles);
 
-    if (!success)
-    {
-        SetError ("error parsing box.xml: %s", GetError ());
-        return false;
-    }
-
-    /*
-        This mesh is not animated, so we only need to fill the vertex buffer once
-        and render from it every frame.
-     */
-
-    glGenBuffer (&vbo_box);
-    if (!SetTexturedVertices (&vbo_box, &meshDataBox, "0"))
-    {
-        SetError ("error filling vertex buffer for box");
-        return false;
-    }
+            return true;
+        }
+    );
 
     // Load skybox texture:
-
-    f = SDL_RWFromZipArchive (resPath.c_str(), "sky.png");
-    if (!f)
-        return false;
-    success = LoadPNG(f, &texSky);
-    f->close(f);
-
-    if (!success)
-    {
-        SetError ("error parsing sky.png: %s", GetError ());
-        return false;
-    }
+    pLoader->Add (GetShTextureLoadFunc (resPath, "sky.png", &texSky));
 
     // Load skybox mesh as xml:
+    pLoader->Add (
+        [resPath, this] ()
+        {
+            if (!LoadMesh (resPath, "sky.xml", &meshDataSky))
+                return false;
 
-    f = SDL_RWFromZipArchive (resPath.c_str(), "sky.xml");
-    if (!f)
-        return false;
-    pDoc = ParseXML(f);
-    f->close(f);
+            /*
+                This mesh is not animated, so we only need to fill the vertex buffer once
+                and render from it every frame.
+             */
 
-    if (!pDoc)
-    {
-        SetError ("error parsing sky.xml: %s", GetError ());
-        return false;
-    }
+            glGenBuffer (&vbo_sky);
+            if (!SetTexturedVertices (&vbo_sky, &meshDataSky, "0"))
+            {
+                SetError ("error filling vertex buffer for box");
+                return false;
+            }
 
-    // convert xml to mesh:
-
-    success = ParseMesh(pDoc, &meshDataSky);
-    xmlFreeDoc (pDoc);
-
-    if (!success)
-    {
-        SetError ("error parsing sky.xml: %s", GetError ());
-        return false;
-    }
-
-    // The skybox mesh isn't animated either, so load into vertex buffer only once.
-
-    glGenBuffer (&vbo_sky);
-    if (!SetTexturedVertices (&vbo_sky, &meshDataSky, "0"))
-    {
-        SetError ("error filling vertex buffer for sky");
-        return false;
-    }
+            return true;
+        }
+    );
 
     // Load texture for the particles:
+    pLoader->Add (GetShTextureLoadFunc (resPath, "particle.png", &texPar));
 
-    f = SDL_RWFromZipArchive (resPath.c_str(), "particle.png");
-    if (!f)
-        return false;
-    success = LoadPNG(f, &texPar);
-    f->close(f);
+    // Create shader object for player:
+    pLoader->Add (
+        [this] ()
+        {
+            GLuint vsh, fsh;
 
-    if (!success)
-    {
-        SetError ("error parsing particle.png: %s", GetError ());
-        return false;
-    }
+            vsh = CreateShader (normal_vsh, GL_VERTEX_SHADER);
+            fsh = CreateShader (normal_fsh, GL_FRAGMENT_SHADER);
+            if (!(fsh && vsh))
+            {
+                glDeleteShader (vsh);
+                glDeleteShader (fsh);
+                return false;
+            }
 
-    shader_normal = CreateShaderProgram (normal_vsh, normal_fsh);
-    if (!shader_normal)
-    {
-        SetError ("error creating normal shader program: %s", GetError ());
-        return false;
-    }
+            shader_normal = CreateShaderProgram (vsh, fsh);
 
-    // Pick tangent and bitangent index:
-    GLint max_attribs;
-    glGetIntegerv (GL_MAX_VERTEX_ATTRIBS, &max_attribs);
+            // schedule for deletion:
+            glDeleteShader (vsh);
+            glDeleteShader (fsh);
 
-    index_tangent = max_attribs - 2;
-    index_bitangent = max_attribs - 1;
+            if (!shader_normal)
+                return false;
 
-    // Derive extra objects from the data we just loaded:
+            // Pick tangent and bitangent index:
+            GLint max_attribs;
+            glGetIntegerv (GL_MAX_VERTEX_ATTRIBS, &max_attribs);
 
-    shadowTriangles = new STriangle[meshDataDummy.triangles.size() + 2 * meshDataDummy.quads.size()];
+            index_tangent = max_attribs - 2;
+            index_bitangent = max_attribs - 1;
 
-    pMeshDummy = new MeshState (&meshDataDummy);
-    ToTriangles (&meshDataBox, &collision_triangles, &n_collision_triangles);
-
-    // Put the player on the ground we just generated
-    posPlayer = CollisionMove (posPlayer, vec3 (posPlayer.x, -1000.0f, posPlayer.z),
-                               colliders, N_PLAYER_COLLIDERS, collision_triangles, n_collision_triangles);
-
-    return true;
+            return true;
+        }
+    );
 }
 
 void getCameraPosition( const vec3 &center,
@@ -748,7 +718,7 @@ int GetTriangles (const MeshState *pMesh, STriangle *triangles)
     int i = 0,
         m;
     pMesh->ThroughFaces (
-        [&](void *, const int n_vertex, const MeshVertex **p_vertices, const MeshTexel *texels)
+        [&](const int n_vertex, const MeshVertex **p_vertices, const MeshTexel *texels)
         {
             m = 0;
             if (n_vertex >= 3)
@@ -983,7 +953,7 @@ enum RenderMode {RENDER_FACE, RENDER_NBT};
 /**
  * Renders Normal, Tangent and Bitangent for debugging
  */
-void RenderNBT (void *, const int n_vertices, const MeshVertex **p_vertices, const MeshTexel *texels)
+void RenderNBT (const int n_vertices, const MeshVertex **p_vertices, const MeshTexel *texels)
 {
     glBegin (GL_LINES);
 

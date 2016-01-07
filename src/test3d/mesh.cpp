@@ -92,7 +92,7 @@ void ToTriangles (const MeshData *pMeshData, Triangle **pT, size_t *pN)
     *pN = n_triangles;
     *pT = triangles;
 }
-void ThroughSubsetFaces (const MeshData *pMeshData, const std::string &id, MeshFaceFunc func, void *pObj)
+void ThroughSubsetFaces (const MeshData *pMeshData, const std::string &id, MeshFaceFunc func)
 {
     if (pMeshData->subsets.find (id) == pMeshData->subsets.end ())
     {
@@ -111,7 +111,7 @@ void ThroughSubsetFaces (const MeshData *pMeshData, const std::string &id, MeshF
             vs [j] = &pMeshData->vertices.at (pQuad->GetVertexID(j));
         }
 
-        func (pObj, 4, vs, pQuad->texels);
+        func (4, vs, pQuad->texels);
     }
     for (auto it = pSubset->triangles.begin(); it != pSubset->triangles.end(); it++)
     {
@@ -121,10 +121,10 @@ void ThroughSubsetFaces (const MeshData *pMeshData, const std::string &id, MeshF
             vs [j] = &pMeshData->vertices.at (pTriangle->GetVertexID(j));
         }
 
-        func (pObj, 3, vs, pTriangle->texels);
+        func (3, vs, pTriangle->texels);
     }
 }
-void ThrougFaces (const MeshData *pMeshData, MeshFaceFunc func, void *pObj)
+void ThrougFaces (const MeshData *pMeshData, MeshFaceFunc func)
 {
     const MeshVertex *vs [4];
 
@@ -136,7 +136,7 @@ void ThrougFaces (const MeshData *pMeshData, MeshFaceFunc func, void *pObj)
             vs [j] = &pMeshData->vertices.at (pQuad->GetVertexID(j));
         }
 
-        func (pObj, 4, vs, pQuad->texels);
+        func (4, vs, pQuad->texels);
     }
     for (auto it = pMeshData->triangles.begin(); it != pMeshData->triangles.end(); it++)
     {
@@ -146,10 +146,10 @@ void ThrougFaces (const MeshData *pMeshData, MeshFaceFunc func, void *pObj)
             vs [j] = &pMeshData->vertices.at (pTriangle->GetVertexID(j));
         }
 
-        func (pObj, 3, vs, pTriangle->texels);
+        func (3, vs, pTriangle->texels);
     }
 }
-void MeshState::ThroughSubsetFaces (const std::string &id, MeshFaceFunc func, void *pObj) const
+void MeshState::ThroughSubsetFaces (const std::string &id, MeshFaceFunc func) const
 {
     if(pMeshData->subsets.find(id) == pMeshData->subsets.end())
     {
@@ -168,7 +168,7 @@ void MeshState::ThroughSubsetFaces (const std::string &id, MeshFaceFunc func, vo
             vs [j] = &vertexStates.at (pQuad->GetVertexID(j));
         }
 
-        func (pObj, 4, vs, pQuad->texels);
+        func (4, vs, pQuad->texels);
     }
     for (auto it = pSubset->triangles.begin(); it != pSubset->triangles.end(); it++)
     {
@@ -178,10 +178,10 @@ void MeshState::ThroughSubsetFaces (const std::string &id, MeshFaceFunc func, vo
             vs [j] = &vertexStates.at (pTriangle->GetVertexID(j));
         }
 
-        func (pObj, 3, vs, pTriangle->texels);
+        func (3, vs, pTriangle->texels);
     }
 }
-void MeshState::ThroughFaces (MeshFaceFunc func, void *pObj) const
+void MeshState::ThroughFaces (MeshFaceFunc func) const
 {
     const MeshVertex *vs [4];
 
@@ -193,7 +193,7 @@ void MeshState::ThroughFaces (MeshFaceFunc func, void *pObj) const
             vs [j] = &vertexStates.at (pQuad->GetVertexID(j));
         }
 
-        func (pObj, 4, vs, pQuad->texels);
+        func (4, vs, pQuad->texels);
     }
     for (auto it = pMeshData->triangles.begin(); it != pMeshData->triangles.end(); it++)
     {
@@ -203,7 +203,7 @@ void MeshState::ThroughFaces (MeshFaceFunc func, void *pObj) const
             vs [j] = &vertexStates.at (pTriangle->GetVertexID(j));
         }
 
-        func (pObj, 3, vs, pTriangle->texels);
+        func (3, vs, pTriangle->texels);
     }
 }
 

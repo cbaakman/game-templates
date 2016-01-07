@@ -25,22 +25,40 @@
 #include "mesh.h"
 #include "../texture.h"
 
+/**
+ * Demonstrates different techniques for rendering grass.
+ *
+ * Currently implemented methods:
+ * - layer by layer (looks like moss, not grass)
+ * - one polygon per blade (more expensive)
+ */
 class GrassScene : public App::Scene
 {
 private:
 
     float angleX, angleY, distCamera;
 
-    VertexBuffer vbo_hill;
+    VertexBuffer vbo_hill,
+                 vbo_grass;
     MeshData meshDataHill;
 
-    Texture texDots;
+    vec3 *grass_neutral_positions;
 
-    GLuint grassShader;
+    Texture texDots,
+            texGrass;
 
+    GLuint layerShader,
+           polyShader;
+
+    // wind parameters, makes the grass move
     vec3 wind;
     float t;
 
+    enum GrassMode {
+
+        GRASSMODE_LAYER, GRASSMODE_POLYGON,
+
+    } mode;
 public:
 
     GrassScene (App *);
@@ -53,6 +71,7 @@ public:
 
     void OnMouseWheel (const SDL_MouseWheelEvent *);
     void OnMouseMove (const SDL_MouseMotionEvent *);
+    void OnKeyPress (const SDL_KeyboardEvent *);
 };
 
 #endif // GRASS_H

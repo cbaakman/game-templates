@@ -22,6 +22,7 @@
 #include "../vec.h"
 #include "../err.h"
 #include "../xml.h"
+#include "../random.h"
 
 #include "../shader.h"
 
@@ -29,7 +30,15 @@
 #define NORMAL_INDEX 1
 #define TEXCOORD_INDEX 2
 
+const GLfloat grass_top_color [3] = {0.0f, 1.0f, 0.0f},
+              grass_bottom_color [3] = {0.0f, 0.5f, 0.0f};
+
 const char
+
+    /*
+        For some reason, 150 shaders don't work with client states,
+        so we must use vertex attributes to refer to position, normal ans texture coords.
+     */
 
     layer_vsh [] = R"shader(
         #version 150
@@ -65,7 +74,7 @@ const char
 
         uniform int layer,
                     n_layers;
-        uniform float extend_max = 0.5;
+        uniform float extend_max;
         uniform vec3 wind;
 
         uniform mat4 modelViewMatrix;
@@ -119,6 +128,9 @@ const char
         uniform sampler2D tex_dots;
         uniform int layer;
 
+        uniform vec3 top_color,
+                     bottom_color;
+
         in VertexData {
             vec3 eyeNormal;
             vec2 texCoord;
@@ -127,70 +139,290 @@ const char
 
         void main ()
         {
+            // On the texture, black is opaque, white is transparent.
             vec4 dotSample = texture2D (tex_dots, VertexIn.texCoord.st);
             float alpha = 1.0 - dotSample.r - VertexIn.extension * VertexIn.extension;
             if (layer <= 0)
                 alpha = 1.0;
 
-            gl_FragColor = vec4 (0.0, 0.5 + 0.5 * VertexIn.extension, 0.0, alpha);
+            vec3 color = (1.0 - VertexIn.extension) * bottom_color + VertexIn.extension * top_color;
+
+            gl_FragColor = vec4 (color, alpha);
+        }
+
+    )shader",
+
+    poly_fsh [] = R"shader(
+
+        uniform sampler2D tex_grass;
+
+        uniform vec3 top_color,
+                     bottom_color;
+
+        void main ()
+        {
+            // On the texture, black is opaque, white is transparent.
+            vec4 sample = texture2D (tex_grass, gl_TexCoord[0].st);
+
+            float a = gl_TexCoord[0].t * gl_TexCoord[0].t;
+            vec3 color = (1.0 - a) * bottom_color + a * top_color;
+
+            gl_FragColor = vec4 (color, 1.0 - sample.r);
         }
 
     )shader";
 
 GrassScene::GrassScene (App *pApp) : Scene (pApp),
     angleY(PI/4), angleX(PI/4), distCamera(3.0f),
-    grassShader(0),
-    wind(0.0f, 0.0f, 0.0f), t(0.0f)
+    layerShader(0), polyShader(0),
+    grass_neutral_positions(NULL),
+    wind(0.0f, 0.0f, 0.0f), t(0.0f),
+    mode(GRASSMODE_POLYGON)
 {
-    texDots.tex = 0;
+    texDots.tex = texGrass.tex = 0;
     std::memset (&vbo_hill, 0, sizeof (VertexBuffer));
+    std::memset (&vbo_grass, 0, sizeof (VertexBuffer));
 }
 GrassScene::~GrassScene ()
 {
+    delete [] grass_neutral_positions;
+
     glDeleteBuffer (&vbo_hill);
-    glDeleteProgram (grassShader);
+    glDeleteBuffer (&vbo_grass);
+    glDeleteProgram (layerShader);
+    glDeleteProgram (polyShader);
     glDeleteTextures (1, &texDots.tex);
+    glDeleteTextures (1, &texGrass.tex);
 }
 struct HillVertex
 {
     MeshVertex v;
     MeshTexel t;
 };
+struct GrassVertex
+{
+    MeshVertex v;
+    MeshTexel t;
+};
+/*
+    We can both enable vertex attribute arrays and client states to
+    represent vertex positions, normals and texture coordinates.
+    As long as they represent the same data format.
+ */
 void RenderHillVertices (const VertexBuffer *pBuffer)
 {
     glBindBuffer (GL_ARRAY_BUFFER, pBuffer->handle);
 
     // Match the vertex format: position [3], normal [3], texcoord [2]
-    //glEnableClientState (GL_VERTEX_ARRAY);
+    glEnableClientState (GL_VERTEX_ARRAY);
     glEnableVertexAttribArray (VERTEX_INDEX);
     glVertexAttribPointer (VERTEX_INDEX, 3, GL_FLOAT, GL_FALSE, sizeof (HillVertex), 0);
-    //glVertexPointer (3, GL_FLOAT, sizeof (HillVertex), 0);
+    glVertexPointer (3, GL_FLOAT, sizeof (HillVertex), 0);
 
-    //glEnableClientState (GL_NORMAL_ARRAY);
+    glEnableClientState (GL_NORMAL_ARRAY);
     glEnableVertexAttribArray (NORMAL_INDEX);
     glVertexAttribPointer (NORMAL_INDEX, 3, GL_FLOAT, GL_TRUE, sizeof (HillVertex), (const GLvoid *)(sizeof (vec3)));
-    //glNormalPointer (GL_FLOAT, sizeof (HillVertex), (const GLvoid *)(sizeof (vec3)));
+    glNormalPointer (GL_FLOAT, sizeof (HillVertex), (const GLvoid *)(sizeof (vec3)));
 
-    //glEnableClientState (GL_TEXTURE_COORD_ARRAY);
+    glEnableClientState (GL_TEXTURE_COORD_ARRAY);
     glEnableVertexAttribArray (TEXCOORD_INDEX);
     glVertexAttribPointer (TEXCOORD_INDEX, 2, GL_FLOAT, GL_FALSE, sizeof (HillVertex), (const GLvoid *)(2 * sizeof (vec3)));
-    //glTexCoordPointer (2, GL_FLOAT, sizeof (HillVertex), (const GLvoid *)(2 * sizeof (vec3)));
+    glTexCoordPointer (2, GL_FLOAT, sizeof (HillVertex), (const GLvoid *)(2 * sizeof (vec3)));
 
     glDrawArrays (GL_TRIANGLES, 0, pBuffer->n_vertices);
 
-    //glDisableClientState (GL_VERTEX_ARRAY);
+    glDisableClientState (GL_VERTEX_ARRAY);
     glDisableVertexAttribArray (VERTEX_INDEX);
-    //glDisableClientState (GL_NORMAL_ARRAY);
+    glDisableClientState (GL_NORMAL_ARRAY);
     glDisableVertexAttribArray (NORMAL_INDEX);
-    //glDisableClientState (GL_TEXTURE_COORD_ARRAY);
+    glDisableClientState (GL_TEXTURE_COORD_ARRAY);
     glDisableVertexAttribArray (TEXCOORD_INDEX);
 
+    glBindBuffer (GL_ARRAY_BUFFER, 0);
+}
+void RenderGrassVertices (const VertexBuffer *pBuffer)
+{
+    glBindBuffer (GL_ARRAY_BUFFER, pBuffer->handle);
+
+    // Match the vertex format: position [3], normal [3], texcoord [2]
+    glEnableClientState (GL_VERTEX_ARRAY);
+    glEnableVertexAttribArray (VERTEX_INDEX);
+    glVertexAttribPointer (VERTEX_INDEX, 3, GL_FLOAT, GL_FALSE, sizeof (GrassVertex), 0);
+    glVertexPointer (3, GL_FLOAT, sizeof (GrassVertex), 0);
+
+    glEnableClientState (GL_NORMAL_ARRAY);
+    glEnableVertexAttribArray (NORMAL_INDEX);
+    glVertexAttribPointer (NORMAL_INDEX, 3, GL_FLOAT, GL_TRUE, sizeof (GrassVertex), (const GLvoid *)(sizeof (vec3)));
+    glNormalPointer (GL_FLOAT, sizeof (GrassVertex), (const GLvoid *)(sizeof (vec3)));
+
+    glEnableClientState (GL_TEXTURE_COORD_ARRAY);
+    glEnableVertexAttribArray (TEXCOORD_INDEX);
+    glVertexAttribPointer (TEXCOORD_INDEX, 2, GL_FLOAT, GL_FALSE, sizeof (GrassVertex), (const GLvoid *)(2 * sizeof (vec3)));
+    glTexCoordPointer (2, GL_FLOAT, sizeof (GrassVertex), (const GLvoid *)(2 * sizeof (vec3)));
+
+    glDrawArrays (GL_TRIANGLES, 0, pBuffer->n_vertices);
+
+    glDisableClientState (GL_VERTEX_ARRAY);
+    glDisableVertexAttribArray (VERTEX_INDEX);
+    glDisableClientState (GL_NORMAL_ARRAY);
+    glDisableVertexAttribArray (NORMAL_INDEX);
+    glDisableClientState (GL_TEXTURE_COORD_ARRAY);
+    glDisableVertexAttribArray (TEXCOORD_INDEX);
+
+    glBindBuffer (GL_ARRAY_BUFFER, 0);
+}
+
+#define GRASS_PER_M2 200
+#define MAX_GRASS_ANGLE M_PI_4
+#define GRASS_WIDTH 0.2f
+#define GRASS_HEIGHT 0.6f
+bool GenGrassPolygons (VertexBuffer *pBuffer, vec3 **p_grass_neutral_positions, const MeshData *pMeshData, const std::string &subset_id)
+{
+    size_t i = 0,
+           m, u, j, k;
+
+    const int triangles [][3] = {{0, 1, 2}, {0, 2, 3}};
+
+    // Don't know this exactly, depends on the surface area of the floor:
+    const size_t n_vertices_estimate = GRASS_PER_M2 * 10 * (pMeshData->quads.size () * 2 + pMeshData->triangles.size ());
+
+    glBindBuffer (GL_ARRAY_BUFFER, pBuffer->handle);
+    glBufferData (GL_ARRAY_BUFFER, sizeof (GrassVertex) * n_vertices_estimate, NULL, GL_DYNAMIC_DRAW);
+    *p_grass_neutral_positions = new vec3 [n_vertices_estimate];
+
+    GrassVertex *pbuf = (GrassVertex *)glMapBuffer (GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+    if (!pbuf)
+    {
+        glBindBuffer (GL_ARRAY_BUFFER, 0);
+        SetError ("failed to obtain buffer pointer");
+        return false;
+    }
+
+    ThroughSubsetFaces (pMeshData, subset_id,
+        [&](const int n_vertex, const MeshVertex **p_vertices, const MeshTexel *)
+        {
+            m = 0;
+            if (n_vertex >= 3)
+                m++;
+            if (n_vertex >= 4)
+                m++;
+
+            for (u = 0; u < m; u++)
+            {
+                const vec3 p0 = p_vertices [triangles [u][0]]->p,
+                           p1 = p_vertices [triangles [u][1]]->p,
+                           p2 = p_vertices [triangles [u][2]]->p,
+                           n = Cross (p1 - p0, p2 - p0).Unit ();
+
+                const float l01 = (p1 - p0).Length (),
+                            l02 = (p2 - p0).Length (),
+                            l12 = (p2 - p1).Length (),
+                            s = (l01 + l02 + l12) / 2,
+                            area = sqrt (s * (s - l01) * (s - l02) * (s - l12));
+
+                const size_t n_blades = area * GRASS_PER_M2;
+                for (j = 0; j < n_blades; j++)
+                {
+                    if ((i + 6) >= n_vertices_estimate)
+                    {
+                        SetError ("vertex estimate exceeded");
+                        return false;
+                    }
+
+                    // Give each blade a random orientation and position on the triangle.
+                    float r1 = RandomFloat (0.0f, 1.0f),
+                          r2 = RandomFloat (0.0f, 1.0f),
+                          a = RandomFloat (0, 2 * M_PI),
+                          b = RandomFloat (-MAX_GRASS_ANGLE, MAX_GRASS_ANGLE),
+                          c = RandomFloat (-MAX_GRASS_ANGLE, MAX_GRASS_ANGLE);
+
+                    if (r2 > (1.0f - r1))
+                    {
+                        /*
+                            Outside the triangle, but inside the parallelogram.
+                            Rotate 180 degrees to fix
+                         */
+
+                        r2 = 1.0f - r2;
+                        r1 = 1.0f - r1;
+                    }
+
+                    matrix4 transf = matRotY (a) * matRotX (c) * matRotZ (b);
+
+                    vec3 base = p0 + r1 * (p1 - p0) + r2 * (p2 - p0),
+                         vertical = transf * n,
+                         horizontal = transf * Cross (n, VEC_FORWARD),
+                         normal = transf * VEC_BACK;
+
+                    // move grass down into the ground to correct for angle:
+                    base -= vertical * (GRASS_WIDTH / 2) * sin (b);
+
+                    // Make a quad from two triangles (6 vertices):
+
+                    pbuf [i].v.p = base - (GRASS_WIDTH / 2) * horizontal;
+                    pbuf [i].v.n = normal;
+                    pbuf [i].t = {0.0f, 0.0f};
+
+                    pbuf [i + 1].v.p = pbuf [i].v.p + GRASS_HEIGHT * vertical;
+                    pbuf [i + 1].v.n = normal;
+                    pbuf [i + 1].t = {0.0f, 1.0f};
+
+                    pbuf [i + 2].v.p = base + (GRASS_WIDTH / 2) * horizontal;
+                    pbuf [i + 2].v.n = normal;
+                    pbuf [i + 2].t = {1.0f, 0.0f};
+
+                    pbuf [i + 3] = pbuf [i + 1];
+
+                    pbuf [i + 4].v.p = pbuf [i + 2].v.p + GRASS_HEIGHT * vertical;
+                    pbuf [i + 4].v.n = normal;
+                    pbuf [i + 4].t = {1.0f, 1.0f};
+
+                    pbuf [i + 5] = pbuf [i + 2];
+
+                    // Register these so that wind can be calculated
+                    for (k=0; k < 6; k++)
+                        (*p_grass_neutral_positions) [i + k] = pbuf [i + k].v.p;
+
+                    i += 6;
+                }
+            }
+        }
+    );
+
+    pBuffer->n_vertices = i;
+
+    glUnmapBuffer (GL_ARRAY_BUFFER);
+    glBindBuffer (GL_ARRAY_BUFFER, 0);
+
+    return true;
+}
+void UpdateGrassPolygons (VertexBuffer *pBuffer, const vec3 *grass_neutral_positions, const vec3 &wind)
+{
+    glBindBuffer (GL_ARRAY_BUFFER, pBuffer->handle);
+
+    GrassVertex *pbuf = (GrassVertex *)glMapBuffer (GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+    if (!pbuf)
+    {
+        glBindBuffer (GL_ARRAY_BUFFER, 0);
+        fprintf (stderr, "WARNING, failed to obtain buffer pointer during update!\n");
+    }
+
+
+    // Every second, fourth and fifth vertex is a grass blade's top
+    for (size_t i = 0; i < pBuffer->n_vertices; i += 6)
+    {
+        pbuf [i + 1].v.p = grass_neutral_positions [i + 1] + wind;
+        pbuf [i + 3].v.p = grass_neutral_positions [i + 3] + wind;
+        pbuf [i + 4].v.p = grass_neutral_positions [i + 4] + wind;
+    }
+
+    glUnmapBuffer (GL_ARRAY_BUFFER);
     glBindBuffer (GL_ARRAY_BUFFER, 0);
 }
 bool SetHillVertices (VertexBuffer *pBuffer, const MeshData *pMeshData, const std::string &subset_id)
 {
     size_t i = 0,
-           m;
+           m, u;
 
     const int triangles [][3] = {{0, 1, 2}, {0, 2, 3}};
 
@@ -216,7 +448,7 @@ bool SetHillVertices (VertexBuffer *pBuffer, const MeshData *pMeshData, const st
             if (n_vertex >= 4)
                 m++;
 
-            for (int u = 0; u < m; u++)
+            for (u = 0; u < m; u++)
             {
                 for (int j : triangles [u])
                 {
@@ -289,6 +521,13 @@ void GrassScene::AddAll (Loader *pLoader)
                 return false;
             }
 
+            glGenBuffer (&vbo_grass);
+            if (!GenGrassPolygons (&vbo_grass, &grass_neutral_positions, &meshDataHill, "0"))
+            {
+                SetError ("error filling grass vertex buffer");
+                return false;
+            }
+
             return true;
         }
     );
@@ -309,17 +548,17 @@ void GrassScene::AddAll (Loader *pLoader)
                 return false;
             }
 
-            grassShader = CreateShaderProgram (vsh, gsh, fsh);
-            if (!grassShader)
+            layerShader = CreateShaderProgram (vsh, gsh, fsh);
+            if (!layerShader)
                 return false;
 
-            glBindAttribLocation (grassShader, VERTEX_INDEX, "vertex");
+            glBindAttribLocation (layerShader, VERTEX_INDEX, "vertex");
             if (!CheckGLError ("setting vertex attrib location"))
                 return false;
-            glBindAttribLocation (grassShader, NORMAL_INDEX, "normal");
+            glBindAttribLocation (layerShader, NORMAL_INDEX, "normal");
             if (!CheckGLError ("setting normal attrib location"))
                 return false;
-            glBindAttribLocation (grassShader, TEXCOORD_INDEX, "texCoord");
+            glBindAttribLocation (layerShader, TEXCOORD_INDEX, "texCoord");
             if (!CheckGLError ("setting texCoord attrib location"))
                 return false;
 
@@ -333,14 +572,38 @@ void GrassScene::AddAll (Loader *pLoader)
     );
 
     pLoader->Add (
+        [this] ()
+        {
+            GLuint fsh;
+
+            fsh = CreateShader (poly_fsh, GL_FRAGMENT_SHADER);
+            if (!fsh)
+            {
+                glDeleteShader (fsh);
+                return false;
+            }
+
+            polyShader = CreateShaderProgram (fsh);
+            if (!polyShader)
+                return false;
+
+            // Schedule deletion:
+            glDeleteShader (fsh);
+
+            return true;
+
+        }
+    );
+
+    pLoader->Add (
         [this, zipPath] ()
         {
             SDL_RWops *f = SDL_RWFromZipArchive (zipPath.c_str(), "dots.png");
             if (!f) // file or archive missing
                 return false;
 
-            bool success = LoadPNG(f, &texDots);
-            f->close(f);
+            bool success = LoadPNG (f, &texDots);
+            f->close (f);
 
             if (!success)
             {
@@ -351,11 +614,58 @@ void GrassScene::AddAll (Loader *pLoader)
             return true;
         }
     );
+
+    pLoader->Add (
+        [this, zipPath] ()
+        {
+            SDL_RWops *f = SDL_RWFromZipArchive (zipPath.c_str(), "grass.png");
+            if (!f) // file or archive missing
+                return false;
+
+            bool success = LoadPNG (f, &texGrass);
+            f->close (f);
+
+            if (!success)
+            {
+                SetError ("error parsing grass.png: %s", GetError ());
+                return false;
+            }
+
+            // Don't repeat at the edges of the grass blade texture:
+            glBindTexture (GL_TEXTURE_2D, texGrass.tex);
+            glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glBindTexture (GL_TEXTURE_2D, 0);
+
+            return true;
+        }
+    );
+
 }
 void GrassScene::Update (const float dt)
 {
     t += dt;
     wind.x = 0.1f * sin (t);
+
+    UpdateGrassPolygons (&vbo_grass, grass_neutral_positions, wind);
+}
+void GrassScene::OnKeyPress (const SDL_KeyboardEvent *event)
+{
+    if (event->type == SDL_KEYDOWN)
+    {
+        if (event->keysym.sym == SDLK_a)
+        {
+            switch (mode)
+            {
+            case GRASSMODE_LAYER:
+                mode = GRASSMODE_POLYGON;
+                break;
+            case GRASSMODE_POLYGON:
+                mode = GRASSMODE_LAYER;
+                break;
+            }
+        }
+    }
 }
 void GrassScene::OnMouseWheel (const SDL_MouseWheelEvent *event)
 {
@@ -414,7 +724,7 @@ void GrassScene::Render (void)
     glClearDepth (1.0f);
     glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    glEnable (GL_LIGHTING);
+    glDisable (GL_LIGHTING);
     glLightModelfv (GL_LIGHT_MODEL_AMBIENT, ambient);
     glLightfv (GL_LIGHT0, GL_DIFFUSE, diffuse);
     glEnable (GL_LIGHT0);
@@ -423,38 +733,88 @@ void GrassScene::Render (void)
 
     glDisable (GL_STENCIL_TEST);
     glDisable (GL_CULL_FACE);
-    glDepthFunc (GL_LEQUAL);
-    glDepthMask (GL_TRUE);
-    glDisable (GL_COLOR_MATERIAL);
 
     glEnable (GL_DEPTH_TEST);
-    glEnable (GL_BLEND);
-    glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthFunc (GL_LEQUAL);
+    glDepthMask (GL_TRUE);
 
-    glEnable (GL_TEXTURE_2D);
-    glActiveTexture (GL_TEXTURE0);
-    glBindTexture (GL_TEXTURE_2D, texDots.tex);
-
-    glUseProgram (grassShader);
-
-    loc = glGetUniformLocation (grassShader, "projMatrix");
-    glUniformMatrix4fv (loc, 1, GL_FALSE, matCamera.m);
-
-    loc = glGetUniformLocation (grassShader, "modelViewMatrix");
-    glUniformMatrix4fv (loc, 1, GL_FALSE, matCameraView.m);
-
-    loc = glGetUniformLocation (grassShader, "wind");
-    glUniform3f (loc, wind.x, wind.y, wind.z);
-
-    // Render The Grass polygons, layer by layer:
-    loc = glGetUniformLocation (grassShader, "n_layers");
-    glUniform1i (loc, N_GRASS_LAYERS);
-    loc = glGetUniformLocation (grassShader, "layer");
-    for (i = 0; i < N_GRASS_LAYERS; i++)
+    switch (mode)
     {
-        glUniform1i (loc, i);
-        RenderHillVertices (&vbo_hill);
-    }
+    case GRASSMODE_LAYER:
 
-    glUseProgram (0);
+        glDisable (GL_COLOR_MATERIAL);
+
+        glEnable (GL_BLEND);
+        glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        glEnable (GL_TEXTURE_2D);
+        glActiveTexture (GL_TEXTURE0);
+        glBindTexture (GL_TEXTURE_2D, texDots.tex);
+
+        glUseProgram (layerShader);
+
+        loc = glGetUniformLocation (layerShader, "projMatrix");
+        glUniformMatrix4fv (loc, 1, GL_FALSE, matCamera.m);
+
+        loc = glGetUniformLocation (layerShader, "modelViewMatrix");
+        glUniformMatrix4fv (loc, 1, GL_FALSE, matCameraView.m);
+
+        loc = glGetUniformLocation (layerShader, "wind");
+        glUniform3fv (loc, 1, wind.v);
+
+        loc = glGetUniformLocation (layerShader, "top_color");
+        glUniform3fv (loc, 1, grass_top_color);
+
+        loc = glGetUniformLocation (layerShader, "bottom_color");
+        glUniform3fv (loc, 1, grass_bottom_color);
+
+        loc = glGetUniformLocation (layerShader, "extend_max");
+        glUniform1f (loc, GRASS_HEIGHT);
+
+        // Render The Grass layer by layer:
+        loc = glGetUniformLocation (layerShader, "n_layers");
+        glUniform1i (loc, N_GRASS_LAYERS);
+        loc = glGetUniformLocation (layerShader, "layer");
+        for (i = 0; i < N_GRASS_LAYERS; i++)
+        {
+            glUniform1i (loc, i);
+            RenderHillVertices (&vbo_hill);
+        }
+
+        glUseProgram (0);
+    break;
+    case GRASSMODE_POLYGON:
+
+        glUseProgram (0);
+
+        glEnable (GL_BLEND);
+        glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        glDisable (GL_TEXTURE_2D);
+
+        glEnable (GL_COLOR_MATERIAL);
+        glColor3fv (grass_bottom_color);
+        RenderHillVertices (&vbo_hill);
+
+        glEnable (GL_TEXTURE_2D);
+        glActiveTexture (GL_TEXTURE0);
+        glBindTexture (GL_TEXTURE_2D, texGrass.tex);
+
+        glUseProgram (polyShader);
+
+        loc = glGetUniformLocation (polyShader, "top_color");
+        glUniform3fv (loc, 1, grass_top_color);
+
+        loc = glGetUniformLocation (polyShader, "bottom_color");
+        glUniform3fv (loc, 1, grass_bottom_color);
+
+        // transparent fragments may render to the color buffer, but not to the depth buffer
+        glAlphaFunc (GL_GREATER, 0.99f) ;
+        glEnable (GL_ALPHA_TEST);
+        RenderGrassVertices (&vbo_grass);
+        glDisable (GL_ALPHA_TEST);
+
+        glUseProgram (0);
+    break;
+    }
 }

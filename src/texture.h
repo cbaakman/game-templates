@@ -22,6 +22,7 @@
 #define TEXTURE_H
 
 #include <png.h>
+#include <string>
 
 #include <GL/glew.h>
 #include <GL/gl.h>
@@ -38,5 +39,13 @@ struct Texture {
  * Loads a png image from SDL_RWops as an OpenGL texture.
  */
 bool LoadPNG (SDL_RWops *, Texture *);
+
+// Shortcuts for loading:
+bool LoadPNG (const char *zip_path, const char *png_path, Texture *);
+bool LoadPNG (const std::string &zip_path, const std::string &png_path, Texture *);
+
+#include "load.h"
+LoadFunc LoadPNGFunc (const char *zip_path, const char *png_path, Texture *);
+LoadFunc LoadPNGFunc (const std::string &zip_path, const std::string &png_path, Texture *);
 
 #endif // TEXTURE_H

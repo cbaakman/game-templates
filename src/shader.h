@@ -48,4 +48,21 @@ GLuint CreateShaderProgram (const GLuint shader1, const GLuint shader2, const GL
 GLuint CreateShaderProgram (const GLuint shader1, const GLuint shader2, const GLuint shader3,
                             const GLuint shader4, const GLuint shader5, const GLuint shader6);
 
+// Shortcuts
+GLuint CreateShaderProgram (GLenum type1, const std::string& source1);
+GLuint CreateShaderProgram (GLenum type1, const std::string& source1,
+                            GLenum type2, const std::string& source2);
+GLuint CreateShaderProgram (GLenum type1, const std::string& source1,
+                            GLenum type2, const std::string& source2,
+                            GLenum type3, const std::string& source3);
+GLuint CreateShaderProgram (GLenum type1, const std::string& source1,
+                            GLenum type2, const std::string& source2,
+                            GLenum type3, const std::string& source3,
+                            GLenum type4, const std::string& source4);
+GLuint CreateShaderProgram (GLenum type1, const std::string& source1,
+                            GLenum type2, const std::string& source2,
+                            GLenum type3, const std::string& source3,
+                            GLenum type4, const std::string& source4,
+                            GLenum type5, const std::string& source5);
+
 #endif // SHADER_H

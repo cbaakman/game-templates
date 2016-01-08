@@ -29,7 +29,7 @@
  * Demonstrates different techniques for rendering grass.
  *
  * Currently implemented methods:
- * - layer by layer (looks like moss, not grass)
+ * - layer by layer (looks better from the top)
  * - one polygon per blade (more expensive)
  */
 class GrassScene : public App::Scene
@@ -54,11 +54,18 @@ private:
     vec3 wind;
     float t;
 
-    enum GrassMode {
+    /*
+        GrassMode enum type cannot be incremented.
+        So treat it as an int.
+     */
+    int mode;
+    enum GrassMode
+    {
+        GRASSMODE_LAYER,
+        GRASSMODE_POLYGON,
 
-        GRASSMODE_LAYER, GRASSMODE_POLYGON,
-
-    } mode;
+        N_GRASSMODES
+    };
 public:
 
     GrassScene (App *);

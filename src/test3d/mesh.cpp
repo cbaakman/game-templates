@@ -1161,3 +1161,38 @@ void MeshState::SetAnimationState(const char *animation_id, float frame, bool lo
 
     ApplyBoneTransformations(tranforms);
 }
+
+#include "../io.h"
+#include "../xml.h"
+bool LoadMesh (const char *zipPath, const char *xmlPath, MeshData *pData)
+{
+    SDL_RWops *f = SDL_RWFromZipArchive (zipPath, xmlPath);
+    if (!f)
+        return false;
+
+    xmlDocPtr  pDoc = ParseXML (f);
+    f->close(f);
+
+    if (!pDoc)
+    {
+        SetError ("error parsing xml %s: %s", xmlPath, GetError ());
+        return false;
+    }
+
+    // Convert xml to mesh:
+
+    bool success = ParseMesh (pDoc, pData);
+    xmlFreeDoc (pDoc);
+
+    if (!success)
+    {
+        SetError ("error parsing mesh %s: %s", xmlPath, GetError ());
+        return false;
+    }
+
+    return true;
+}
+bool LoadMesh (const std::string &zipPath, const std::string &xmlPath, MeshData *pData)
+{
+    LoadMesh (zipPath.c_str(), xmlPath.c_str (), pData);
+}

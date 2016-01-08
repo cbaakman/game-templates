@@ -176,3 +176,126 @@ GLuint CreateShaderProgram (const std::list <GLuint>& shaders)
 
     return program;
 }
+GLuint CreateShaderProgram (GLenum type1, const std::string& source1)
+{
+    GLuint sh1 = CreateShader (source1, type1);
+    if (!sh1)
+    {
+        glDeleteShader (sh1);
+        return 0;
+    }
+
+    GLuint program = CreateShaderProgram (sh1);
+
+    // schedule to delete when program is deleted
+    glDeleteShader (sh1);
+
+    return program;
+}
+GLuint CreateShaderProgram (GLenum type1, const std::string& source1,
+                            GLenum type2, const std::string& source2)
+{
+    GLuint sh1 = CreateShader (source1, type1),
+           sh2 = CreateShader (source2, type2);
+    if (!(sh1 && sh2))
+    {
+        glDeleteShader (sh1);
+        glDeleteShader (sh2);
+        return 0;
+    }
+
+    GLuint program = CreateShaderProgram (sh1, sh2);
+
+    // schedule to delete when program is deleted
+    glDeleteShader (sh1);
+    glDeleteShader (sh2);
+
+    return program;
+}
+GLuint CreateShaderProgram (GLenum type1, const std::string& source1,
+                            GLenum type2, const std::string& source2,
+                            GLenum type3, const std::string& source3)
+{
+    GLuint sh1 = CreateShader (source1, type1),
+           sh2 = CreateShader (source2, type2),
+           sh3 = CreateShader (source3, type3);
+
+    if (!(sh1 && sh2 && sh3))
+    {
+        glDeleteShader (sh1);
+        glDeleteShader (sh2);
+        glDeleteShader (sh3);
+        return 0;
+    }
+
+    GLuint program = CreateShaderProgram (sh1, sh2, sh3);
+
+    // schedule to delete when program is deleted
+    glDeleteShader (sh1);
+    glDeleteShader (sh2);
+    glDeleteShader (sh3);
+
+    return program;
+}
+GLuint CreateShaderProgram (GLenum type1, const std::string& source1,
+                            GLenum type2, const std::string& source2,
+                            GLenum type3, const std::string& source3,
+                            GLenum type4, const std::string& source4)
+{
+    GLuint sh1 = CreateShader (source1, type1),
+           sh2 = CreateShader (source2, type2),
+           sh3 = CreateShader (source3, type3),
+           sh4 = CreateShader (source4, type4);
+
+    if (!(sh1 && sh2 && sh3 && sh4))
+    {
+        glDeleteShader (sh1);
+        glDeleteShader (sh2);
+        glDeleteShader (sh3);
+        glDeleteShader (sh4);
+        return 0;
+    }
+
+    GLuint program = CreateShaderProgram (sh1, sh2, sh3, sh4);
+
+    // schedule to delete when program is deleted
+    glDeleteShader (sh1);
+    glDeleteShader (sh2);
+    glDeleteShader (sh3);
+    glDeleteShader (sh4);
+
+    return program;
+}
+GLuint CreateShaderProgram (GLenum type1, const std::string& source1,
+                            GLenum type2, const std::string& source2,
+                            GLenum type3, const std::string& source3,
+                            GLenum type4, const std::string& source4,
+                            GLenum type5, const std::string& source5)
+{
+    GLuint sh1 = CreateShader (source1, type1),
+           sh2 = CreateShader (source2, type2),
+           sh3 = CreateShader (source3, type3),
+           sh4 = CreateShader (source4, type4),
+           sh5 = CreateShader (source5, type5);
+
+    if (!(sh1 && sh2 && sh3 && sh4 && sh5))
+    {
+        glDeleteShader (sh1);
+        glDeleteShader (sh2);
+        glDeleteShader (sh3);
+        glDeleteShader (sh4);
+        glDeleteShader (sh5);
+        return 0;
+    }
+
+    GLuint program = CreateShaderProgram (sh1, sh2, sh3, sh4, sh5);
+
+    // schedule to delete when program is deleted
+    glDeleteShader (sh1);
+    glDeleteShader (sh2);
+    glDeleteShader (sh3);
+    glDeleteShader (sh4);
+    glDeleteShader (sh5);
+
+    return program;
+}

@@ -259,22 +259,8 @@ void WaterScene::AddAll (Loader *pLoader)
     pLoader->Add (
         [this] ()
         {
-            GLuint vsh, fsh;
-
-            vsh = CreateShader (water_vsh, GL_VERTEX_SHADER);
-            fsh = CreateShader (water_fsh, GL_FRAGMENT_SHADER);
-            if (!(fsh && vsh))
-            {
-                glDeleteShader (vsh);
-                glDeleteShader (fsh);
-                return false;
-            }
-
-            shaderProgramWater = CreateShaderProgram (vsh, fsh);
-
-            // schedule for deletion:
-            glDeleteShader (vsh);
-            glDeleteShader (fsh);
+            shaderProgramWater = CreateShaderProgram (GL_VERTEX_SHADER, water_vsh,
+                                                      GL_FRAGMENT_SHADER, water_fsh);
 
             if (!shaderProgramWater)
                 return false;
@@ -286,22 +272,8 @@ void WaterScene::AddAll (Loader *pLoader)
     pLoader->Add (
         [this] ()
         {
-            GLuint vsh, fsh;
-
-            vsh = CreateShader (srcClipVertex, GL_VERTEX_SHADER);
-            fsh = CreateShader (srcDepth1Fragment, GL_FRAGMENT_SHADER);
-            if (!(fsh && vsh))
-            {
-                glDeleteShader (vsh);
-                glDeleteShader (fsh);
-                return false;
-            }
-
-            shaderProgramDepth = CreateShaderProgram (vsh, fsh);
-
-            // schedule for deletion:
-            glDeleteShader (vsh);
-            glDeleteShader (fsh);
+            shaderProgramDepth = CreateShaderProgram (GL_VERTEX_SHADER, srcClipVertex,
+                                                      GL_FRAGMENT_SHADER, srcDepth1Fragment);
 
             if (!shaderProgramDepth)
                 return false;

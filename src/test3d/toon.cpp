@@ -201,32 +201,8 @@ void ToonScene::AddAll (Loader *pLoader)
     pLoader->Add (
         [&, resPath] ()
         {
-            SDL_RWops *f;
-            bool success;
-            xmlDocPtr pDoc;
-
-            // Load head mesh:
-            f = SDL_RWFromZipArchive (resPath.c_str(), "head.xml");
-            if (!f)
+            if (!LoadMesh (resPath, "head.xml", &meshDataHead))
                 return false;
-            pDoc = ParseXML (f);
-            f->close(f);
-
-            if (!pDoc)
-            {
-                SetError ("error parsing head.xml: %s", GetError ());
-                return false;
-            }
-
-            // Convert xml to mesh:
-            success = ParseMesh (pDoc, &meshDataHead);
-            xmlFreeDoc (pDoc);
-
-            if (!success)
-            {
-                SetError ("error parsing head.xml: %s", GetError ());
-                return false;
-            }
 
             /*
                 This mesh is not animated, so we only need to fill the vertex buffer once
@@ -288,49 +264,14 @@ void ToonScene::AddAll (Loader *pLoader)
         }
     );
 
-    pLoader->Add (
-        [&, resPath] ()
-        {
-            SDL_RWops *f;
-            bool success;
-
-            // Load background image:
-            f = SDL_RWFromZipArchive (resPath.c_str(), "toonbg.png");
-            if (!f)
-                return false;
-            success = LoadPNG(f, &texBG);
-            f->close(f);
-
-            if (!success)
-            {
-                SetError ("error parsing toonbg.png: %s", GetError ());
-                return false;
-            }
-
-            return true;
-        }
-    );
+    pLoader->Add (LoadPNGFunc (resPath, "toonbg.png", &texBG));
 
     pLoader->Add (
         [&] ()
         {
-            GLuint vsh, fsh;
-
-            vsh = CreateShader (toon_vsh, GL_VERTEX_SHADER);
-            fsh = CreateShader (toon_fsh, GL_FRAGMENT_SHADER);
-            if (!(fsh && vsh))
-            {
-                glDeleteShader (vsh);
-                glDeleteShader (fsh);
-                return false;
-            }
-
             // Create shader from sources:
-            shaderProgram = CreateShaderProgram (vsh, fsh);
-
-            // schedule for deletion:
-            glDeleteShader (vsh);
-            glDeleteShader (fsh);
+            shaderProgram = CreateShaderProgram (GL_VERTEX_SHADER, toon_vsh,
+                                                 GL_FRAGMENT_SHADER, toon_fsh);
 
             if (!shaderProgram)
                 return false;
@@ -459,7 +400,7 @@ void ToonScene::Render ()
     glColor4fv (meshDataHead.subsets.at("2").diffuse);
     RenderToonVertices (&vbo_hair);
 
-    glUseProgram (NULL);
+    glUseProgram (0);
 }
 void ToonScene::OnMouseMove (const SDL_MouseMotionEvent *event)
 {

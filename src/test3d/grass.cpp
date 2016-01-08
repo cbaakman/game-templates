@@ -26,18 +26,21 @@
 
 #include "../shader.h"
 
-#define VERTEX_INDEX 0
-#define NORMAL_INDEX 1
-#define TEXCOORD_INDEX 2
+/*
+    Set these 2 parameters higher to get better looking grass.
+    Set them lower for faster rendering.
+ */
+#define GRASS_PER_M2 200
+#define N_GRASS_LAYERS 20
 
-const GLfloat grass_top_color [3] = {0.0f, 1.0f, 0.0f},
-              grass_bottom_color [3] = {0.0f, 0.5f, 0.0f};
+const GLfloat GRASS_TOP_COLOR [3] = {0.0f, 1.0f, 0.0f},
+              GRASS_BOTTOM_COLOR [3] = {0.0f, 0.5f, 0.0f};
 
 const char
 
     /*
         For some reason, 150 shaders don't work with client states,
-        so we must use vertex attributes to refer to position, normal ans texture coords.
+        so we must use vertex attributes to refer to position, normal and texture coords.
      */
 
     layer_vsh [] = R"shader(
@@ -69,10 +72,14 @@ const char
         }
     )shader",
 
+    /*
+        This geometry shader is responsible for generating the layers.
+        It will be called once per layer.
+     */
     layer_gsh [] = R"shader(
         #version 150
 
-        uniform int layer,
+        uniform int layer, // current layer
                     n_layers;
         uniform float extend_max;
         uniform vec3 wind;
@@ -142,8 +149,19 @@ const char
             // On the texture, black is opaque, white is transparent.
             vec4 dotSample = texture2D (tex_dots, VertexIn.texCoord.st);
             float alpha = 1.0 - dotSample.r - VertexIn.extension * VertexIn.extension;
+
+            // The bottom layer is always opaque.
             if (layer <= 0)
                 alpha = 1.0;
+
+            /*
+                This alpha threshold makes the grass look more solid.
+                Remove it to get softer, moss-like grass.
+             */
+            if (alpha > 0.25)
+                alpha = 1.0;
+            else
+                alpha = 0.0;
 
             vec3 color = (1.0 - VertexIn.extension) * bottom_color + VertexIn.extension * top_color;
 
@@ -209,6 +227,11 @@ struct GrassVertex
     represent vertex positions, normals and texture coordinates.
     As long as they represent the same data format.
  */
+
+#define VERTEX_INDEX 0
+#define NORMAL_INDEX 1
+#define TEXCOORD_INDEX 2
+
 void RenderHillVertices (const VertexBuffer *pBuffer)
 {
     glBindBuffer (GL_ARRAY_BUFFER, pBuffer->handle);
@@ -272,7 +295,6 @@ void RenderGrassVertices (const VertexBuffer *pBuffer)
     glBindBuffer (GL_ARRAY_BUFFER, 0);
 }
 
-#define GRASS_PER_M2 200
 #define MAX_GRASS_ANGLE M_PI_4
 #define GRASS_WIDTH 0.2f
 #define GRASS_HEIGHT 0.6f
@@ -283,9 +305,10 @@ bool GenGrassPolygons (VertexBuffer *pBuffer, vec3 **p_grass_neutral_positions, 
 
     const int triangles [][3] = {{0, 1, 2}, {0, 2, 3}};
 
-    // Don't know this exactly, depends on the surface area of the floor:
+    // Hard to predict this exactly, depends on the surface area of the floor:
     const size_t n_vertices_estimate = GRASS_PER_M2 * 10 * (pMeshData->quads.size () * 2 + pMeshData->triangles.size ());
 
+    // The buffer must be dynamic, because the wind will deform the blades all the time:
     glBindBuffer (GL_ARRAY_BUFFER, pBuffer->handle);
     glBufferData (GL_ARRAY_BUFFER, sizeof (GrassVertex) * n_vertices_estimate, NULL, GL_DYNAMIC_DRAW);
     *p_grass_neutral_positions = new vec3 [n_vertices_estimate];
@@ -298,6 +321,7 @@ bool GenGrassPolygons (VertexBuffer *pBuffer, vec3 **p_grass_neutral_positions, 
         return false;
     }
 
+    // Generate blade quads for the entire surface of the mesh:
     ThroughSubsetFaces (pMeshData, subset_id,
         [&](const int n_vertex, const MeshVertex **p_vertices, const MeshTexel *)
         {
@@ -307,7 +331,7 @@ bool GenGrassPolygons (VertexBuffer *pBuffer, vec3 **p_grass_neutral_positions, 
             if (n_vertex >= 4)
                 m++;
 
-            for (u = 0; u < m; u++)
+            for (u = 0; u < m; u++) // one or two triangles
             {
                 const vec3 p0 = p_vertices [triangles [u][0]]->p,
                            p1 = p_vertices [triangles [u][1]]->p,
@@ -339,7 +363,7 @@ bool GenGrassPolygons (VertexBuffer *pBuffer, vec3 **p_grass_neutral_positions, 
                     if (r2 > (1.0f - r1))
                     {
                         /*
-                            Outside the triangle, but inside the parallelogram.
+                            Point is outside the triangle, but inside the parallelogram.
                             Rotate 180 degrees to fix
                          */
 
@@ -347,7 +371,7 @@ bool GenGrassPolygons (VertexBuffer *pBuffer, vec3 **p_grass_neutral_positions, 
                         r1 = 1.0f - r1;
                     }
 
-                    matrix4 transf = matRotY (a) * matRotX (c) * matRotZ (b);
+                    matrix4 transf = matRotX (c) * matRotZ (b) * matRotY (a);
 
                     vec3 base = p0 + r1 * (p1 - p0) + r2 * (p2 - p0),
                          vertical = transf * n,
@@ -465,19 +489,6 @@ bool SetHillVertices (VertexBuffer *pBuffer, const MeshData *pMeshData, const st
 
     return true;
 }
-bool CheckGLError (const char *doing)
-{
-    GLenum err = glGetError();
-    if (err != GL_NO_ERROR)
-    {
-        char s [100];
-        GLErrorString (s, err);
-        SetError ("%s while %s", s, doing);
-        return false;
-    }
-
-    return true;
-}
 void GrassScene::AddAll (Loader *pLoader)
 {
     const std::string zipPath = std::string (SDL_GetBasePath()) + "test3d.zip";
@@ -485,25 +496,7 @@ void GrassScene::AddAll (Loader *pLoader)
     pLoader->Add (
         [this, zipPath] ()
         {
-            SDL_RWops *f = SDL_RWFromZipArchive (zipPath.c_str(), "hill.xml");
-            if (!f)
-                return false;
-
-            xmlDocPtr  pDoc = ParseXML (f);
-            f->close(f);
-
-            if (!pDoc)
-            {
-                SetError ("error parsing hill.xml: %s", GetError ());
-                return false;
-            }
-
-            // Convert xml to mesh:
-
-            bool success = ParseMesh (pDoc, &meshDataHill);
-            xmlFreeDoc (pDoc);
-
-            if (!success)
+            if (!LoadMesh (zipPath.c_str(), "hill.xml", &meshDataHill))
             {
                 SetError ("error parsing hill.xml: %s", GetError ());
                 return false;
@@ -535,37 +528,42 @@ void GrassScene::AddAll (Loader *pLoader)
     pLoader->Add (
         [this] ()
         {
-            GLuint vsh, gsh, fsh;
-
-            vsh = CreateShader (layer_vsh, GL_VERTEX_SHADER);
-            gsh = CreateShader (layer_gsh, GL_GEOMETRY_SHADER);
-            fsh = CreateShader (layer_fsh, GL_FRAGMENT_SHADER);
-            if (!(vsh && gsh && fsh))
-            {
-                glDeleteShader (vsh);
-                glDeleteShader (gsh);
-                glDeleteShader (fsh);
-                return false;
-            }
-
-            layerShader = CreateShaderProgram (vsh, gsh, fsh);
+            layerShader = CreateShaderProgram (GL_VERTEX_SHADER, layer_vsh,
+                                               GL_GEOMETRY_SHADER, layer_gsh,
+                                               GL_FRAGMENT_SHADER, layer_fsh);
             if (!layerShader)
                 return false;
 
+            /*
+                Tell the shaders which attribute indices represent
+                position, normal and texture coordinates:
+             */
             glBindAttribLocation (layerShader, VERTEX_INDEX, "vertex");
-            if (!CheckGLError ("setting vertex attrib location"))
+            if (!CheckGLOK ("setting vertex attrib location"))
                 return false;
             glBindAttribLocation (layerShader, NORMAL_INDEX, "normal");
-            if (!CheckGLError ("setting normal attrib location"))
+            if (!CheckGLOK ("setting normal attrib location"))
                 return false;
             glBindAttribLocation (layerShader, TEXCOORD_INDEX, "texCoord");
-            if (!CheckGLError ("setting texCoord attrib location"))
+            if (!CheckGLOK ("setting texCoord attrib location"))
                 return false;
 
-            // Schedule deletion:
-            glDeleteShader (vsh);
-            glDeleteShader (gsh);
-            glDeleteShader (fsh);
+            // Pass on parameters to the shader:
+            GLint loc;
+
+            glUseProgram (layerShader);
+            loc = glGetUniformLocation (layerShader, "top_color");
+            glUniform3fv (loc, 1, GRASS_TOP_COLOR);
+
+            loc = glGetUniformLocation (layerShader, "bottom_color");
+            glUniform3fv (loc, 1, GRASS_BOTTOM_COLOR);
+
+            loc = glGetUniformLocation (layerShader, "extend_max");
+            glUniform1f (loc, GRASS_HEIGHT);
+
+            loc = glGetUniformLocation (layerShader, "n_layers");
+            glUniform1i (loc, N_GRASS_LAYERS);
+            glUseProgram (0);
 
             return true;
         }
@@ -574,62 +572,32 @@ void GrassScene::AddAll (Loader *pLoader)
     pLoader->Add (
         [this] ()
         {
-            GLuint fsh;
-
-            fsh = CreateShader (poly_fsh, GL_FRAGMENT_SHADER);
-            if (!fsh)
-            {
-                glDeleteShader (fsh);
-                return false;
-            }
-
-            polyShader = CreateShaderProgram (fsh);
+            polyShader = CreateShaderProgram (GL_FRAGMENT_SHADER, poly_fsh);
             if (!polyShader)
                 return false;
 
-            // Schedule deletion:
-            glDeleteShader (fsh);
+            // Pass on parameters to the shader:
+            GLint loc;
 
-            return true;
+            glUseProgram (polyShader);
+            loc = glGetUniformLocation (polyShader, "top_color");
+            glUniform3fv (loc, 1, GRASS_TOP_COLOR);
 
-        }
-    );
-
-    pLoader->Add (
-        [this, zipPath] ()
-        {
-            SDL_RWops *f = SDL_RWFromZipArchive (zipPath.c_str(), "dots.png");
-            if (!f) // file or archive missing
-                return false;
-
-            bool success = LoadPNG (f, &texDots);
-            f->close (f);
-
-            if (!success)
-            {
-                SetError ("error parsing dots.png: %s", GetError ());
-                return false;
-            }
+            loc = glGetUniformLocation (polyShader, "bottom_color");
+            glUniform3fv (loc, 1, GRASS_BOTTOM_COLOR);
+            glUseProgram (0);
 
             return true;
         }
     );
 
+    pLoader->Add (LoadPNGFunc (zipPath.c_str(), "dots.png", &texDots));
+
     pLoader->Add (
         [this, zipPath] ()
         {
-            SDL_RWops *f = SDL_RWFromZipArchive (zipPath.c_str(), "grass.png");
-            if (!f) // file or archive missing
+            if (!LoadPNG (zipPath.c_str(), "grass.png", &texGrass))
                 return false;
-
-            bool success = LoadPNG (f, &texGrass);
-            f->close (f);
-
-            if (!success)
-            {
-                SetError ("error parsing grass.png: %s", GetError ());
-                return false;
-            }
 
             // Don't repeat at the edges of the grass blade texture:
             glBindTexture (GL_TEXTURE_2D, texGrass.tex);
@@ -655,15 +623,7 @@ void GrassScene::OnKeyPress (const SDL_KeyboardEvent *event)
     {
         if (event->keysym.sym == SDLK_a)
         {
-            switch (mode)
-            {
-            case GRASSMODE_LAYER:
-                mode = GRASSMODE_POLYGON;
-                break;
-            case GRASSMODE_POLYGON:
-                mode = GRASSMODE_LAYER;
-                break;
-            }
+            mode = (mode + 1) % N_GRASSMODES;
         }
     }
 }
@@ -700,7 +660,6 @@ const vec3 posLight (0.0f, 5.0f, 0.0f);
 #define VIEW_ANGLE 45.0f
 #define NEAR_VIEW 0.1f
 #define FAR_VIEW 1000.0f
-#define N_GRASS_LAYERS 20
 void GrassScene::Render (void)
 {
     int w, h, i;
@@ -753,6 +712,7 @@ void GrassScene::Render (void)
 
         glUseProgram (layerShader);
 
+        // Pass on variables to the shader:
         loc = glGetUniformLocation (layerShader, "projMatrix");
         glUniformMatrix4fv (loc, 1, GL_FALSE, matCamera.m);
 
@@ -762,18 +722,7 @@ void GrassScene::Render (void)
         loc = glGetUniformLocation (layerShader, "wind");
         glUniform3fv (loc, 1, wind.v);
 
-        loc = glGetUniformLocation (layerShader, "top_color");
-        glUniform3fv (loc, 1, grass_top_color);
-
-        loc = glGetUniformLocation (layerShader, "bottom_color");
-        glUniform3fv (loc, 1, grass_bottom_color);
-
-        loc = glGetUniformLocation (layerShader, "extend_max");
-        glUniform1f (loc, GRASS_HEIGHT);
-
         // Render The Grass layer by layer:
-        loc = glGetUniformLocation (layerShader, "n_layers");
-        glUniform1i (loc, N_GRASS_LAYERS);
         loc = glGetUniformLocation (layerShader, "layer");
         for (i = 0; i < N_GRASS_LAYERS; i++)
         {
@@ -785,6 +734,7 @@ void GrassScene::Render (void)
     break;
     case GRASSMODE_POLYGON:
 
+        // Render hill first:
         glUseProgram (0);
 
         glEnable (GL_BLEND);
@@ -793,22 +743,20 @@ void GrassScene::Render (void)
         glDisable (GL_TEXTURE_2D);
 
         glEnable (GL_COLOR_MATERIAL);
-        glColor3fv (grass_bottom_color);
+        glColor3fv (GRASS_BOTTOM_COLOR);
         RenderHillVertices (&vbo_hill);
 
+        // Now render the blades:
         glEnable (GL_TEXTURE_2D);
         glActiveTexture (GL_TEXTURE0);
         glBindTexture (GL_TEXTURE_2D, texGrass.tex);
 
         glUseProgram (polyShader);
 
-        loc = glGetUniformLocation (polyShader, "top_color");
-        glUniform3fv (loc, 1, grass_top_color);
-
-        loc = glGetUniformLocation (polyShader, "bottom_color");
-        glUniform3fv (loc, 1, grass_bottom_color);
-
-        // transparent fragments may render to the color buffer, but not to the depth buffer
+        /*
+            Transparent fragments must not be rendered,
+            because we need the depth buffer here.
+         */
         glAlphaFunc (GL_GREATER, 0.99f) ;
         glEnable (GL_ALPHA_TEST);
         RenderGrassVertices (&vbo_grass);

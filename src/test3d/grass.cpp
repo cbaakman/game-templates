@@ -295,7 +295,7 @@ void RenderGrassVertices (const VertexBuffer *pBuffer)
     glBindBuffer (GL_ARRAY_BUFFER, 0);
 }
 
-#define MAX_GRASS_ANGLE M_PI_4
+#define MAX_GRASS_ANGLE 0.785
 #define GRASS_WIDTH 0.2f
 #define GRASS_HEIGHT 0.6f
 bool GenGrassPolygons (VertexBuffer *pBuffer, vec3 **p_grass_neutral_positions, const MeshData *pMeshData, const std::string &subset_id)

@@ -52,6 +52,8 @@
 		<Unit filename="src/server/server.h" />
 		<Unit filename="src/str.cpp" />
 		<Unit filename="src/str.h" />
+		<Unit filename="src/thread.cpp" />
+		<Unit filename="src/thread.h" />
 		<Unit filename="src/util.h" />
 		<Extensions>
 			<code_completion />

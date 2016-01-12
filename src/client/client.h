@@ -55,8 +55,9 @@ private:
     SDL_GLContext mainGLContext;
     bool done;
 
-    IPaddress serverAddress;
-    UDPsocket socket;
+    IPaddress serverAddress,
+              *pUDPAddress;
+    UDPsocket udp_socket;
 
     UDPpacket   *toServer,
                 *fromServer,
@@ -98,6 +99,10 @@ public:
     SDL_Window *GetMainWindow () { return mainWindow; }
 
     bool SendToServer (const Uint8* data, const int len);
+
+    TCPsocket Server_TCP_Connect ();
+
+    IPaddress *GetUDPAddress ();
 
     void SwitchScene (Scene* scene); // NULL to do nothing
 

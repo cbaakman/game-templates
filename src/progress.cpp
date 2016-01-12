@@ -26,13 +26,12 @@
 Progress::Progress ()
 {
     pPassedMutex = SDL_CreateMutex ();
-    pTotalMutex = SDL_CreateMutex ();
-
     if (!pPassedMutex)
-        fprintf (stderr, "WARNING Couldn't create progress::passed mutex\n");
+        fprintf (stderr, "WARNING Couldn't create progress::passed mutex, %s\n", SDL_GetError ());
 
+    pTotalMutex = SDL_CreateMutex ();
     if (!pTotalMutex)
-        fprintf (stderr, "WARNING Couldn't create progress::total mutex\n");
+        fprintf (stderr, "WARNING Couldn't create progress::total mutex, %s\n", SDL_GetError ());
 
     n_passed = n_total = 0;
 }
@@ -50,7 +49,7 @@ void Progress::AddTotal (const std::size_t n)
         SDL_UnlockMutex (pTotalMutex);
     }
     else
-        fprintf (stderr, "WARNING Couldn't lock progress::total mutex\n");
+        fprintf (stderr, "WARNING Couldn't lock progress::total mutex, %s\n", SDL_GetError ());
 }
 void Progress::AddPassed (const std::size_t n)
 {
@@ -61,7 +60,7 @@ void Progress::AddPassed (const std::size_t n)
         SDL_UnlockMutex (pPassedMutex);
     }
     else
-        fprintf (stderr, "WARNING Couldn't lock progress::passed mutex\n");
+        fprintf (stderr, "WARNING Couldn't lock progress::passed mutex, %s\n", SDL_GetError ());
 }
 std::size_t Progress::GetPassed ()
 {
@@ -74,7 +73,7 @@ std::size_t Progress::GetPassed ()
         SDL_UnlockMutex (pPassedMutex);
     }
     else
-        fprintf(stderr, "WARNING Couldn't lock progress::passed mutex\n");
+        fprintf(stderr, "WARNING Couldn't lock progress::passed mutex, %s\n", SDL_GetError ());
 
     return n;
 }
@@ -89,7 +88,7 @@ std::size_t Progress::GetTotal ()
         SDL_UnlockMutex (pTotalMutex);
     }
     else
-        fprintf(stderr, "WARNING Couldn't lock progress::total mutex\n");
+        fprintf(stderr, "WARNING Couldn't lock progress::total mutex, %s\n", SDL_GetError ());
 
     return n;
 }

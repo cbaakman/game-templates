@@ -27,6 +27,7 @@
 #include "../ini.h"
 #include "../ip.h"
 #include "../str.h"
+#include "../thread.h"
 
 #define SETTINGS_FILE "settings.ini"
 
@@ -37,6 +38,192 @@
 #define CONNECTION_PINGPERIOD 1000 // ticks
 
 const int CONNECTION_TIMEOUT_TICKS = CONNECTION_TIMEOUT * 1000;
+
+Server::User::User (const IPaddress *pAddr, const char *_accountName)
+{
+    strcpy (accountName, _accountName);
+    ticksSinceLastContact = 0;
+    memcpy (&address, pAddr, sizeof (IPaddress));
+
+    params.hue = rand () % 360; // give the user a random color
+    state.pos.x = -1000;
+    state.pos.y = -1000;
+
+    ticksSinceLastContact = 0;
+}
+
+/**
+ * This runs in a temporary thread.
+ */
+void Server::OnLogin (TCPsocket clientSocket, const IPaddress *pClientIP)
+{
+    int n_sent,
+        n_recieved,
+        keySize, keyDataSize,
+        decryptedSize,
+        maxflen;
+    unsigned char *public_key_data, *public_key,
+                  encrypted [PACKET_MAXSIZE],
+                  *decrypted;
+    RSA* key;
+    BIGNUM *bn;
+    Uint8 signal;
+
+    // If the server is full at this point, don't bother.
+    if (IsServerFull ())
+    {
+        signal = NETSIG_SERVERFULL;
+        if (SDLNet_TCP_Send (clientSocket, &signal, 1) != 1)
+        {
+            fprintf (stderr, "WARNING, could not send server full error to user: %s\n", SDLNet_GetError ());
+        }
+        return;
+    }
+
+    // Generate a RSA key to encrypt login password in
+    bn = BN_new ();
+    BN_set_word (bn, 65537);
+    key = RSA_new ();
+    bool keySuccess = RSA_generate_key_ex (key, 1024, bn, NULL) &&
+                      RSA_check_key (key);
+    BN_free (bn);
+
+    if (!keySuccess)
+    {
+        fprintf (stderr, "rsa key generation failed\n");
+        RSA_free (key);
+        return;
+    }
+
+    // Convert public key to byte array and send to user:
+    keySize = i2d_RSAPublicKey (key, NULL);
+    keyDataSize = keySize + 1;
+    public_key_data = new unsigned char [keyDataSize];
+    public_key_data [0] = NETSIG_RSAPUBLICKEY;
+    public_key = public_key_data + 1;
+    i2d_RSAPublicKey (key, &public_key);
+
+    n_sent = SDLNet_TCP_Send (clientSocket, public_key_data, keyDataSize);
+    delete [] public_key_data;
+
+    if (n_sent != keyDataSize)
+    {
+        fprintf (stderr, "error sending key: %s\n", SDLNet_GetError());
+        RSA_free (key);
+        return;
+    }
+
+    // Receive encrypted login parameters from user:
+    n_recieved = SDLNet_TCP_Recv (clientSocket, encrypted, PACKET_MAXSIZE);
+    if (n_recieved <= 0)
+    {
+        if (n_recieved < 0)
+            fprintf (stderr, "error recieving encrypted login: %s\n", SDLNet_GetError());
+        else
+        {
+            char ip [100];
+            ip2String (*pClientIP, ip);
+            fprintf (stderr, "client at %s hung up while recieving encrypted login\n", ip);
+        }
+
+        RSA_free (key);
+        return;
+    }
+
+    // Decrypt login parameters:
+    maxflen = maxFLEN (key);
+    decrypted = new Uint8 [maxflen];
+
+    decryptedSize = RSA_private_decrypt (n_recieved, encrypted, decrypted, key, SERVER_RSA_PADDING);
+    RSA_free (key);
+
+    if (decryptedSize != sizeof (LoginParams))
+    {
+        fprintf (stderr, "error decrypting login parameters, wrong size\n");
+        delete [] decrypted;
+        return;
+    }
+
+    // Get decrypted username, password, etc.
+    const LoginParams *pParams = (const LoginParams *)decrypted;
+
+    if (GetUser (pParams->username)) // this user is already logged in
+    {
+        Uint8 signal = NETSIG_ALREADYLOGGEDIN;
+        if (SDLNet_TCP_Send (clientSocket, &signal, 1) != 1)
+        {
+            fprintf (stderr, "WARNING, could not send already logged in error to user: %s\n", SDLNet_GetError ());
+        }
+    }
+    else if (authenticate (accountsPath.c_str(), pParams->username, pParams->password))
+    {
+        // To keep it thread safe, we must copy these values before the user enters the list..
+        IPaddress clientAddress;
+        clientAddress.host = pClientIP->host;
+        clientAddress.port = pParams->udp_port;
+
+        UserP pUser = new User (&clientAddress, pParams->username);
+
+        UserParams userParams = pUser->params;
+        UserState startState = pUser->state;
+
+        // Try to add user to the list:
+        if (AddUser (pUser))
+        {
+            // Send client the message that login succeeded,
+            // along with the user's first state and parameters:
+            int len = 1 + sizeof (UserParams) + sizeof (UserState);
+            Uint8* data = new Uint8 [len];
+            data [0] = NETSIG_LOGINSUCCESS;
+            memcpy (data + 1, &userParams, sizeof (UserParams));
+            memcpy (data + 1 + sizeof (UserParams), &startState, sizeof (UserState));
+            n_sent = SDLNet_TCP_Send (clientSocket, data, len);
+            delete data;
+
+            if (n_sent != len)
+            {
+                fprintf (stderr, "WARNING, could not send login conformation to user: %s\n", SDLNet_GetError ());
+            }
+
+            OnMessage (SERVER_MSG_INFO, "%s just logged in", pUser->accountName);
+
+            // Tell other users about this new user:
+            if (SDL_LockMutex (pUsersMutex) == 0)
+            {
+                for (const UserP pOtherUser : users)
+                {
+                    if(pOtherUser != pUser)
+                    {
+                        TellUserAboutUser (pOtherUser, pUser);
+                        TellUserAboutUser (pUser, pOtherUser);
+                    }
+                }
+
+                SDL_UnlockMutex (pUsersMutex);
+            }
+            else
+                fprintf (stderr, "Error telling users about new user, could not lock mutex: %s\n", SDL_GetError ());
+        }
+        else // AddUser failed, server full
+        {
+            signal = NETSIG_SERVERFULL;
+            if (SDLNet_TCP_Send (clientSocket, &signal, 1) != 1)
+            {
+                fprintf (stderr, "WARNING, could not send server full error to user: %s\n", SDLNet_GetError ());
+            }
+        }
+    }
+    else // authentication failure
+    {
+        signal = NETSIG_AUTHENTICATIONERROR;
+        if (SDLNet_TCP_Send (clientSocket, &signal, 1) != 1)
+        {
+            fprintf (stderr, "WARNING, could not send authentication error to user: %s\n", SDLNet_GetError ());
+        }
+    }
+
+    delete [] decrypted;
+}
 
 void Server::OnMessage (Server::MessageType type, const char *format, ...)
 {
@@ -62,17 +249,20 @@ void Server::OnMessage (Server::MessageType type, const char *format, ...)
 
 Server::Server() :
     done(false),
-    users (NULL),
+    pUsersMutex (NULL),
     maxUsers(0),
     loopThread(NULL),
     in(NULL), out(NULL),
     udpPackets(NULL),
-    socket(NULL)
+    tcp_socket(NULL), udp_socket(NULL)
 {
     settingsPath[0]=NULL;
+
+    pUsersMutex = SDL_CreateMutex ();
 }
 Server::~Server()
 {
+    SDL_DestroyMutex (pUsersMutex);
 }
 bool Server::Init()
 {
@@ -81,14 +271,7 @@ bool Server::Init()
 
     // load the maxUsers setting from the config
     maxUsers = LoadSetting(settingsPath.c_str(), MAXLOGIN_SETTING);
-    if (maxUsers > 0)
-    {
-        // Allocate memory for users to log in:
-        users = new UserP [maxUsers];
-        for (Uint64 i = 0; i < maxUsers; i++)
-            users[i] = NULL;
-    }
-    else
+    if (maxUsers <= 0)
     {
         fprintf (stderr, "Max Login not found in %s\n", settingsPath.c_str());
         return false;
@@ -110,9 +293,22 @@ bool Server::Init()
     }
 
     // Open a socket and listen at the configured port:
-    if (!(socket = SDLNet_UDP_Open (port)))
+    if (!(udp_socket = SDLNet_UDP_Open (port)))
     {
         fprintf (stderr,"SDLNet_UDP_Open: %s\n", SDLNet_GetError());
+        return false;
+    }
+
+    if (SDLNet_ResolveHost (&mAddress, NULL, port) < 0)
+    {
+        fprintf(stderr, "SDLNet_ResolveHost: %s\n", SDLNet_GetError());
+        return false;
+    }
+
+    // Open a socket and listen at the configured port:
+    if (!(tcp_socket = SDLNet_TCP_Open (&mAddress)))
+    {
+        fprintf (stderr,"SDLNet_TCP_Open: %s\n", SDLNet_GetError());
         return false;
     }
 
@@ -149,10 +345,15 @@ void Server::CleanUp()
         udpPackets = NULL;
         in = out = NULL;
     }
-    if(socket)
+    if(udp_socket)
     {
-        SDLNet_UDP_Close(socket);
-        socket = NULL;
+        SDLNet_UDP_Close (udp_socket);
+        udp_socket = NULL;
+    }
+    if (tcp_socket)
+    {
+        SDLNet_TCP_Close (tcp_socket);
+        tcp_socket = NULL;
     }
 
     /*
@@ -160,99 +361,125 @@ void Server::CleanUp()
         and wait for it to finish.
      */
     done = true;
-    SDL_WaitThread (loopThread, &status);
+    if (loopThread)
+    {
+        SDL_WaitThread (loopThread, &status);
+        loopThread = NULL;
+    }
 
     SDLNet_Quit();
 
-    // Clean up memory
-    for(Uint64 i=0; i < maxUsers; i++)
-        delete users[i];
-    delete [] users; users=NULL;
-    maxUsers = 0;
-}
-Server::UserP Server::AddUser()
-{
-    for(Uint64 i = 0; i < maxUsers; i++)
+    if (SDL_LockMutex (pUsersMutex) == 0)
     {
-        if (!users[i]) // found an empty sport for a new user
+        for (UserP pUser : users)
+            delete pUser;
+        users.clear ();
+
+        SDL_UnlockMutex (pUsersMutex);
+    }
+    else
+        fprintf (stderr, "Error deleting users, could not lock mutex!\n");
+}
+bool Server::IsServerFull (void)
+{
+    if (SDL_LockMutex (pUsersMutex) != 0)
+    {
+        fprintf (stderr, "Error checking server full, could not lock mutex: %s\n", SDL_GetError ());
+        return true;
+    }
+
+    bool b = users.size () >= maxUsers;
+
+    SDL_UnlockMutex (pUsersMutex);
+
+    return b;
+}
+bool Server::AddUser (UserP pUser)
+{
+    if (users.size() < maxUsers)
+    {
+        if (SDL_LockMutex (pUsersMutex) != 0)
         {
-            users[i] = new User;
-            users[i]->accountName [0] = NULL;
-            users[i]->ticksSinceLastContact = 0;
+            fprintf (stderr, "Error adding user, could not lock mutex: %s\n", SDL_GetError ());
+            return false;
+        }
 
-            // Generate a RSA key to encrypt login password in
-            BIGNUM *bn = BN_new (); BN_set_word (bn, 65537);
-            users[i]->key = RSA_new ();
-            bool keySuccess = RSA_generate_key_ex (users[i]->key, 1024, bn, NULL)
-                && RSA_check_key (users[i]->key);
+        users.push_back (pUser);
 
-            BN_free (bn);
+        SDL_UnlockMutex (pUsersMutex);
+        return true;
+    }
 
-            if (!keySuccess)
-            {
-                RSA_free (users[i]->key);
-                delete users[i]; users[i]=NULL;
-                return NULL;
-            }
+    return false;
+}
+Server::UserP Server::GetUser (const IPaddress *pAddress)
+{
+    if (SDL_LockMutex (pUsersMutex) != 0)
+    {
+        fprintf (stderr, "Error getting user, could not lock mutex: %s\n", SDL_GetError ());
+        return NULL;
+    }
 
-            return users [i];
+    for (UserP pUser : users)
+    {
+        if (pUser->address.host == pAddress->host &&
+            pUser->address.port == pAddress->port)
+        {
+            SDL_UnlockMutex (pUsersMutex);
+            return pUser;
         }
     }
 
-    return NULL;
-}
-Server::UserP Server::GetUser (const IPaddress& address)
-{
-    for(Uint64 i = 0; i < maxUsers; i++)
-    {
-        if (users[i]
-            && users[i]->address.host == address.host
-            && users[i]->address.port == address.port)
-        {
-            return users [i];
-        }
-    }
+    SDL_UnlockMutex (pUsersMutex);
     return NULL;
 }
 Server::UserP Server::GetUser (const char* accountName)
 {
-    for(Uint64 i = 0; i < maxUsers; i++)
+    if (SDL_LockMutex (pUsersMutex) != 0)
     {
-        if (users[i]
-            && strcmp (users[i]->accountName, accountName)==0 )
+        fprintf (stderr, "Error getting user, could not lock mutex: %s\n", SDL_GetError ());
+        return NULL;
+    }
+
+    for (UserP pUser : users)
+    {
+        if (strcmp (pUser->accountName, accountName)==0 )
         {
-            return users[i];
+            SDL_UnlockMutex (pUsersMutex);
+            return pUser;
         }
     }
+
+    SDL_UnlockMutex (pUsersMutex);
     return NULL;
 }
-bool Server::LoggedIn(Server::User* user)
-{
-    if (!user)
-        return false;
-
-    // If accountname is set, user is considered logged in
-    return (bool) user->accountName [0];
-}
-void Server::OnPlayerRemove (Server::User* user)
+void Server::OnPlayerRemove (Server::UserP pUser)
 {
     // Tell other players about this one's removal:
     int len = USERNAME_MAXLENGTH + 1;
     Uint8*data = new Uint8 [USERNAME_MAXLENGTH + 1];
     data [0] = NETSIG_DELPLAYER;
-    memcpy (data + 1,user->accountName, USERNAME_MAXLENGTH);
+    memcpy (data + 1, pUser->accountName, USERNAME_MAXLENGTH);
 
-    // Send the message to all clients:
-    for(Uint64 i=0; i<maxUsers; i++)
+    if (SDL_LockMutex (pUsersMutex) == 0)
     {
-        if(users[i] && LoggedIn(users[i]) && users[i]!=user)
+        // Send the message to all clients:
+        for (UserP pOtherUser : users)
         {
-            SendToClient (users[i]->address, data, len);
+            if(pOtherUser != pUser)
+            {
+                SendToClient (pOtherUser->address, data, len);
+            }
         }
+
+        SDL_UnlockMutex (pUsersMutex);
     }
+    else
+        fprintf (stderr, "OnPlayerRemove, error locking mutex: %s", SDL_GetError ());
+
     delete[] data;
 }
-void Server::TellAboutLogout (Server::User* to, const char* loggedOutUsername)
+void Server::TellAboutLogout (UserP to, const char* loggedOutUsername)
 {
     // User 'to' will be told that 'loggedOutUsername' has logged out.
 
@@ -265,7 +492,7 @@ void Server::TellAboutLogout (Server::User* to, const char* loggedOutUsername)
     SendToClient (to->address, data, len);
     delete[] data;
 }
-void Server::TellUserAboutUser (Server::User* to, Server::User* about)
+void Server::TellUserAboutUser (UserP to, const UserP about)
 {
     // user 'about' has been added and user 'to' must know
 
@@ -283,64 +510,84 @@ void Server::TellUserAboutUser (Server::User* to, Server::User* about)
     SendToClient (to->address, data, len);
     delete [] data;
 }
-void Server::DelUser(const Uint64 i)
+void Server::DelUser (Server::UserP pUser)
 {
-    RSA_free (users[i]->key);
-    delete users[i];
-    users [i] = NULL;
-}
-void Server::DelUser(Server::User* user)
-{
-    for(Uint64 i=0; i<maxUsers; i++)
+    if (SDL_LockMutex (pUsersMutex) != 0)
     {
-        if (users[i]==user)
+        fprintf (stderr, "Error removing user, could not lock mutex: %s\n", SDL_GetError ());
+        return;
+    }
+
+    users.remove (pUser);
+    delete pUser;
+
+    SDL_UnlockMutex (pUsersMutex);
+}
+void Server::Update (Uint32 ticks)
+{
+    if (SDL_LockMutex (pUsersMutex) != 0)
+    {
+        fprintf (stderr, "Error updating users, could not lock mutex: %s\n", SDL_GetError ());
+        return;
+    }
+
+    std::list<UserP> toRemove;
+    for (UserP pUser : users)
+    {
+        // periodically send pings to every user
+
+        pUser->ticksSinceLastContact += ticks;
+        if(!(pUser->pinging) && pUser->ticksSinceLastContact > CONNECTION_PINGPERIOD)
         {
-            DelUser(i);
+            Uint8 ping = NETSIG_PINGSERVER;
+            SendToClient (pUser->address, &ping, 1);
+            pUser->pinging = true;
+        }
+        if (pUser->ticksSinceLastContact > CONNECTION_TIMEOUT_TICKS )
+        {
+            OnMessage (SERVER_MSG_INFO, "%s timed out", pUser->accountName);
+
+            toRemove.push_back (pUser);
         }
     }
-}
-void Server::Update(Uint32 ticks)
-{
-    for(Uint64 i=0; i<maxUsers; i++)
+    SDL_UnlockMutex (pUsersMutex);
+
+    for (UserP pUser : toRemove)
     {
-        UserP user=users[i];
-        if (user)
-        {
-            // periodically send pings to every user
-
-            user->ticksSinceLastContact += ticks;
-            if(!(user->pinging) && user->ticksSinceLastContact > CONNECTION_PINGPERIOD)
-            {
-                Uint8 ping = NETSIG_PINGSERVER;
-                SendToClient (user->address,&ping,1);
-                user->pinging = true;
-            }
-            if( user->ticksSinceLastContact > CONNECTION_TIMEOUT_TICKS )
-            {
-                // A connecton timeout
-
-                OnPlayerRemove(user);
-                DelUser(i);
-            }
-        }
+        OnPlayerRemove (pUser);
+        DelUser (pUser);
     }
 }
-void Server::OnStateSet (User *user, UserState* state)
+void Server::OnStateSet (UserP user, const UserState* state)
 {
-    user->state.ticks = SDL_GetTicks();
-    user->state.pos = state->pos;
+    // Must lock the mutex when altering a user in the list.
+    if (SDL_LockMutex (pUsersMutex) == 0)
+    {
+        for (UserP pUser : users)
+        {
+            if (pUser == user)
+            {
+                user->state.ticks = SDL_GetTicks(); // Update to current time
+                user->state.pos = state->pos;
+            }
+        }
+
+        SDL_UnlockMutex (pUsersMutex);
+    }
+    else
+        fprintf (stderr, "Error setting user state, could not lock mutex: %s\n", SDL_GetError ());
 
     SendUserStateToAll (user);
 }
-void Server::OnChatMessage (const User *user, const char *msg)
+void Server::OnChatMessage (const UserP pUser, const char *msg)
 {
     ChatEntry e;
-    strcpy (e.username, user->accountName);
+    strcpy (e.username, pUser->accountName);
     strcpy (e.message, msg);
 
     chat_history.push_back (e);
 
-    OnMessage (SERVER_MSG_INFO, "%s said: %s", user->accountName, msg);
+    OnMessage (SERVER_MSG_INFO, "%s said: %s", pUser->accountName, msg);
 
     // Tell everybody about this chat message:
 
@@ -353,36 +600,34 @@ void Server::OnChatMessage (const User *user, const char *msg)
 
     delete [] data;
 }
-void Server::SendUserStateToAll (User* user)
+void Server::SendUserStateToAll (const UserP pUser)
 {
     int len = 1 + USERNAME_MAXLENGTH + sizeof(UserState);
-    Uint8* data = new Uint8[len];
+    Uint8* data = new Uint8 [len];
     data[0] = NETSIG_USERSTATE;
-    memcpy (data + 1, &user->accountName, USERNAME_MAXLENGTH);
-    memcpy (data + 1 + USERNAME_MAXLENGTH, &(user->state), sizeof(UserState));
+    memcpy (data + 1, &pUser->accountName, USERNAME_MAXLENGTH);
+    memcpy (data + 1 + USERNAME_MAXLENGTH, &(pUser->state), sizeof (UserState));
 
-    // Sends the state to everyone EXCEPT the state's user himself
-    for (Uint64 i = 0; i < maxUsers; i++)
-    {
-        if (LoggedIn (users[i]) && users[i]!=user)
-        {
-            SendToClient(users[i]->address, data, len);
-        }
-    }
-    delete[] data;
+    SendToAll (data, len);
+
+    delete [] data;
 }
 void Server::SendToAll (const Uint8 *data, const int len)
 {
-    // Sends data package to all users in the list
-    for (Uint64 i=0; i < maxUsers; i++)
+    if (SDL_LockMutex (pUsersMutex) == 0)
     {
-        if (LoggedIn(users[i]))
+        // Sends data package to all users in the list
+        for (UserP pUser : users)
         {
-            SendToClient (users[i]->address, data, len);
+            SendToClient (pUser->address, data, len);
         }
+
+        SDL_UnlockMutex (pUsersMutex);
     }
+    else
+        fprintf (stderr, "WARNING, failed to lock mutex while sending a message to all: %s", SDL_GetError ());
 }
-void Server::OnLogout(Server::User* user)
+void Server::OnLogout (Server::User* user)
 {
     // User requested logout, remove and tell other users
 
@@ -391,203 +636,93 @@ void Server::OnLogout(Server::User* user)
 
     OnMessage (SERVER_MSG_INFO, "%s just logged out", user->accountName);
 }
-void Server::OnRequest(const IPaddress& clientAddress, Uint8*data, int len)
+void Server::OnUDPPackage (const IPaddress& clientAddress, Uint8 *data, int len)
 {
-    UserP user = GetUser (clientAddress);
+    const UserP user = GetUser (&clientAddress);
     if (user)
     {
         // this is a sign of life, reset ping time
         user->ticksSinceLastContact = 0;
     }
-
-    // See if we're dealing with a logged in user:
-    bool logged_in = LoggedIn (user);
+    else // package came from user that was not logged in
+        return;
 
     Uint8 signature = data [0];
     data++; len--;
 
     // What we do now depends on the signature (first byte)
-    switch(signature)
+    switch (signature)
     {
     case NETSIG_LOGOUT:
-        if(user && logged_in)
-            OnLogout(user);
-    break;
-    case NETSIG_LOGINREQUEST:
-        if(!user)
-            OnLoginRequest(clientAddress);
-    break;
-    case NETSIG_RSAENCRYPTED:
-        OnRSAEncrypted(clientAddress,data,len);
-    break;
-    case NETSIG_AUTHENTICATE:
-        if (user && len == sizeof(LoginParams))
-            OnAuthenticate(clientAddress,(LoginParams*)data);
+        OnLogout (user);
     break;
     case NETSIG_PINGCLIENT:
-        if (logged_in)
-            SendToClient(clientAddress,&signature,1);
+        SendToClient(clientAddress,&signature,1);
     break;
     case NETSIG_PINGSERVER:
-        if (logged_in)
-            user->pinging=false;
+        user->pinging=false;
     break;
     case NETSIG_USERSTATE:
-        if (logged_in && len == sizeof(UserState))
+        if (len == sizeof(UserState))
         {
             UserState* state=(UserState*)data;
             OnStateSet(user, state);
         }
     break;
     case NETSIG_CHATMESSAGE:
+    {
+        // make sure it's null terminated and not too long:
+        char *msg = (char *)data;
+        int i = 0;
+        while (msg [i] && i < len && (i + 1) < MAX_CHAT_LENGTH)
+            i ++;
 
-        if (logged_in)
-        {
-            // make sure it's null terminated and not too long:
-            char *msg = (char *)data;
-            int i = 0;
-            while (msg [i] && i < len && (i + 1) < MAX_CHAT_LENGTH)
-                i ++;
+        if (msg [i])
+            msg [i] = NULL;
 
-            if (msg [i])
-                msg [i] = NULL;
-
-            OnChatMessage (user, msg);
-        }
+        OnChatMessage (user, msg);
+    }
     break;
     case NETSIG_REQUESTPLAYERINFO:
-        if (logged_in && len == USERNAME_MAXLENGTH)
+        if (len == USERNAME_MAXLENGTH)
         {
-            User* other=GetUser((const char*)data);
-            if(other)
+            User* other = GetUser ((const char *)data);
+            if (other)
             {
-                TellUserAboutUser(user,other);
+                TellUserAboutUser (user, other);
             }
             else // this user doesn't know yet about this other user logging out
             {
-                TellAboutLogout(user,(const char*)data);
+                TellAboutLogout (user, (const char *)data);
             }
         }
     default:
         return;
     }
 }
-void Server::OnRSAEncrypted(const IPaddress& clientAddress, Uint8*encrypted, int len)
+void Server::OnTCPConnection (TCPsocket clientSocket)
 {
-    // Decrypt the message using the RSA key we remembered for this user
-
-    UserP user = GetUser(clientAddress);
-    if (!user)
+    if (!clientSocket)
         return;
 
-    int maxflen=maxFLEN(user->key);
-
-    Uint8* decrypted = new Uint8[maxflen];
-    int decryptedSize = RSA_private_decrypt (len, encrypted, decrypted, user->key, SERVER_RSA_PADDING);
-    OnRequest (clientAddress, decrypted, decryptedSize);
-    delete[] decrypted;
-}
-void Server::OnAuthenticate(const IPaddress& clientAddress, LoginParams* params)
-{
-    User *pendingUser = GetUser(clientAddress),
-         *prevUser;
-
-    if ((prevUser = GetUser (params->username)))
+    IPaddress *pClientIP = SDLNet_TCP_GetPeerAddress (clientSocket);
+    if (!pClientIP)
     {
-        // This username is already logged in
+        fprintf (stderr, "SDLNet_TCP_GetPeerAddress: %s\n", SDLNet_GetError());
+        return;
+    }
 
-        // Tell the client that this user is already logged in:
-        Uint8 response = NETSIG_ALREADYLOGGEDIN;
-        SendToClient (clientAddress,&response,1);
+    Uint8 signal;
+    if (SDLNet_TCP_Recv (clientSocket, &signal, 1) == 1)
+    {
+        if (signal == NETSIG_LOGINREQUEST)
 
-        // Remove the user that requested the login:
-        if (prevUser != pendingUser)
-            DelUser (pendingUser);
+            OnLogin (clientSocket, pClientIP);
     }
     else
-    {
-        UserP user = GetUser (clientAddress);
-        if (user && authenticate (accountsPath.c_str(), params->username, params->password))
-        {
-            // username and password match
+        fprintf (stderr, "Recieved no signal from newly opened tcp socket: %s\n", SDLNet_GetError());
 
-            // register username with ip-address:
-            strcpy (user->accountName, params->username);
-
-            user->params.hue = rand() % 360; // give the user a random color
-            user->state.pos.x=-1000;
-            user->state.pos.y=-1000;
-
-            // Send user the message that login succeeded,
-            // along with his first state and parameters:
-            int len = 1 + sizeof(UserParams) + sizeof(UserState);
-            Uint8* data = new Uint8 [len];
-            data [0] = NETSIG_LOGINSUCCESS;
-            memcpy(data + 1, &user->params, sizeof(UserParams));
-            memcpy(data + 1 + sizeof(UserParams), &user->state, sizeof(UserState));
-            SendToClient (clientAddress,data,len);
-            delete data;
-
-            OnMessage (SERVER_MSG_INFO, "%s just logged in", user->accountName);
-
-            // Tell other users about this new user:
-            for(Uint64 i = 0; i < maxUsers; i++)
-            {
-                if(users[i] && LoggedIn(users[i]))
-                {
-                    if(users[i]!=user)
-                    {
-                        TellUserAboutUser (user, users[i]);
-                        TellUserAboutUser (users[i], user);
-                    }
-                }
-            }
-        }
-        else // authentication failed
-        {
-            Uint8 response = NETSIG_AUTHENTICATIONERROR;
-            SendToClient (clientAddress, &response, 1);
-
-            // Remove the user that requested the login:
-            DelUser (pendingUser);
-        }
-    }
-}
-void Server::OnLoginRequest (const IPaddress& clientAddress)
-{
-    if (GetUser (clientAddress))
-    {
-        // We already have a user logged in under the requested username
-
-        Uint8 response = NETSIG_ALREADYLOGGEDIN;
-        SendToClient (clientAddress, &response, 1);
-    }
-    else
-    {
-        UserP user = AddUser ();
-        if (user)
-        {
-            // Send the user a public key to encrypt password:
-
-            int keySize = i2d_RSAPublicKey(user->key, NULL);
-            Uint8* data = new Uint8 [keySize + 1];
-            data [0] = NETSIG_RSAPUBLICKEY;
-            unsigned char *pe = (unsigned char *)(data + 1);
-            i2d_RSAPublicKey (user->key, &pe);
-
-            SendToClient (clientAddress, data, keySize + 1);
-
-            delete [] data;
-
-            // Register IP address:
-            user->address = clientAddress;
-        }
-        else // too many users already
-        {
-            Uint8 response = NETSIG_SERVERFULL;
-            SendToClient (clientAddress, &response, 1);
-        }
-    }
+    SDLNet_TCP_Close (clientSocket);
 }
 bool Server::SendToClient (const IPaddress& clientAddress, const Uint8*data, int len)
 {
@@ -601,7 +736,7 @@ bool Server::SendToClient (const IPaddress& clientAddress, const Uint8*data, int
     memcpy (out->data, data, len);
     out->len = len;
 
-    SDLNet_UDP_Send (socket, -1, out);
+    SDLNet_UDP_Send (udp_socket, -1, out);
 
     if (out->status != len) // the wrong number has been returned
         return false;
@@ -610,33 +745,38 @@ bool Server::SendToClient (const IPaddress& clientAddress, const Uint8*data, int
 }
 void Server::PrintChatHistory () const
 {
-    for (std::list<ChatEntry>::const_iterator it = chat_history.begin(); it != chat_history.end(); it++)
+    for (const ChatEntry &entry : chat_history)
     {
-        const ChatEntry *pEntry = &(*it);
-        printf ("%s said: %s\n", pEntry->username, pEntry->message);
+        printf ("%s said: %s\n", entry.username, entry.message);
     }
 }
-void Server::PrintUsers() const
+void Server::PrintUsers () const
 {
     bool printedHeader = false;
     char ipStr[IP_STRINGLENGTH];
     int nFound = 0;
-    for(Uint64 i = 0; i < maxUsers; i++)
+
+    if (SDL_LockMutex (pUsersMutex) == 0)
     {
-        if (!users[i])
-            continue;
+        for (UserP pUser : users)
+        {
+            if (nFound <= 0)
+            { // only print a header if there are users
+                printf("IP-address:   \taccount-name:  \tlast contact(ms ago):\n");
+            }
+            nFound ++;
+
+            ip2String (pUser->address, ipStr);
+            printf ("%s\t%14s\t%u\n", ipStr, pUser->accountName, pUser->ticksSinceLastContact);
+        }
+
+        SDL_UnlockMutex (pUsersMutex);
 
         if (nFound <= 0)
-        { // only print a header if there are users
-            printf("IP-address:   \taccount-name:  \tlast contact(ms ago):\n");
-        }
-        nFound ++;
-
-        ip2String(users[i]->address, ipStr);
-        printf("%s\t%14s\t%u\n", ipStr, users[i]->accountName, users[i]->ticksSinceLastContact);
+            printf ("nobody is logged in right now\n");
     }
-    if (nFound <= 0)
-        printf ("nobody is logged in right now\n");
+    else
+        fprintf (stderr, "error printing users, couldn't lock mutex: %s\n", SDL_GetError ());
 }
 int Server::LoopThreadFunc (void* p)
 {
@@ -644,13 +784,26 @@ int Server::LoopThreadFunc (void* p)
 
     Server* server = (Server*)p;
     Uint32 ticks0 = SDL_GetTicks(), ticks;
+    TCPsocket clientSocket;
 
     while (!server->done) // is the server still running?
     {
-        // Poll for incoming packets:
-        while (SDLNet_UDP_Recv (server->socket, server->in))
+        // Poll for incoming tcp connections:
+        while ((clientSocket = SDLNet_TCP_Accept (server->tcp_socket)))
         {
-            server->OnRequest (server->in->address, server->in->data, server->in->len);
+            MakeSDLThread (
+                [&]
+                {
+                    server->OnTCPConnection (clientSocket);
+                    return 0;
+                },
+                "server_tcp_thread");
+        }
+
+        // Poll for incoming packets:
+        while (SDLNet_UDP_Recv (server->udp_socket, server->in))
+        {
+            server->OnUDPPackage (server->in->address, server->in->data, server->in->len);
         }
 
         // Get time passed since last iteration:

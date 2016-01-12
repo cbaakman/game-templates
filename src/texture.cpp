@@ -251,3 +251,47 @@ pngload_failure: // things to do when an error occurs during reading:
 
     return false;
 }
+
+#include "io.h"
+bool LoadPNG (const char *zip_path,
+              const char *png_path,
+              Texture *pTex)
+{
+    SDL_RWops *f = SDL_RWFromZipArchive (zip_path, png_path);
+    if (!f) // file or archive missing
+        return false;
+
+    bool success = LoadPNG (f, pTex);
+    f->close (f);
+
+    if (!success)
+    {
+        SetError ("error loading PNG image %s: %s", png_path, GetError ());
+        return false;
+    }
+
+    return true;
+}
+bool LoadPNG (const std::string &zip_path,
+              const std::string &png_path,
+              Texture *pTex)
+{
+    return LoadPNG (zip_path.c_str (), png_path.c_str (), pTex);
+}
+
+LoadFunc LoadPNGFunc (const char *zip_path,
+                      const char *png_path,
+                      Texture *pTex)
+{
+    return LoadPNGFunc (std::string (zip_path), std::string (png_path), pTex);
+}
+LoadFunc LoadPNGFunc (const std::string &zip_path,
+                      const std::string &png_path,
+                      Texture *pTex)
+{
+    // Load func is asynchronous, so pass pathnames by value:
+    return [zip_path, png_path, pTex] ()
+    {
+        return LoadPNG (zip_path, png_path, pTex);
+    };
+}

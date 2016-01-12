@@ -50,7 +50,8 @@
 #endif
 
 Client::Client():
-    fromServer(NULL), toServer(NULL), udpPackets(NULL), socket(NULL),
+    fromServer(NULL), toServer(NULL), udpPackets(NULL),
+    udp_socket(NULL),
 
     done(false),
     pScene(NULL)
@@ -107,7 +108,7 @@ void Client::MainLoop(void)
             HandleEvent (&event);
         }
 
-        while(SDLNet_UDP_Recv(socket, fromServer))
+        while(SDLNet_UDP_Recv(udp_socket, fromServer))
         {
             if (fromServer->address.host == serverAddress.host &&
                 fromServer->address.port == serverAddress.port)
@@ -153,7 +154,7 @@ void Client::HandleEvent (const SDL_Event *event)
 
     } // End switch
 }
-void EventListener :: OnEvent (const SDL_Event *event)
+void EventListener::OnEvent (const SDL_Event *event)
 {
     // Sends SDL events to the appropriate handler functions
 
@@ -205,6 +206,19 @@ int main (int argc, char* argv[])
 
     return 0;
 }
+IPaddress *Client::GetUDPAddress ()
+{
+    return pUDPAddress;
+}
+TCPsocket Client::Server_TCP_Connect ()
+{
+    TCPsocket socket = SDLNet_TCP_Open (&serverAddress);
+    if (!socket)
+    {
+        fprintf (stderr, "error tcp connecting to the server: %s\n", SDLNet_GetError());
+    }
+    return socket;
+}
 bool Client::SendToServer(const Uint8* data, const int len)
 {
     toServer->address.host = serverAddress.host;
@@ -218,7 +232,7 @@ bool Client::SendToServer(const Uint8* data, const int len)
 
     memcpy (toServer -> data, data, len);
     toServer->len = len;
-    SDLNet_UDP_Send (socket, -1, toServer);
+    SDLNet_UDP_Send (udp_socket, -1, toServer);
 
     if (toServer->status != len)
     {
@@ -245,7 +259,7 @@ bool Client::Init()
         SetError ("SDLNet_Init: %s", SDLNet_GetError());
         return false;
     }
-    if (!(socket = SDLNet_UDP_Open (0))) // the client can run on a random port
+    if (!(udp_socket = SDLNet_UDP_Open (0))) // the client can run on a random port
     {
         SetError ("SDLNet_UDP_Open: %s", SDLNet_GetError());
         return false;
@@ -253,6 +267,11 @@ bool Client::Init()
     if (SDLNet_ResolveHost (&serverAddress, hostName, port) == -1)
     {
         SetError ("SDLNet_ResolveHost with hostname %s and port %d: %s", hostName, port, SDLNet_GetError());
+        return false;
+    }
+    if (!(pUDPAddress = SDLNet_UDP_GetPeerAddress (udp_socket, -1)))
+    {
+        SetError ("SDLNet_UDP_GetPeerAddress from own udp socket: %s", SDLNet_GetError());
         return false;
     }
     if(!(udpPackets = SDLNet_AllocPacketV(2, PACKET_MAXSIZE)))
@@ -384,10 +403,10 @@ void Client::CleanUp()
         udpPackets = NULL;
         fromServer = toServer = NULL;
     }
-    if (socket)
+    if (udp_socket)
     {
-        SDLNet_UDP_Close(socket);
-        socket = NULL;
+        SDLNet_UDP_Close(udp_socket);
+        udp_socket = NULL;
     }
     SDLNet_Quit();
     Mix_CloseAudio();

@@ -268,6 +268,8 @@ public:
     ~MeshState();
 };
 
-
+// Shortcuts:
+bool LoadMesh (const std::string &zipPath, const std::string &xmlPath, MeshData *pData);
+bool LoadMesh (const char *zipPath, const char *xmlPath, MeshData *pData);
 
 #endif // MESH_H

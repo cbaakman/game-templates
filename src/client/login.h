@@ -41,7 +41,10 @@
 class LoginScene : public Client::Scene
 {
 private:
-    void Login();
+
+    void LoginProc (TCPsocket socket, const LoginParams params);
+    void StartLogin ();
+    void GetLoginParams (LoginParams *p);
 
     // variables used during login:
     bool logging;
@@ -164,7 +167,6 @@ private:
 
     void OnServerMessage(const Uint8*data, int len);
 
-    void SendEncryptedAuthentication (RSA* publicKey);
     void OnLogin (UserParams* params, UserState* state);
 
     void RenderCursor (int mX, int mY);

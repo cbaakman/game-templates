@@ -379,56 +379,6 @@ void RenderTexturedVertices (const VertexBuffer *pBuffer)
 
     glBindBuffer (GL_ARRAY_BUFFER, 0);
 }
-LoadFunc GetShTextureLoadFunc (const std::string &zipPath, const std::string &pngPath, Texture *pTexture)
-{
-    return [zipPath, pngPath, pTexture] ()
-    {
-        SDL_RWops *f = SDL_RWFromZipArchive (zipPath.c_str(), pngPath.c_str ());
-        if (!f) // file or archive missing
-            return false;
-
-        bool success = LoadPNG(f, pTexture);
-        f->close(f);
-
-        if (!success)
-        {
-            SetError ("error parsing %s: %s", pngPath.c_str (), GetError ());
-            return false;
-        }
-
-        return true;
-    };
-}
-bool LoadMesh (const std::string &zipPath, const std::string &xmlPath, MeshData *pData)
-{
-    // Load mesh as xml:
-
-    SDL_RWops *f = SDL_RWFromZipArchive (zipPath.c_str(), xmlPath.c_str ());
-    if (!f)
-        return false;
-
-    xmlDocPtr  pDoc = ParseXML (f);
-    f->close(f);
-
-    if (!pDoc)
-    {
-        SetError ("error parsing %s: %s", xmlPath.c_str (), GetError ());
-        return false;
-    }
-
-    // Convert xml to mesh:
-
-    bool success = ParseMesh (pDoc, pData);
-    xmlFreeDoc (pDoc);
-
-    if (!success)
-    {
-        SetError ("error parsing %s: %s", xmlPath.c_str (), GetError ());
-        return false;
-    }
-
-    return true;
-}
 void ShadowScene::AddAll (Loader *pLoader)
 {
     /*
@@ -439,10 +389,10 @@ void ShadowScene::AddAll (Loader *pLoader)
     const std::string resPath = std::string (SDL_GetBasePath()) + "test3d.zip";
 
     // Load dummy texture:
-    pLoader->Add (GetShTextureLoadFunc (resPath, "dummy.png", &texDummy));
+    pLoader->Add (LoadPNGFunc (resPath, "dummy.png", &texDummy));
 
     // Load dummy normal texture:
-    pLoader->Add (GetShTextureLoadFunc (resPath, "dummy_n.png", &texDummyNormal));
+    pLoader->Add (LoadPNGFunc (resPath, "dummy_n.png", &texDummyNormal));
 
     // Load dummy mesh as xml document:
     pLoader->Add (
@@ -474,7 +424,7 @@ void ShadowScene::AddAll (Loader *pLoader)
     );
 
     // Load environment texture:
-    pLoader->Add (GetShTextureLoadFunc (resPath, "box.png", &texBox));
+    pLoader->Add (LoadPNGFunc (resPath, "box.png", &texBox));
 
     // Load environment mesh as xml:
     pLoader->Add (
@@ -507,7 +457,7 @@ void ShadowScene::AddAll (Loader *pLoader)
     );
 
     // Load skybox texture:
-    pLoader->Add (GetShTextureLoadFunc (resPath, "sky.png", &texSky));
+    pLoader->Add (LoadPNGFunc (resPath, "sky.png", &texSky));
 
     // Load skybox mesh as xml:
     pLoader->Add (
@@ -533,18 +483,17 @@ void ShadowScene::AddAll (Loader *pLoader)
     );
 
     // Load texture for the particles:
-    pLoader->Add (GetShTextureLoadFunc (resPath, "particle.png", &texPar));
+    pLoader->Add (LoadPNGFunc (resPath, "particle.png", &texPar));
 
     // Create shader object for player:
     pLoader->Add (
         [this] ()
         {
-            shader_normal = CreateShaderProgram (normal_vsh, normal_fsh);
+            shader_normal = CreateShaderProgram (GL_VERTEX_SHADER, normal_vsh,
+                                                 GL_FRAGMENT_SHADER, normal_fsh);
+
             if (!shader_normal)
-            {
-                SetError ("error creating normal shader program: %s", GetError ());
                 return false;
-            }
 
             // Pick tangent and bitangent index:
             GLint max_attribs;
@@ -552,6 +501,18 @@ void ShadowScene::AddAll (Loader *pLoader)
 
             index_tangent = max_attribs - 2;
             index_bitangent = max_attribs - 1;
+
+            /*
+                Tell the shaders which attribute indices represent
+                tangen and bitangent:
+             */
+            glBindAttribLocation (shader_normal, index_tangent, "tangent");
+            if (!CheckGLOK ("setting tangent attrib location"))
+                return false;
+
+            glBindAttribLocation (shader_normal, index_bitangent, "bitangent");
+            if (!CheckGLOK ("setting bitangent attrib location"))
+                return false;
 
             return true;
         }
@@ -580,7 +541,7 @@ void ShadowScene::Update (const float dt)
     if (state[SDL_SCANCODE_A] || state[SDL_SCANCODE_D]
         || state[SDL_SCANCODE_W] || state[SDL_SCANCODE_S])
     {
-        getCameraPosition(posPlayer, angleX, angleY, distCamera, posCamera);
+        getCameraPosition (posPlayer, angleX, angleY, distCamera, posCamera);
 
         // Move dummy, according to camera view and buttons pressed
         GLfloat mx, mz;
@@ -1109,9 +1070,6 @@ void ShadowScene::Render ()
 
     texLoc = glGetUniformLocation (shader_normal, "tex_normal");
     glUniform1i (texLoc, 1);
-
-    glBindAttribLocation (shader_normal, index_tangent, "tangent");
-    glBindAttribLocation (shader_normal, index_bitangent, "bitangent");
 
     // Send the vertex buffer contents to the shader:
     RenderNormalMapVertices (&vbo_dummy, index_tangent, index_bitangent);

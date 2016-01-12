@@ -62,24 +62,38 @@ void vec2::operator-= (const vec2& v2)
     x -= v2.x;
     y -= v2.y;
 }
+void vec2::operator/= (const float v)
+{
+    x /= v;
+    y /= v;
+}
+void vec2::operator*= (const float v)
+{
+    x *= v;
+    y *= v;
+}
 vec2 vec2::operator- () const
 {
     vec2 v(-x,-y);
     return v;
 }
-float vec2::length2() const
+float vec2::Length2 () const
 {
     return (x*x+y*y);
 }
-float vec2::length() const
+float vec2::Length () const
 {
-    return sqrt(length2());
+    return sqrt (Length2());
 }
-vec2 vec2::unit() const
+vec2 vec2::Unit () const
 {
-    return (*this/length());
+    const float l = Length();
+    if (l > 0.0f)
+        return (*this / l);
+    else
+        return *this;
 }
-vec2 vec2::rotate(float a) const
+vec2 vec2::Rotate (const float a) const
 {
     vec2 r;
     const float
@@ -91,7 +105,7 @@ vec2 vec2::rotate(float a) const
 
     return r;
 }
-float vec2::angle () const
+float vec2::Angle () const
 {
     return atan (y / x);
 }
@@ -99,21 +113,21 @@ vec2 operator* (const float& f, const vec2& v)
 {
     return (v * f);
 }
-float distance2(const vec2& v1, const vec2& v2)
+float Distance2 (const vec2& v1, const vec2& v2)
 {
-    return (v2 - v1).length2();
+    return (v2 - v1).Length2();
 }
-float distance(const vec2& v1, const vec2& v2)
+float Distance (const vec2& v1, const vec2& v2)
 {
-    return (v2 - v1).length();
+    return (v2 - v1).Length();
 }
-float dot (const vec2& v1, const vec2& v2)
+float Dot (const vec2 &v1, const vec2 &v2)
 {
     return v1.x * v2.x + v1.y * v2.y;
 }
-float angle (const vec2&v1,const vec2&v2)
+float Angle (const vec2 &v1,const vec2 &v2)
 {
-    float a=acosf(dot(v1.unit(),v2.unit()));
+    float a = acosf (Dot (v1.Unit (), v2.Unit ()));
 
     /*
         Return an angle between -PI and PI.
@@ -125,11 +139,11 @@ float angle (const vec2&v1,const vec2&v2)
 
     return a;
 }
-vec2 projection (const vec2& v,const vec2& on_v)
+vec2 Projection (const vec2& v, const vec2& on_v)
 {
-    return on_v * dot (v, on_v) / on_v.length2 ();
+    return on_v * Dot (v, on_v) / on_v.Length2 ();
 }
-vec2 lineIntersection(const vec2& a1, const vec2& a2, const vec2& b1, const vec2& b2)
+vec2 LineIntersection (const vec2& a1, const vec2& a2, const vec2& b1, const vec2& b2)
 {
      float d = (a1.x - a2.x) * (b1.y - b2.y) - (a1.y - a2.y) * (b1.x - b2.x),
            a = a1.x * a2.y - a1.y * a2.x,
@@ -138,7 +152,7 @@ vec2 lineIntersection(const vec2& a1, const vec2& a2, const vec2& b1, const vec2
      vec2 r ((a*(b1.x-b2.x)-b*(a1.x-a2.x))/d,(a*(b1.y-b2.y)-b*(a1.y-a2.y))/d);
      return r;
 }
-vec2 pointOnBezierCurve(float ti, const vec2& p0, const vec2& p1, const vec2& p2, const vec2& p3)
+vec2 PointOnBezierCurve (float ti, const vec2& p0, const vec2& p1, const vec2& p2, const vec2& p3)
 {
     float   invti = 1.0f - ti;
 

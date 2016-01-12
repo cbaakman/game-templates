@@ -27,12 +27,42 @@
 #include <string>
 
 /**
- * Creates a shader program from source.
- * :param sourceVertex: source of the vertex shader
- * :param sourceFragment: source of the fragment shader
+ * Compile the source of a shader.
+ * :param type: GL_VERTEX_SHADER, GL_TESS_CONTROL_SHADER, GL_TESS_EVALUATION_SHADER, GL_GEOMETRY_SHADER, or GL_FRAGMENT_SHADER.
+ * :returns: OpenGL handle to shader, or 0 on error
+ */
+GLuint CreateShader (const std::string& source, GLenum type);
+
+/**
+ * Creates a shader program from given shaders.
+ * :param shaderN: shader objects created with 'CreateShader', max 6
  * :returns: OpenGL handle to the shader program, or 0 on error
  */
-GLuint CreateShaderProgram (const std::string& sourceVertex, const std::string& sourceFragment);
-GLuint CreateShaderProgram (const char *sourceVertex, const char *sourceFragment);
+GLuint CreateShaderProgram (const GLuint shader1);
+GLuint CreateShaderProgram (const GLuint shader1, const GLuint shader2);
+GLuint CreateShaderProgram (const GLuint shader1, const GLuint shader2, const GLuint shader3);
+GLuint CreateShaderProgram (const GLuint shader1, const GLuint shader2, const GLuint shader3,
+                            const GLuint shader4);
+GLuint CreateShaderProgram (const GLuint shader1, const GLuint shader2, const GLuint shader3,
+                            const GLuint shader4, const GLuint shader5);
+GLuint CreateShaderProgram (const GLuint shader1, const GLuint shader2, const GLuint shader3,
+                            const GLuint shader4, const GLuint shader5, const GLuint shader6);
+
+// Shortcuts
+GLuint CreateShaderProgram (GLenum type1, const std::string& source1);
+GLuint CreateShaderProgram (GLenum type1, const std::string& source1,
+                            GLenum type2, const std::string& source2);
+GLuint CreateShaderProgram (GLenum type1, const std::string& source1,
+                            GLenum type2, const std::string& source2,
+                            GLenum type3, const std::string& source3);
+GLuint CreateShaderProgram (GLenum type1, const std::string& source1,
+                            GLenum type2, const std::string& source2,
+                            GLenum type3, const std::string& source3,
+                            GLenum type4, const std::string& source4);
+GLuint CreateShaderProgram (GLenum type1, const std::string& source1,
+                            GLenum type2, const std::string& source2,
+                            GLenum type3, const std::string& source3,
+                            GLenum type4, const std::string& source4,
+                            GLenum type5, const std::string& source5);
 
 #endif // SHADER_H

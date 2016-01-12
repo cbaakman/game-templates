@@ -19,21 +19,45 @@
 
 
 #include <string>
+#include <list>
 #include <stdio.h>
+#include <cstring>
 
 #include "err.h"
 #include "shader.h"
 
-/**
- * Compile either the source of a vertex or fragment shader.
- * :param type: either GL_VERTEX_SHADER or GL_FRAGMENT_SHADER
- * :returns: OpenGL handle to shader, or 0 on error
- */
-GLuint CreateShader(const std::string& source, int type)
+void GetShaderTypeName (GLenum type, char *pOut)
 {
-    if(type != GL_VERTEX_SHADER && type != GL_FRAGMENT_SHADER)
+    switch (type)
     {
-        SetError ("Incorrect shader type: %.4X", type);
+    case GL_VERTEX_SHADER:
+        strcpy (pOut, "vertex");
+        break;
+    case GL_FRAGMENT_SHADER:
+        strcpy (pOut, "fragment");
+        break;
+    case GL_GEOMETRY_SHADER:
+        strcpy (pOut, "geometry");
+        break;
+    case GL_TESS_CONTROL_SHADER:
+        strcpy (pOut, "tessellation control");
+        break;
+    case GL_TESS_EVALUATION_SHADER:
+        strcpy (pOut, "tessellation evaluation");
+        break;
+    default:
+        strcpy (pOut, "");
+    };
+}
+
+GLuint CreateShader(const std::string& source, GLenum type)
+{
+    char typeName [100];
+    GetShaderTypeName (type, typeName);
+
+    if (!typeName [0])
+    {
+        SetError ("Unknown shader type: %.4X", type);
         return 0;
     }
 
@@ -55,13 +79,7 @@ GLuint CreateShader(const std::string& source, int type)
         char *errorString = new char [logLength + 1];
         glGetShaderInfoLog (shader, logLength, NULL, errorString);
 
-        if (type == GL_VERTEX_SHADER)
-
-            SetError ("Error compiling vertex shader: %s", errorString);
-
-        else if (type == GL_FRAGMENT_SHADER)
-
-            SetError ("Error compiling fragment shader: %s", errorString);
+        SetError ("Error compiling %s shader: %s", typeName, errorString);
 
         delete [] errorString;
 
@@ -71,52 +89,213 @@ GLuint CreateShader(const std::string& source, int type)
 
     return shader;
 }
-GLuint CreateShaderProgram (const char *sourceVertex, const char *sourceFragment)
+GLuint CreateShaderProgram (const std::list <GLuint>& shaders);
+GLuint CreateShaderProgram (const GLuint s1)
 {
-    return CreateShaderProgram (std::string (sourceVertex), std::string (sourceFragment));
+    std::list <GLuint> shaders;
+    shaders.push_back (s1);
+    return CreateShaderProgram (shaders);
 }
-GLuint CreateShaderProgram (const std::string& sourceVertex, const std::string& sourceFragment)
+GLuint CreateShaderProgram (const GLuint s1, const GLuint s2)
+{
+    std::list <GLuint> shaders;
+    shaders.push_back (s1);
+    shaders.push_back (s2);
+    return CreateShaderProgram (shaders);
+}
+GLuint CreateShaderProgram (const GLuint s1, const GLuint s2, const GLuint s3)
+{
+    std::list <GLuint> shaders;
+    shaders.push_back (s1);
+    shaders.push_back (s2);
+    shaders.push_back (s3);
+    return CreateShaderProgram (shaders);
+}
+GLuint CreateShaderProgram (const GLuint s1, const GLuint s2, const GLuint s3,
+                            const GLuint s4)
+{
+    std::list <GLuint> shaders;
+    shaders.push_back (s1);
+    shaders.push_back (s2);
+    shaders.push_back (s3);
+    shaders.push_back (s4);
+    return CreateShaderProgram (shaders);
+}
+GLuint CreateShaderProgram (const GLuint s1, const GLuint s2, const GLuint s3,
+                            const GLuint s4, const GLuint s5)
+{
+    std::list <GLuint> shaders;
+    shaders.push_back (s1);
+    shaders.push_back (s2);
+    shaders.push_back (s3);
+    shaders.push_back (s4);
+    shaders.push_back (s5);
+    return CreateShaderProgram (shaders);
+}
+GLuint CreateShaderProgram (const GLuint s1, const GLuint s2, const GLuint s3,
+                            const GLuint s4, const GLuint s5, const GLuint s6)
+{
+    std::list <GLuint> shaders;
+    shaders.push_back (s1);
+    shaders.push_back (s2);
+    shaders.push_back (s3);
+    shaders.push_back (s4);
+    shaders.push_back (s5);
+    shaders.push_back (s6);
+    return CreateShaderProgram (shaders);
+}
+GLuint CreateShaderProgram (const std::list <GLuint>& shaders)
 {
     GLint result = GL_FALSE;
     int logLength;
-    GLuint program=0, vertexShader, fragmentShader;
+    GLuint program=0;
 
-    // Compile the sources:
-    vertexShader = CreateShader (sourceVertex, GL_VERTEX_SHADER);
-    fragmentShader = CreateShader (sourceFragment, GL_FRAGMENT_SHADER);
+    // Combine the compiled shaders into a program:
+    program = glCreateProgram();
 
-    if (vertexShader && fragmentShader)
+    for (auto shader : shaders)
+        glAttachShader (program, shader);
+
+    glLinkProgram (program);
+
+    glGetProgramiv (program, GL_LINK_STATUS, &result);
+    if (result != GL_TRUE)
     {
-        // Combine the compiled shaders into a program:
-        program = glCreateProgram();
+        // Error occurred, get log:
 
-        glAttachShader (program, vertexShader);
-        glAttachShader (program, fragmentShader);
+        glGetProgramiv(program, GL_INFO_LOG_LENGTH, &logLength);
 
-        glLinkProgram (program);
+        char *errorString = new char [logLength];
+        glGetProgramInfoLog (program, logLength, NULL, errorString);
+        SetError ("Error linking shader program: %s", errorString);
+        delete [] errorString;
 
-        glGetProgramiv (program, GL_LINK_STATUS, &result);
-        if (result != GL_TRUE)
-        {
-            // Error occurred, get log:
-
-            glGetProgramiv(program, GL_INFO_LOG_LENGTH, &logLength);
-
-            char *errorString = new char [logLength];
-            glGetProgramInfoLog (program, logLength, NULL, errorString);
-            SetError ("Error linking shader program: %s", errorString);
-            delete [] errorString;
-
-            glDeleteShader (vertexShader);
-            glDeleteShader (fragmentShader);
-            glDeleteProgram (program);
-            return 0;
-        }
+        glDeleteProgram (program);
+        return 0;
     }
 
-    // Not needed anymore at this point:
-    glDeleteShader (vertexShader);
-    glDeleteShader (fragmentShader);
+    return program;
+}
+GLuint CreateShaderProgram (GLenum type1, const std::string& source1)
+{
+    GLuint sh1 = CreateShader (source1, type1);
+    if (!sh1)
+    {
+        glDeleteShader (sh1);
+        return 0;
+    }
+
+    GLuint program = CreateShaderProgram (sh1);
+
+    // schedule to delete when program is deleted
+    glDeleteShader (sh1);
+
+    return program;
+}
+GLuint CreateShaderProgram (GLenum type1, const std::string& source1,
+                            GLenum type2, const std::string& source2)
+{
+    GLuint sh1 = CreateShader (source1, type1),
+           sh2 = CreateShader (source2, type2);
+    if (!(sh1 && sh2))
+    {
+        glDeleteShader (sh1);
+        glDeleteShader (sh2);
+        return 0;
+    }
+
+    GLuint program = CreateShaderProgram (sh1, sh2);
+
+    // schedule to delete when program is deleted
+    glDeleteShader (sh1);
+    glDeleteShader (sh2);
+
+    return program;
+}
+GLuint CreateShaderProgram (GLenum type1, const std::string& source1,
+                            GLenum type2, const std::string& source2,
+                            GLenum type3, const std::string& source3)
+{
+    GLuint sh1 = CreateShader (source1, type1),
+           sh2 = CreateShader (source2, type2),
+           sh3 = CreateShader (source3, type3);
+
+    if (!(sh1 && sh2 && sh3))
+    {
+        glDeleteShader (sh1);
+        glDeleteShader (sh2);
+        glDeleteShader (sh3);
+        return 0;
+    }
+
+    GLuint program = CreateShaderProgram (sh1, sh2, sh3);
+
+    // schedule to delete when program is deleted
+    glDeleteShader (sh1);
+    glDeleteShader (sh2);
+    glDeleteShader (sh3);
+
+    return program;
+}
+GLuint CreateShaderProgram (GLenum type1, const std::string& source1,
+                            GLenum type2, const std::string& source2,
+                            GLenum type3, const std::string& source3,
+                            GLenum type4, const std::string& source4)
+{
+    GLuint sh1 = CreateShader (source1, type1),
+           sh2 = CreateShader (source2, type2),
+           sh3 = CreateShader (source3, type3),
+           sh4 = CreateShader (source4, type4);
+
+    if (!(sh1 && sh2 && sh3 && sh4))
+    {
+        glDeleteShader (sh1);
+        glDeleteShader (sh2);
+        glDeleteShader (sh3);
+        glDeleteShader (sh4);
+        return 0;
+    }
+
+    GLuint program = CreateShaderProgram (sh1, sh2, sh3, sh4);
+
+    // schedule to delete when program is deleted
+    glDeleteShader (sh1);
+    glDeleteShader (sh2);
+    glDeleteShader (sh3);
+    glDeleteShader (sh4);
+
+    return program;
+}
+GLuint CreateShaderProgram (GLenum type1, const std::string& source1,
+                            GLenum type2, const std::string& source2,
+                            GLenum type3, const std::string& source3,
+                            GLenum type4, const std::string& source4,
+                            GLenum type5, const std::string& source5)
+{
+    GLuint sh1 = CreateShader (source1, type1),
+           sh2 = CreateShader (source2, type2),
+           sh3 = CreateShader (source3, type3),
+           sh4 = CreateShader (source4, type4),
+           sh5 = CreateShader (source5, type5);
+
+    if (!(sh1 && sh2 && sh3 && sh4 && sh5))
+    {
+        glDeleteShader (sh1);
+        glDeleteShader (sh2);
+        glDeleteShader (sh3);
+        glDeleteShader (sh4);
+        glDeleteShader (sh5);
+        return 0;
+    }
+
+    GLuint program = CreateShaderProgram (sh1, sh2, sh3, sh4, sh5);
+
+    // schedule to delete when program is deleted
+    glDeleteShader (sh1);
+    glDeleteShader (sh2);
+    glDeleteShader (sh3);
+    glDeleteShader (sh4);
+    glDeleteShader (sh5);
 
     return program;
 }

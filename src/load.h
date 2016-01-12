@@ -31,12 +31,13 @@
 typedef std::function <bool (void)> LoadFunc;
 
 /**
- * This could represent a resource.
+ * A Loadable object could represent a resource.
+ *
+ * A Loadable object may not be deleted between the calls
+ * to 'Loader::Add' and 'Loader::LoadAll'
  */
 class Loadable
 {
-private:
-    LoadFunc load;
 public:
     virtual bool Load (void) = 0; // works like LoadFunc
 };
@@ -53,7 +54,7 @@ private:
     std::list <LoadFunc> toLoad;
 public:
     void Add (LoadFunc);
-    void Add (Loadable *); // object must not be deleted before loading
+    void Add (Loadable *);
 
     /**
      * If a progress object is given, loading progress will be reported to it.

@@ -96,7 +96,7 @@ const char
             vec3 eyeVertex,
                  eyeNormal;
             vec2 texCoord;
-        } VertexIn [3];
+        } VertexIn [];
 
         out VertexData {
             vec3 eyeNormal;

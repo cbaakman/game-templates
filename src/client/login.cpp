@@ -281,7 +281,9 @@ bool LoginScene::LoginButton::MouseOver(GLfloat mX, GLfloat mY) const
 void LoginScene::LoginButton::OnMouseClick (const SDL_MouseButtonEvent *event)
 {
     if (MouseOver(event->x,event->y) && event->button == SDL_BUTTON_LEFT)
+    {
         parent->StartLogin();
+    }
 }
 void LoginScene::LoginButton::RenderCursor(int mX, int mY)
 {
@@ -366,6 +368,7 @@ LoginScene::LoginScene (Client *p) : Scene(p),
     usernameBox (NULL), passwordBox (NULL), loginButton (NULL),
 
     logging (false),
+    loginSocket (NULL),
     t (0.0f)
 {
     errorMessage[0] = NULL;
@@ -376,6 +379,8 @@ LoginScene::LoginScene (Client *p) : Scene(p),
 }
 LoginScene::~LoginScene ()
 {
+    SDLNet_TCP_Close (loginSocket);
+
     if (pSound)
         Mix_FreeChunk (pSound);
 
@@ -399,66 +404,95 @@ LoginScene::~LoginScene ()
  * as long as logging is set to 'true'. When logging
  * is 'false' other threads start reading from errorMessage again!
  */
-void LoginScene::LoginProc (TCPsocket socket, const LoginParams params)
+void LoginScene::LoginProc (const LoginParams params)
 {
+    // used to prevent blocking connections:
+    #define LOGINT_CHECK if (!logging) goto login_fail;
+
     Uint8 buf [PACKET_MAXSIZE],
           signal = NULL;
     int n_sent, n_recieved, keyLen;
     RSA *publicKey;
 
-    signal = NETSIG_LOGINREQUEST;
-    if (SDLNet_TCP_Send (socket, &signal, 1) != 1)
+    LOGINT_CHECK;
+
+    loginSocket = pClient->Server_TCP_Connect ();
+    if (!loginSocket)
     {
-        strcpy (errorMessage, "Disconnected from the server");
-        goto login_end;
+        strcpy (errorMessage, "Error connecting to the server!");
+        goto login_fail;
     }
 
-    // Expect response from server here:
-    if ((n_recieved = SDLNet_TCP_Recv (socket, buf, PACKET_MAXSIZE)) <= 0)
+    LOGINT_CHECK;
+
+    signal = NETSIG_LOGINREQUEST;
+    if (SDLNet_TCP_Send (loginSocket, &signal, 1) != 1)
     {
         strcpy (errorMessage, "Disconnected from the server");
-        goto login_end;
+        goto login_fail;
     }
+
+    LOGINT_CHECK;
+
+    // Expect response from server here:
+    if ((n_recieved = SDLNet_TCP_Recv (loginSocket, buf, PACKET_MAXSIZE)) <= 0)
+    {
+        strcpy (errorMessage, "Disconnected from the server");
+        goto login_fail;
+    }
+
+    LOGINT_CHECK;
 
     signal = buf [0];
 
     if (signal == NETSIG_SERVERFULL)
     {
         strcpy (errorMessage, "Server is full");
-        goto login_end;
+        goto login_fail;
+    }
+    else if (signal == NETSIG_INTERNALERROR)
+    {
+        strcpy (errorMessage, "Serverside Internal Error");
+        goto login_fail;
     }
     else if (signal == NETSIG_RSAPUBLICKEY)
     {
         if (n_recieved <= 1)
         {
+            strcpy (errorMessage, "Disconnected from the server");
+
             fprintf (stderr, "missing attached public key\n");
-            goto login_end;
+            goto login_fail;
         }
 
         const unsigned char *pKey = buf + 1;
         publicKey = d2i_RSAPublicKey (NULL, &pKey, n_recieved - 1);
         if (!publicKey)
         {
+            strcpy (errorMessage, "Disconnected from the server");
+
             fprintf (stderr, "d2i_RSAPublicKey failed\n");
-            goto login_end;
+            goto login_fail;
         }
 
         const int encSZ = RSA_size (publicKey); // encrypted data buffer size
         if (maxFLEN (publicKey) < sizeof (LoginParams)) // must fit in
         {
+            strcpy (errorMessage, "Disconnected from the server");
+
             fprintf (stderr, "data too big for rsa key\n");
-            goto login_end;
+            goto login_fail;
         }
 
         Uint8 *encrypted = new Uint8 [encSZ];
 
         int encrypted_len = RSA_public_encrypt (sizeof (LoginParams), (const unsigned char *)&params, encrypted, publicKey, SERVER_RSA_PADDING);
-        if (SDLNet_TCP_Send (socket, encrypted, encrypted_len) != encrypted_len)
+        if (SDLNet_TCP_Send (loginSocket, encrypted, encrypted_len) != encrypted_len)
         {
             strcpy (errorMessage, "Disconnected from the server");
 
             fprintf (stderr, "error while sending encrypted login: %s\n", SDLNet_GetError ());
-            goto login_end;
+            goto login_fail;
         }
 
         delete [] encrypted;
@@ -467,11 +501,13 @@ void LoginScene::LoginProc (TCPsocket socket, const LoginParams params)
     else // invalid signal
     {
         strcpy (errorMessage, "Disconnected from the server");
-        goto login_end;
+        goto login_fail;
     }
 
+    LOGINT_CHECK;
+
     // Expect response from server here:
-    if ((n_recieved = SDLNet_TCP_Recv (socket, buf, PACKET_MAXSIZE)) <= 0)
+    if ((n_recieved = SDLNet_TCP_Recv (loginSocket, buf, PACKET_MAXSIZE)) <= 0)
     {
         if (n_recieved < 0)
             fprintf (stderr, "error while recieving server response: %s\n", SDLNet_GetError ());
@@ -479,25 +515,27 @@ void LoginScene::LoginProc (TCPsocket socket, const LoginParams params)
             fprintf (stderr, "server hung up before responding\n");
 
         strcpy (errorMessage, "Disconnected from the server");
-        goto login_end;
+        goto login_fail;
     }
+
+    LOGINT_CHECK;
 
     signal = buf [0];
 
     if (signal == NETSIG_ALREADYLOGGEDIN)
     {
         strcpy (errorMessage, "Already logged in");
-        goto login_end;
+        goto login_fail;
     }
     else if (signal == NETSIG_SERVERFULL)
     {
         strcpy (errorMessage, "Server is full");
-        goto login_end;
+        goto login_fail;
     }
     else if (signal == NETSIG_AUTHENTICATIONERROR)
     {
         strcpy (errorMessage, "Authentication error");
-        goto login_end;
+        goto login_fail;
     }
     else if (signal == NETSIG_LOGINSUCCESS)
     {
@@ -508,16 +546,19 @@ void LoginScene::LoginProc (TCPsocket socket, const LoginParams params)
         return;
     }
 
-login_end:
+login_fail:
 
-    // Only do this when login fails:
-    pMenu->EnableInput ();
+    CancelLogin ();
 }
 void LoginScene::StartLogin ()
 {
-    const char  *un=usernameBox->GetText(),
-                *pw=passwordBox->GetText();
-    if(!*un || !*pw)
+    const char  *un = usernameBox->GetText(),
+                *pw = passwordBox->GetText();
+
+    // Remove any previous error messages:
+    errorMessage [0] = NULL;
+
+    if (!(*un && *pw))
     {
         strcpy (errorMessage, "Please fill in a username AND a password!");
         return;
@@ -532,33 +573,37 @@ void LoginScene::StartLogin ()
         return;
     }
 
-    TCPsocket socket = pClient->Server_TCP_Connect ();
-    if (socket)
-    {
-        logging = true;
-        loginTime = 0;
-        pMenu->DisableInput();
+    // Username and password must be passed on to the thread by value.
+    LoginParams params;
+    GetLoginParams (&params);
 
-        LoginParams params;
-        GetLoginParams (&params);
+    // Keeps track of how long the login takes:
+    loginTime = 0.0f;
 
-        MakeSDLThread (
-            [this, socket, params] ()
-            {
-                this->LoginProc (socket, params);
+    // Change the scene's GUI state:
+    logging = true;
+    pMenu->DisableInput ();
 
-                SDLNet_TCP_Close (socket);
-                this->logging = false;
+    // Try to connect in the background:
+    SDL_Thread *pLoginThread = MakeSDLThread
+    (
+        [&] ()
+        {
+            LoginProc (params);
 
-                return 0;
-            },
-            "login_thread"
-        );
-    }
-    else
-    {
-        strcpy (errorMessage, "Error connecting to the server!");
-    }
+            return 0;
+        },
+        "login_thread"
+    );
+
+    /*
+        Since the login thread takes care of the login procedure
+        and the main thread is just for user input, we don't need
+        to join them. The login thread will simply start the next scene
+        when done (or re-enable this one). And the main thread does not need to have
+        a reference allocated to this thread.
+     */
+    SDL_DetachThread (pLoginThread);
 }
 void LoginScene::GetLoginParams (LoginParams *p)
 {
@@ -722,17 +767,32 @@ void LoginScene::OnServerMessage (const Uint8*data,int len)
 
     data++; len--;
 }
+void LoginScene::CancelLogin (void)
+{
+    // Close the tcp connection:
+    SDLNet_TCP_Close (loginSocket);
+    loginSocket = NULL;
+
+    // Change the GUI back to the original state:
+    pMenu->EnableInput ();
+    logging = false;
+}
 void LoginScene::OnLogin (UserParams* params, UserState* state)
 {
     // Now it's time to activate the next scene:
     pClient->SwitchScene (nextScene);
     nextScene->OnLogin (GetUsername(), params, state);
-    errorMessage [0] = NULL;
+
+    logging = false;
+
+    // Close the tcp connection:
+    SDLNet_TCP_Close (loginSocket);
+    loginSocket = NULL;
 }
 void LoginScene::OnLogout ()
 {
     Uint8 message = NETSIG_LOGOUT;
-    pClient->SendToServer (&message,1);
+    pClient->SendToServer (&message, 1);
 
     pMenu->EnableInput ();
 }
@@ -748,15 +808,13 @@ void LoginScene::Update (const float dt)
     if (logging)
     {
         loginTime += dt;
-
-        if(loginTime > CONNECTION_TIMEOUT)
+        if (loginTime > CONNECTION_TIMEOUT)
         {
-            logging=false;
-            pMenu->EnableInput();
-            strcpy (errorMessage, "Error! Connection Timeout!");
+            strcpy (errorMessage, "Connection Timeout!");
+
+            CancelLogin ();
         }
     }
-
 
     pMenu->Update (dt);
 }
@@ -1157,7 +1215,7 @@ void TestConnectionScene::Update(const float dt)
     {
         RegisteredPlayer *other = *it;
 
-        if( currentTicks > (other->next.ticks+CONNECTION_TIMEOUT*1000) )
+        if( currentTicks > (other->next.ticks + CONNECTION_TIMEOUT*1000) )
         {
             // forget players of which no more info is recieved
             OnForgetUser (other);
@@ -1413,7 +1471,6 @@ void TestConnectionScene::OnAddedUser (const char* username, UserParams* params,
 
     if(strcmp(myUsername,username)==0) // It's about me
     {
-        // printf("%s got hue value %d",myUsername,params->hue);
         myParams = *params;
         return;
     }

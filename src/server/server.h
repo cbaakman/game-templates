@@ -43,7 +43,7 @@
 #define NETSIG_PINGSERVER           0x01
 #define NETSIG_PINGCLIENT           0x03
 
-#define NETSIG_LOGINFAIL            0x07
+#define NETSIG_INTERNALERROR        0x07
 #define NETSIG_RSAPUBLICKEY         0x08
 #define NETSIG_LOGINREQUEST         0x09
 #define NETSIG_AUTHENTICATE         0x10
@@ -87,10 +87,15 @@ struct ChatEntry // must fit inside PACKET_MAXSIZE
          message [MAX_CHAT_LENGTH]; // what was said?
 };
 
+#define RANDSTOCK_SIZE 25
+
 class Server
 {
 private:
     enum MessageType {SERVER_MSG_INFO, SERVER_MSG_ERROR};
+
+    std::list <int> randstock;
+    int GetNextRand (void);
 
     struct User // created after login, identified by IP-adress
     {
@@ -103,7 +108,7 @@ private:
         UserState state;
         UserParams params;
 
-        User (const IPaddress *, const char *accountName);
+        User (const IPaddress *, const char *accountName, const UserParams *);
     };
 
     SDL_mutex *pUsersMutex; // must lock when accessing user list
@@ -133,7 +138,7 @@ private:
 
     bool done; // if true, loopThread ends
     SDL_Thread *loopThread;
-    static int LoopThreadFunc (void* server);
+    int LoopThreadFunc (void);
 
     void Update (Uint32 ticks);
 

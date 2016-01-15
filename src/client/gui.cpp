@@ -146,19 +146,13 @@ void Menu::FocusMenuObject (MenuObject* obj)
         }
     }
 }
-void Menu::OnEvent (const SDL_Event* event)
+void Menu::OnEvent (const SDL_Event *event)
 {
-    EventListener::OnEvent (event);
-    if (focussed && inputEnabled)
-    {
-        focussed -> OnEvent (event);
-    }
+    if (inputEnabled)
+        EventListener::OnEvent (event);
 }
 void Menu::OnKeyPress (const SDL_KeyboardEvent *event)
 {
-    if (!inputEnabled)
-        return;
-
     switch (event->keysym.sym)
     {
     case SDLK_TAB:
@@ -171,14 +165,13 @@ void Menu::OnKeyPress (const SDL_KeyboardEvent *event)
                 FocusMenuObject (next);
         }
     break;
-    default: return;
+    default:
+        focussed->OnKeyPress (event);
+        return;
     }
 }
 void Menu::OnMouseClick (const SDL_MouseButtonEvent *event)
 {
-    if(!inputEnabled)
-        return;
-
     /*
         When multiple objects are hit by the mouse cursor,
         the last one in the list gets the focus. Because that
@@ -200,11 +193,22 @@ void Menu::OnMouseClick (const SDL_MouseButtonEvent *event)
         mouseOverObj->OnMouseClick (event);
     }
 }
+void Menu::OnMouseMove (const SDL_MouseMotionEvent *event)
+{
+    /*
+        Send this through to all enabled objects.
+     */
+
+    for (MenuObject *pObj : objects)
+    {
+        if (pObj->enabled)
+        {
+            pObj->OnMouseMove (event);
+        }
+    }
+}
 void Menu::OnMouseWheel (const SDL_MouseWheelEvent *event)
 {
-    if(!inputEnabled)
-        return;
-
     int mX, mY;
     SDL_GetMouseState (&mX, &mY);
 

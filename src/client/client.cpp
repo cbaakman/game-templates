@@ -158,7 +158,7 @@ void EventListener::OnEvent (const SDL_Event *event)
 {
     // Sends SDL events to the appropriate handler functions
 
-    switch(event->type) {
+    switch (event->type) {
 
         case SDL_KEYDOWN:
 

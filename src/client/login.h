@@ -42,13 +42,14 @@ class LoginScene : public Client::Scene
 {
 private:
 
-    void LoginProc (TCPsocket socket, const LoginParams params);
+    void LoginProc (const LoginParams params);
     void StartLogin ();
     void GetLoginParams (LoginParams *p);
 
     // variables used during login:
     bool logging;
     float loginTime;
+    TCPsocket loginSocket;
 
     // Set this string to show an error message on screen
     char errorMessage [100];
@@ -167,6 +168,7 @@ private:
 
     void OnServerMessage(const Uint8*data, int len);
 
+    void CancelLogin (void);
     void OnLogin (UserParams* params, UserState* state);
 
     void RenderCursor (int mX, int mY);

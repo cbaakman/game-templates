@@ -129,10 +129,10 @@ public:
     void FocusMenuObject (MenuObject *); // may be NULL to focus nothing
 
     virtual void OnEvent (const SDL_Event *);
-
-    virtual void OnMouseClick (const SDL_MouseButtonEvent *event);
-    virtual void OnKeyPress (const SDL_KeyboardEvent *event);
-    virtual void OnMouseWheel (const SDL_MouseWheelEvent *event);
+    virtual void OnMouseClick (const SDL_MouseButtonEvent *);
+    virtual void OnKeyPress (const SDL_KeyboardEvent *);
+    virtual void OnMouseWheel (const SDL_MouseWheelEvent *);
+    virtual void OnMouseMove (const SDL_MouseMotionEvent *);
 
     /*
         Any object added with AddMenuObject is automatically deleted when

@@ -39,13 +39,13 @@
 
 const int CONNECTION_TIMEOUT_TICKS = CONNECTION_TIMEOUT * 1000;
 
-Server::User::User (const IPaddress *pAddr, const char *_accountName)
+Server::User::User (const IPaddress *pAddr, const char *_accountName, const UserParams *pParams)
 {
     strcpy (accountName, _accountName);
     ticksSinceLastContact = 0;
     memcpy (&address, pAddr, sizeof (IPaddress));
 
-    params.hue = rand () % 360; // give the user a random color
+    memcpy (&params, pParams, sizeof (UserParams));
     state.pos.x = -1000;
     state.pos.y = -1000;
 
@@ -92,6 +92,13 @@ void Server::OnLogin (TCPsocket clientSocket, const IPaddress *pClientIP)
     {
         fprintf (stderr, "rsa key generation failed\n");
         RSA_free (key);
+
+        signal = NETSIG_INTERNALERROR;
+        if (SDLNet_TCP_Send (clientSocket, &signal, 1) != 1)
+        {
+            fprintf (stderr, "WARNING, could not send internal error to user: %s\n", SDLNet_GetError ());
+        }
+
         return;
     }
 
@@ -141,6 +148,13 @@ void Server::OnLogin (TCPsocket clientSocket, const IPaddress *pClientIP)
     {
         fprintf (stderr, "error decrypting login parameters, wrong size\n");
         delete [] decrypted;
+
+        signal = NETSIG_AUTHENTICATIONERROR;
+        if (SDLNet_TCP_Send (clientSocket, &signal, 1) != 1)
+        {
+            fprintf (stderr, "WARNING, could not send authentication error to user: %s\n", SDLNet_GetError ());
+        }
+
         return;
     }
 
@@ -162,9 +176,11 @@ void Server::OnLogin (TCPsocket clientSocket, const IPaddress *pClientIP)
         clientAddress.host = pClientIP->host;
         clientAddress.port = pParams->udp_port;
 
-        UserP pUser = new User (&clientAddress, pParams->username);
+        UserParams userParams;
+        userParams.hue = GetNextRand() % 360; // give the user a random color
 
-        UserParams userParams = pUser->params;
+        UserP pUser = new User (&clientAddress, pParams->username, &userParams);
+
         UserState startState = pUser->state;
 
         // Try to add user to the list:
@@ -313,7 +329,12 @@ bool Server::Init()
     }
 
     // Start the request handling thread
-    loopThread = SDL_CreateThread (LoopThreadFunc, "server_request_handler_thread", (void *)this);
+    loopThread = MakeSDLThread (
+        [this]
+        {
+            return this->LoopThreadFunc ();
+        }
+        ,"server_request_handler_thread");
     if(!loopThread)
     {
         fprintf (stderr,"Server loop thread not started\n");
@@ -329,11 +350,18 @@ bool Server::Init()
     in = udpPackets [0];
     out = udpPackets [1];
 
-    // seed the random number generator:
-    srand (time(0));
-
     done = false;
     return true;
+}
+/**
+ * Can be used from any thread.
+ */
+int Server::GetNextRand (void)
+{
+    int r = randstock.front ();
+    randstock.pop_front ();
+
+    return r;
 }
 void Server::CleanUp()
 {
@@ -778,37 +806,46 @@ void Server::PrintUsers () const
     else
         fprintf (stderr, "error printing users, couldn't lock mutex: %s\n", SDL_GetError ());
 }
-int Server::LoopThreadFunc (void* p)
+int Server::LoopThreadFunc (void)
 {
     // This function continually runs in a separate thread to handle client requests
 
-    Server* server = (Server*)p;
+    // seed the random number generator (works for this thread only):
+    srand (time (NULL));
+
     Uint32 ticks0 = SDL_GetTicks(), ticks;
     TCPsocket clientSocket;
 
-    while (!server->done) // is the server still running?
+    while (!done) // is the server still running?
     {
+        // Keep a stock of random numbers:
+        while (randstock.size() < RANDSTOCK_SIZE)
+            randstock.push_back (rand ());
+
         // Poll for incoming tcp connections:
-        while ((clientSocket = SDLNet_TCP_Accept (server->tcp_socket)))
+        while ((clientSocket = SDLNet_TCP_Accept (tcp_socket)))
         {
-            MakeSDLThread (
-                [&]
-                {
-                    server->OnTCPConnection (clientSocket);
-                    return 0;
-                },
-                "server_tcp_thread");
+            SDL_Thread *pThread = MakeSDLThread (
+            [&]
+            {
+                OnTCPConnection (clientSocket);
+                return 0;
+            },
+            "server_tcp_thread");
+
+            // Don't wait for completion:
+            SDL_DetachThread (pThread);
         }
 
         // Poll for incoming packets:
-        while (SDLNet_UDP_Recv (server->udp_socket, server->in))
+        while (SDLNet_UDP_Recv (udp_socket, in))
         {
-            server->OnUDPPackage (server->in->address, server->in->data, server->in->len);
+            OnUDPPackage (in->address, in->data, in->len);
         }
 
         // Get time passed since last iteration:
         ticks = SDL_GetTicks();
-        server->Update (ticks - ticks0);
+        Update (ticks - ticks0);
         ticks0 = ticks;
 
         SDL_Delay (100); // sleep to allow the other thread to run

@@ -30,7 +30,7 @@
 #include "../account.h"
 
 #define PACKET_MAXSIZE 512
-#define MAX_CHAT_LENGTH 100 // must fit inside packet
+#define MAX_CHAT_LENGTH 100 // must fit inside PACKET_MAXSIZE
 
 /*
     A netsig byte is usually placed at the beginning
@@ -41,9 +41,9 @@
     information already.
  */
 #define NETSIG_PINGSERVER           0x01
-#define NETSIG_RSAENCRYPTED         0x02
 #define NETSIG_PINGCLIENT           0x03
 
+#define NETSIG_INTERNALERROR        0x07
 #define NETSIG_RSAPUBLICKEY         0x08
 #define NETSIG_LOGINREQUEST         0x09
 #define NETSIG_AUTHENTICATE         0x10
@@ -66,10 +66,11 @@ inline int maxFLEN (RSA* rsa) { return (RSA_size(rsa) - 11); }
 
 #define CONNECTION_TIMEOUT 10.0f // seconds
 
-struct LoginParams
+struct LoginParams // must fit inside PACKET_MAXSIZE
 {
     char username [USERNAME_MAXLENGTH],
          password [PASSWORD_MAXLENGTH];
+    int udp_port;
 };
 struct UserParams
 {
@@ -80,37 +81,45 @@ struct UserState
     vec2 pos;
     Uint32 ticks;
 };
-struct ChatEntry
+struct ChatEntry // must fit inside PACKET_MAXSIZE
 {
     char username [USERNAME_MAXLENGTH], // who said it?
          message [MAX_CHAT_LENGTH]; // what was said?
 };
+
+#define RANDSTOCK_SIZE 25
 
 class Server
 {
 private:
     enum MessageType {SERVER_MSG_INFO, SERVER_MSG_ERROR};
 
+    std::list <int> randstock;
+    int GetNextRand (void);
+
     struct User // created after login, identified by IP-adress
     {
-        IPaddress address;
-        char accountName[USERNAME_MAXLENGTH]; // empty if not authenticated
         Uint32 ticksSinceLastContact;
         bool pinging;
-        RSA* key; // For password encryption/decryption.
+
+        IPaddress address;
+        char accountName [USERNAME_MAXLENGTH]; // empty if not authenticated
 
         UserState state;
         UserParams params;
-    };
-    typedef User* UserP;
-    UserP* users;
-    Uint64 maxUsers;
-    static bool LoggedIn (User*);
 
-    UserP AddUser ();
-    UserP GetUser (const IPaddress& address);
+        User (const IPaddress *, const char *accountName, const UserParams *);
+    };
+
+    SDL_mutex *pUsersMutex; // must lock when accessing user list
+    typedef User* UserP;
+    std::list <UserP> users;
+    Uint64 maxUsers;
+
+    bool IsServerFull (void);
+    bool AddUser (UserP user);
+    UserP GetUser (const IPaddress *address);
     UserP GetUser (const char* accountName);
-    void DelUser (const Uint64 i);
     void DelUser (UserP user);
 
     std::list <ChatEntry> chat_history;
@@ -123,36 +132,37 @@ private:
     UDPpacket *in, *out,
                 **udpPackets;
     int port;
-    UDPsocket socket;
+    UDPsocket udp_socket;
+    TCPsocket tcp_socket;
+    IPaddress mAddress;
 
     bool done; // if true, loopThread ends
     SDL_Thread *loopThread;
-    static int LoopThreadFunc (void* server);
+    int LoopThreadFunc (void);
 
     void Update (Uint32 ticks);
 
     void PrintUsers () const;
     void PrintChatHistory () const;
 
-    void TellAboutLogout(User* to, const char* loggedOutUsername);
+    void TellAboutLogout (UserP to, const char *loggedOutUsername);
 
-    void OnRequest (const IPaddress& clientAddress, Uint8*data, int len);
-    void OnRSAEncrypted (const IPaddress& clientAddress, Uint8*data, int len);
-    void OnLoginRequest (const IPaddress& clientAddress);
-    void OnAuthenticate (const IPaddress& clientAddress, LoginParams* params);
+    void OnUDPPackage (const IPaddress& clientAddress, Uint8*data, int len);
+    void OnTCPConnection (TCPsocket clientSocket);
+    void OnLogin (TCPsocket, const IPaddress *pClientIP);
     void OnLogout (User* user);
 
-    bool SendToClient (const IPaddress& clientAddress,const Uint8*data, int len);
+    bool SendToClient (const IPaddress& clientAddress, const Uint8 *data, int len);
 
-    void OnPlayerRemove (User* user);
+    void OnPlayerRemove (UserP user);
 
-    void TellUserAboutUser (User* to, User* about);
+    void TellUserAboutUser (UserP to, const UserP about);
 
-    void OnChatMessage (const User*, const char*);
-    void OnStateSet (User* user,UserState* newState);
-    void SendUserStateToAll (User* user);
+    void OnChatMessage (const UserP, const char *);
+    void OnStateSet (UserP user, const UserState *newState);
+    void SendUserStateToAll (const UserP user);
 
-    void SendToAll (const Uint8*, const int len);
+    void SendToAll (const Uint8 *, const int len);
 
     void OnMessage (MessageType, const char *format, ...);
 

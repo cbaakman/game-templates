@@ -259,12 +259,11 @@ void WaterScene::AddAll (Loader *pLoader)
     pLoader->Add (
         [this] ()
         {
-            shaderProgramWater = CreateShaderProgram (water_vsh, water_fsh);
+            shaderProgramWater = CreateShaderProgram (GL_VERTEX_SHADER, water_vsh,
+                                                      GL_FRAGMENT_SHADER, water_fsh);
+
             if (!shaderProgramWater)
-            {
-                SetError ("error creating water shader program : %s", GetError ());
                 return false;
-            }
 
             return true;
         }
@@ -273,12 +272,11 @@ void WaterScene::AddAll (Loader *pLoader)
     pLoader->Add (
         [this] ()
         {
-            shaderProgramDepth = CreateShaderProgram (srcClipVertex, srcDepth1Fragment);
+            shaderProgramDepth = CreateShaderProgram (GL_VERTEX_SHADER, srcClipVertex,
+                                                      GL_FRAGMENT_SHADER, srcDepth1Fragment);
+
             if (!shaderProgramDepth)
-            {
-                SetError ("error creating depth shader program: %s", GetError ());
                 return false;
-            }
 
             return true;
         }

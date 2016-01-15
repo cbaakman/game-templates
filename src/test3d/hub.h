@@ -26,6 +26,7 @@
 #include "toon.h"
 #include "mapper.h"
 #include "vecs.h"
+#include "grass.h"
 
 #include "../font.h"
 
@@ -41,6 +42,7 @@ private:
     ToonScene *pToonScene;
     MapperScene *pMapperScene;
     VecScene *pVecScene;
+    GrassScene *pGrassScene;
 
     // Currently rendered scene:
     Scene *pCurrent;
@@ -55,7 +57,7 @@ private:
     int help;
 
     // help strings:
-    std::string helpText [5];
+    std::string helpText [6];
 public:
     void OnEvent (const SDL_Event *event);
 

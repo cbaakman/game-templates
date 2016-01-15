@@ -64,6 +64,8 @@
 		<Unit filename="src/client/winres.rc">
 			<Option compilerVar="WINDRES" />
 		</Unit>
+		<Unit filename="src/thread.cpp" />
+		<Unit filename="src/thread.h" />
 		<Unit filename="src/err.cpp" />
 		<Unit filename="src/err.h" />
 		<Unit filename="src/font.cpp" />

@@ -65,7 +65,7 @@ App :: Scene :: Scene (App *p) : pApp (p)
 #define LOAD_BAR_WIDTH 200.0f
 #define LOAD_BAR_HEIGHT 20.0f
 #define LOAD_BAR_EDGE 3.0f
-int ProgressLoop (SDL_Window *pWindow, Progress *pProgress)
+int ProgressLoop (SDL_Window *pWindow, Progress *pProgress, bool &bStillLoading)
 {
     /*
         Since this function runs in a separate thread, we need
@@ -142,7 +142,7 @@ int ProgressLoop (SDL_Window *pWindow, Progress *pProgress)
 
         SDL_GL_SwapWindow (pWindow);
     }
-    while (passed < total); // keep rendering until all jobs are done
+    while (bStillLoading && passed < total); // keep rendering until all jobs are done
 
     SDL_GL_DeleteContext (glContext);
 
@@ -192,8 +192,9 @@ bool App::InitApp (void)
     pScene->AddAll (&loader);
 
     // Progress bar is rendered in a different thread while the scene loads:
+    bool notifyLoading = true;
     SDL_Thread* progressThread = MakeSDLThread (
-                                    [&] () { return ProgressLoop (mainWindow, &progress); },
+                                    [&] () { return ProgressLoop (mainWindow, &progress, notifyLoading); },
                                     "progress"
                                  );
     if (!progressThread)
@@ -207,7 +208,11 @@ bool App::InitApp (void)
         Some of them depend on the current thread's rendering context.
      */
     if (!loader.LoadAll (&progress))
+    {
+        notifyLoading = false;
+        SDL_DetachThread (progressThread);
         return false;
+    }
 
     // Check for other errors:
     if (!CheckGLOK ("scene init"))

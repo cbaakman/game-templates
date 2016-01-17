@@ -275,10 +275,14 @@ Server::Server() :
     settingsPath[0]=NULL;
 
     pUsersMutex = SDL_CreateMutex ();
+    pRandMutex = SDL_CreateMutex ();
+
+    rseed = time (NULL);
 }
 Server::~Server()
 {
     SDL_DestroyMutex (pUsersMutex);
+    SDL_DestroyMutex (pRandMutex);
 }
 bool Server::Init()
 {
@@ -356,12 +360,22 @@ bool Server::Init()
 /**
  * Can be used from any thread.
  */
-int Server::GetNextRand (void)
+unsigned int Server::GetNextRand (void)
 {
-    int r = randstock.front ();
-    randstock.pop_front ();
+    if (SDL_LockMutex (pRandMutex) == 0)
+    {
+        rseed = 9185162 * rseed + 2471575;
 
-    return r;
+        unsigned int r = rseed % RAND_MAX;
+
+        SDL_UnlockMutex (pRandMutex);
+        return r;
+    }
+    else
+    {
+        fprintf (stderr, "Warning: could not lock rand mutex: %s\n", SDL_GetError ());
+        return 0;
+    }
 }
 void Server::CleanUp()
 {
@@ -810,18 +824,11 @@ int Server::LoopThreadFunc (void)
 {
     // This function continually runs in a separate thread to handle client requests
 
-    // seed the random number generator (works for this thread only):
-    srand (time (NULL));
-
     Uint32 ticks0 = SDL_GetTicks(), ticks;
     TCPsocket clientSocket;
 
     while (!done) // is the server still running?
     {
-        // Keep a stock of random numbers:
-        while (randstock.size() < RANDSTOCK_SIZE)
-            randstock.push_back (rand ());
-
         // Poll for incoming tcp connections:
         while ((clientSocket = SDLNet_TCP_Accept (tcp_socket)))
         {

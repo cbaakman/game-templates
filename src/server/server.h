@@ -94,8 +94,10 @@ class Server
 private:
     enum MessageType {SERVER_MSG_INFO, SERVER_MSG_ERROR};
 
-    std::list <int> randstock;
-    int GetNextRand (void);
+    // Used for random number generation from within any thread:
+    SDL_mutex *pRandMutex;
+    unsigned int rseed;
+    unsigned int GetNextRand (void);
 
     struct User // created after login, identified by IP-adress
     {

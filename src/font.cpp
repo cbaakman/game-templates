@@ -31,43 +31,68 @@
 #include <functional>
 
 /**
- * Picks one utf8 character from the byte array and returns
- * a pointer to the data after it.
+ * Picks one unicode character from the utf-8 byte array and returns
+ * a pointer to the utf-8 data after it.
+ *
+ * See also: https://nl.wikipedia.org/wiki/UTF-8
  */
-const char *utf8_next(const char *pBytes, unicode_char *out)
+const char *next_from_utf8 (const char *pBytes, unicode_char *out)
 {
-    int take;
-    if (pBytes [0] >> 5 == 0x6)
+    int n_bytes, i;
+
+    /*
+        The first bits of the first byte determine the length
+        of the utf-8 character. The remaining first byte bits
+        are considered coding.
+     */
+
+    *out = 0x00000000;
+    if (pBytes [0] >> 5 == 0x6) // 110????? means 2 bytes
     {
-        take = 2;
+        *out = pBytes [0] & 0x1f; // ???????? & 00011111
+        n_bytes = 2;
     }
-    else if (pBytes [0] >> 4 == 0xe)
+    else if (pBytes [0] >> 4 == 0xe) // 1110??? means 3 bytes
     {
-        take = 3;
+        *out = pBytes [0] & 0x0f; // ???????? & 00001111
+        n_bytes = 3;
     }
-    else if (pBytes [0] >> 3 == 0x1e)
+    else if (pBytes [0] >> 3 == 0x1e) // 11110??? means 4 bytes
     {
-        take = 4;
+        *out = pBytes [0] & 0x07; // ???????? & 00000111
+        n_bytes = 4;
     }
     else // assume ascii
     {
-        take = 1;
+        if (pBytes [0] >> 7 == 0x01)
+        {
+            fprintf (stderr, "WARNING: utf-8 byte 1 starting in 1??????? !");
+        }
+
+        *out = pBytes [0];
+        return pBytes + 1;
     }
 
-    // store the bytes that make up the utf8 character
-    *out = 0;
-    for (int i = 0; i < take; i++)
+    // Complement the unicode identifier from the remaining encoding bits.
+    for (i = 1; i < n_bytes; i++)
     {
-        *out = (*out << 8) | pBytes [i];
+        if ((pBytes [i] & 0xc0) != 0x80)
+        {
+            fprintf (stderr, "WARNING: utf-8 byte %d not starting in 10?????? !", i + 1);
+        }
+
+        *out = (*out << 6) | (pBytes [i] & 0x3f); // ???????? & 00111111
     }
 
-    return pBytes + take; // move to the next utf8 character
+    return pBytes + n_bytes; // move to the next utf-8 character pointer
 }
 /**
  * Parses a XML character reference from a string.
- * (https://en.wikipedia.org/wiki/Numeric_character_reference)
  *
- * Only handles strings with one unicode character in it :(
+ * See also: https://en.wikipedia.org/wiki/Numeric_character_reference
+ *
+ * Only handles strings with one unicode character in it and
+ * no names, only numbers :(
  */
 bool ParseXMLUnicode (const char *repr, unicode_char *out)
 {
@@ -1153,7 +1178,7 @@ float NextWordWidth (const Font *pFont, const char *pUTF8, unicode_char prev_c)
     while (*pUTF8)
     {
         prev_c = c;
-        nUTF8 = utf8_next(pUTF8, &c);
+        nUTF8 = next_from_utf8(pUTF8, &c);
 
         if (isspace (c))
         {
@@ -1176,7 +1201,7 @@ float NextWordWidth (const Font *pFont, const char *pUTF8, unicode_char prev_c)
     while (*pUTF8)
     {
         prev_c = c;
-        nUTF8 = utf8_next(pUTF8, &c);
+        nUTF8 = next_from_utf8(pUTF8, &c);
 
         if (isspace (c))
             break;
@@ -1211,7 +1236,7 @@ float GetLineSpacing (const Font *pFont)
 bool NeedNewLine (const Font *pFont, const unicode_char prev_c, const char *pUTF8, const float current_x, const float maxWidth)
 {
     unicode_char c;
-    utf8_next(pUTF8, &c);
+    next_from_utf8(pUTF8, &c);
     const Glyph *pGlyph;
     float adv;
 
@@ -1254,7 +1279,7 @@ const char *CleanLineEnd (const char *pUTF8, int *n_removed = NULL)
 
     while (true)
     {
-        nUTF8 = utf8_next(pUTF8, &c);
+        nUTF8 = next_from_utf8(pUTF8, &c);
 
         if (c == '\n' || c == '\r')
         {
@@ -1311,7 +1336,7 @@ float NextLineWidth (const Font *pFont, const char *pUTF8, const float maxLineWi
             return w;
         }
 
-        pUTF8 = utf8_next (pUTF8, &c);
+        pUTF8 = next_from_utf8 (pUTF8, &c);
 
         if (pFont->glyphs.find(c) == pFont->glyphs.end())
         {
@@ -1385,7 +1410,7 @@ void ThroughText (const Font *pFont, const char *pUTF8,
         }
 
         // Get next utf8 char as c
-        pUTF8 = utf8_next (pUTF8, &c);
+        pUTF8 = next_from_utf8 (pUTF8, &c);
 
         if (pFont->glyphs.find(c) == pFont->glyphs.end())
         {

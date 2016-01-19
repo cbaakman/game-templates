@@ -52,7 +52,7 @@ const char *next_from_utf8 (const char *pBytes, unicode_char *out)
         *out = pBytes [0] & 0x1f; // ???????? & 00011111
         n_bytes = 2;
     }
-    else if (pBytes [0] >> 4 == 0xe) // 1110??? means 3 bytes
+    else if (pBytes [0] >> 4 == 0xe) // 1110???? means 3 bytes
     {
         *out = pBytes [0] & 0x0f; // ???????? & 00001111
         n_bytes = 3;
@@ -66,7 +66,7 @@ const char *next_from_utf8 (const char *pBytes, unicode_char *out)
     {
         if (pBytes [0] >> 7 == 0x01)
         {
-            fprintf (stderr, "WARNING: utf-8 byte 1 starting in 1??????? !");
+            fprintf (stderr, "WARNING: utf-8 byte 1 starting in 1??????? !\n");
         }
 
         *out = pBytes [0];
@@ -78,7 +78,7 @@ const char *next_from_utf8 (const char *pBytes, unicode_char *out)
     {
         if ((pBytes [i] & 0xc0) != 0x80)
         {
-            fprintf (stderr, "WARNING: utf-8 byte %d not starting in 10?????? !", i + 1);
+            fprintf (stderr, "WARNING: utf-8 byte %d not starting in 10?????? !\n", i + 1);
         }
 
         *out = (*out << 6) | (pBytes [i] & 0x3f); // ???????? & 00111111

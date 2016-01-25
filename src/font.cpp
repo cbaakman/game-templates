@@ -46,30 +46,32 @@ const char *next_from_utf8 (const char *pBytes, unicode_char *out)
         are considered coding.
      */
 
+    char first = pBytes [0];
+
     *out = 0x00000000;
-    if (pBytes [0] >> 5 == 0x6) // 110????? means 2 bytes
+    if ((first & 0xe0) == 0xc0) // 110????? means 2 bytes
     {
-        *out = pBytes [0] & 0x1f; // ???????? & 00011111
+        *out = first & 0x1f; // ???????? & 00011111
         n_bytes = 2;
     }
-    else if (pBytes [0] >> 4 == 0xe) // 1110???? means 3 bytes
+    else if ((first & 0xf0) == 0xe0) // 1110???? means 3 bytes
     {
-        *out = pBytes [0] & 0x0f; // ???????? & 00001111
+        *out = first & 0x0f; // ???????? & 00001111
         n_bytes = 3;
     }
-    else if (pBytes [0] >> 3 == 0x1e) // 11110??? means 4 bytes
+    else if ((first & 0xf8) == 0xf0) // 11110??? means 4 bytes
     {
-        *out = pBytes [0] & 0x07; // ???????? & 00000111
+        *out = first & 0x07; // ???????? & 00000111
         n_bytes = 4;
     }
     else // assume ascii
     {
-        if (pBytes [0] >> 7 == 0x01)
+        if ((first & 0xc0) == 0x80)
         {
-            fprintf (stderr, "WARNING: utf-8 byte 1 starting in 1??????? !\n");
+            fprintf (stderr, "WARNING: utf-8 byte 1 starting in 10?????? !\n");
         }
 
-        *out = pBytes [0];
+        *out = first;
         return pBytes + 1;
     }
 
@@ -97,12 +99,13 @@ const char *next_from_utf8 (const char *pBytes, unicode_char *out)
 bool ParseXMLUnicode (const char *repr, unicode_char *out)
 {
     size_t len = strlen (repr);
+
     if (len == 1) // ascii
     {
         *out = repr [0];
         return true;
     }
-    else if (repr [0] == '&' || repr [1] == '#' || repr [len - 1] == ';' ) // html code
+    else if (repr [0] == '&' && repr [1] == '#' && repr [len - 1] == ';' ) // html code
     {
         if (repr [2] == 'x') // hexadecimal
 
@@ -114,6 +117,12 @@ bool ParseXMLUnicode (const char *repr, unicode_char *out)
 
         return true;
     }
+    else if ((repr + len) == next_from_utf8 (repr, out)) // utf-8 code
+    {
+        return true;
+    }
+
+    // neither of the above
     return false;
 }
 
@@ -887,7 +896,7 @@ bool ParseSVGFont (const xmlDocPtr pDoc, const int size, Font *pFont)
 
             if (!ParseXMLUnicode((const char *)pAttrib, &ch))
             {
-                SetError ("failed to interpret unicode id: %s", (const char *)pAttrib);
+                SetError ("failed to interpret unicode id \"%s\"", (const char *)pAttrib);
                 xmlFree (pAttrib);
                 return false;
             }

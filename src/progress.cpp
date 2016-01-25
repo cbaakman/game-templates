@@ -64,7 +64,7 @@ void Progress::AddPassed (const std::size_t n)
 }
 std::size_t Progress::GetPassed ()
 {
-    std::size_t n = -1;
+    std::size_t n = 0;
 
     if (SDL_LockMutex (pPassedMutex) == 0)
     {
@@ -79,7 +79,7 @@ std::size_t Progress::GetPassed ()
 }
 std::size_t Progress::GetTotal ()
 {
-    std::size_t n = -1;
+    std::size_t n = 0;
 
     if (SDL_LockMutex (pTotalMutex) == 0)
     {

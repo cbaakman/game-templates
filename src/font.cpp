@@ -19,7 +19,6 @@
 
 
 #include "font.h"
-#include "str.h"
 #include "util.h"
 #include "err.h"
 
@@ -30,64 +29,6 @@
 #include <algorithm>
 #include <functional>
 
-/**
- * Picks one unicode character from the utf-8 byte array and returns
- * a pointer to the utf-8 data after it.
- *
- * See also: https://nl.wikipedia.org/wiki/UTF-8
- */
-const char *next_from_utf8 (const char *pBytes, unicode_char *out)
-{
-    int n_bytes, i;
-
-    /*
-        The first bits of the first byte determine the length
-        of the utf-8 character. The remaining first byte bits
-        are considered coding.
-     */
-
-    char first = pBytes [0];
-
-    *out = 0x00000000;
-    if ((first & 0xe0) == 0xc0) // 110????? means 2 bytes
-    {
-        *out = first & 0x1f; // ???????? & 00011111
-        n_bytes = 2;
-    }
-    else if ((first & 0xf0) == 0xe0) // 1110???? means 3 bytes
-    {
-        *out = first & 0x0f; // ???????? & 00001111
-        n_bytes = 3;
-    }
-    else if ((first & 0xf8) == 0xf0) // 11110??? means 4 bytes
-    {
-        *out = first & 0x07; // ???????? & 00000111
-        n_bytes = 4;
-    }
-    else // assume ascii
-    {
-        if ((first & 0xc0) == 0x80)
-        {
-            fprintf (stderr, "WARNING: utf-8 byte 1 starting in 10?????? !\n");
-        }
-
-        *out = first;
-        return pBytes + 1;
-    }
-
-    // Complement the unicode identifier from the remaining encoding bits.
-    for (i = 1; i < n_bytes; i++)
-    {
-        if ((pBytes [i] & 0xc0) != 0x80)
-        {
-            fprintf (stderr, "WARNING: utf-8 byte %d not starting in 10?????? !\n", i + 1);
-        }
-
-        *out = (*out << 6) | (pBytes [i] & 0x3f); // ???????? & 00111111
-    }
-
-    return pBytes + n_bytes; // move to the next utf-8 character pointer
-}
 /**
  * Parses a XML character reference from a string.
  *
@@ -812,6 +753,8 @@ bool ParseSvgFontHeader(const xmlNodePtr pFnt, const int size, Font *pFont, floa
     return true;
 }
 
+#define DEFAULT_CHAR '?'
+
 bool ParseSVGFont (const xmlDocPtr pDoc, const int size, Font *pFont)
 {
     // The root tag of the xml document is svg:
@@ -875,7 +818,14 @@ bool ParseSVGFont (const xmlDocPtr pDoc, const int size, Font *pFont)
 
     pFont->size = size; // size determines multiply, thus do not multiply size.
 
-    std::map<std::string, unicode_char> glyph_name_lookup;
+    /*
+        Confusing!
+
+        In this font format, the same name can be on multiple glyphs.
+        One glyph name can refer to more than one unicode entry.
+        Example: 'A' referring to both the Roman and Cyrillic A
+     */
+    std::map<std::string, std::list <unicode_char>> glyph_name_lookup;
 
     // iterate over glyph tags
     for (pChild = pFnt->children; pChild; pChild = pChild->next)
@@ -913,7 +863,9 @@ bool ParseSVGFont (const xmlDocPtr pDoc, const int size, Font *pFont)
                 std::string name = std::string((const char *)pAttrib);
                 xmlFree (pAttrib);
 
-                glyph_name_lookup [name] = ch;
+                if (glyph_name_lookup.find (name) == glyph_name_lookup.end ())
+                    glyph_name_lookup [name] = std::list <unicode_char> ();
+                glyph_name_lookup [name].push_back (ch);
             }
 
             if (pFont->glyphs.find(ch) != pFont->glyphs.end())
@@ -1045,25 +997,25 @@ bool ParseSVGFont (const xmlDocPtr pDoc, const int size, Font *pFont)
             // Combine g1 & su1 to make u1
             // Combine g2 & su2 to make u2
 
-            for (std::list<std::string>::const_iterator it = g1.begin(); it != g1.end(); it++)
+            for (const std::string name : g1)
             {
-                std::string name = *it;
-                if (glyph_name_lookup.find(name) == glyph_name_lookup.end())
+                if (glyph_name_lookup.find (name) == glyph_name_lookup.end ())
                 {
                     SetError ("undefined glyph name: %s", name.c_str());
                     return false;
                 }
-                u1.push_back(glyph_name_lookup.at(name));
+                for (const unicode_char ch : glyph_name_lookup.at (name))
+                    u1.push_back(ch);
             }
-            for (std::list<std::string>::const_iterator it = g2.begin(); it != g2.end(); it++)
+            for (const std::string name : g2)
             {
-                std::string name = *it;
                 if (glyph_name_lookup.find(name) == glyph_name_lookup.end())
                 {
                     SetError ("undefined glyph name: %s", name.c_str());
                     return false;
                 }
-                u2.push_back(glyph_name_lookup.at(name));
+                for (const unicode_char ch : glyph_name_lookup.at (name))
+                    u2.push_back(ch);
             }
             for (std::list<std::string>::const_iterator it = su1.begin(); it != su1.end(); it++)
             {
@@ -1109,6 +1061,19 @@ bool ParseSVGFont (const xmlDocPtr pDoc, const int size, Font *pFont)
                 }
             }
         }
+    }
+
+    if (pFont->glyphs.find (DEFAULT_CHAR) == pFont->glyphs.end ())
+    {
+        // even this is missing ><
+
+        pFont->glyphs [DEFAULT_CHAR] = Glyph();
+        pFont->glyphs [DEFAULT_CHAR].tex = NULL;
+        pFont->glyphs [DEFAULT_CHAR].horiz_origin_x = 0;
+        pFont->glyphs [DEFAULT_CHAR].horiz_origin_y = 0;
+        pFont->glyphs [DEFAULT_CHAR].horiz_adv_x = 0;
+        pFont->glyphs [DEFAULT_CHAR].tex_w = pFont->bbox.right - pFont->bbox.left;
+        pFont->glyphs [DEFAULT_CHAR].tex_h = pFont->bbox.bottom - pFont->bbox.top;
     }
 
     // At this point, all went well.
@@ -1194,7 +1159,7 @@ float NextWordWidth (const Font *pFont, const char *pUTF8, unicode_char prev_c)
             if (pFont->glyphs.find (c) == pFont->glyphs.end ())
             {
                 fprintf (stderr, "error: 0x%X, no such glyph\n", c);
-                return 0.0f;
+                c = DEFAULT_CHAR;
             }
 
             pGlyph = &pFont->glyphs.at (c);
@@ -1219,7 +1184,7 @@ float NextWordWidth (const Font *pFont, const char *pUTF8, unicode_char prev_c)
             if (pFont->glyphs.find (c) == pFont->glyphs.end ())
             {
                 fprintf (stderr, "error: 0x%X, no such glyph\n", c);
-                return 0.0f;
+                c = DEFAULT_CHAR;
             }
 
             pGlyph = &pFont->glyphs.at (c);
@@ -1260,7 +1225,8 @@ bool NeedNewLine (const Font *pFont, const unicode_char prev_c, const char *pUTF
 
         if (pFont->glyphs.find(c) == pFont->glyphs.end())
         {
-            return false;
+            fprintf (stderr, "ERROR: no such glyph: 0x%x\n", c);
+            c = DEFAULT_CHAR;
         }
         pGlyph = &pFont->glyphs.at (c);
 
@@ -1350,7 +1316,7 @@ float NextLineWidth (const Font *pFont, const char *pUTF8, const float maxLineWi
         if (pFont->glyphs.find(c) == pFont->glyphs.end())
         {
             fprintf (stderr, "error: 0x%X, no such glyph\n", c);
-            return 0.0f;
+            c = DEFAULT_CHAR;
         }
         pGlyph = &pFont->glyphs.at (c);
 
@@ -1423,7 +1389,8 @@ void ThroughText (const Font *pFont, const char *pUTF8,
 
         if (pFont->glyphs.find(c) == pFont->glyphs.end())
         {
-            return;
+            fprintf (stderr, "error: 0x%X, no such glyph\n", c);
+            c = DEFAULT_CHAR;
         }
         pGlyph = &pFont->glyphs.at (c);
 

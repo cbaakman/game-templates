@@ -26,12 +26,11 @@
 
 #include <map>
 #include <libxml/tree.h>
+#include "str.h"
 
 #define TEXTALIGN_LEFT 0x00
 #define TEXTALIGN_MID 0x03
 #define TEXTALIGN_RIGHT 0x06
-
-typedef int unicode_char; // these codes are backbards compatible with ascii chars
 
 struct Glyph { /* these objects are mapped one-to-one with character codes */
 

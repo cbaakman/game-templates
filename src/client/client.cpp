@@ -141,11 +141,43 @@ void Client::HandleEvent (const SDL_Event *event)
     // The only event that the client handles himself is SDL_QUIT
     // The rest is passed on to the current scene.
 
+    Uint32 windowID = SDL_GetWindowID (mainWindow);
+
     switch(event->type) {
 
         case SDL_QUIT:
             ShutDown ();
             break;
+
+        case SDL_WINDOWEVENT:
+            if (event->window.windowID != windowID)
+                break;
+
+        case SDL_KEYDOWN:
+        case SDL_KEYUP:
+            if (event->key.windowID != windowID)
+                break;
+
+        case SDL_TEXTINPUT:
+            if (event->text.windowID != windowID)
+                break;
+
+        case SDL_TEXTEDITING:
+            if (event->edit.windowID != windowID)
+                break;
+
+        case SDL_MOUSEWHEEL:
+            if (event->wheel.windowID != windowID)
+                break;
+
+        case SDL_MOUSEBUTTONDOWN:
+        case SDL_MOUSEBUTTONUP:
+            if (event->button.windowID != windowID)
+                break;
+
+        case SDL_MOUSEMOTION:
+            if (event->motion.windowID != windowID)
+                break;
 
         default:
             if (pScene)
@@ -162,8 +194,7 @@ void EventListener::OnEvent (const SDL_Event *event)
 
         case SDL_KEYDOWN:
 
-            if (event->key.repeat == 0)
-                this -> OnKeyPress (&event -> key);
+            this -> OnKeyPress (&event -> key);
             break;
 
         case SDL_KEYUP:
@@ -183,6 +214,14 @@ void EventListener::OnEvent (const SDL_Event *event)
         case SDL_MOUSEBUTTONDOWN:
 
             this -> OnMouseClick (&event -> button);
+            break;
+
+        case SDL_TEXTEDITING:
+            this -> OnTextEdit (&event -> edit);
+            break;
+
+        case SDL_TEXTINPUT:
+            this -> OnTextInput (&event -> text);
             break;
 
         default:
@@ -300,6 +339,8 @@ bool Client::Init()
         SetError ("Unable to initialize SDL: %s", SDL_GetError());
         return false;
     }
+
+    SDL_StartTextInput ();
 
     // Set the openGL parameters we want:
     SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);

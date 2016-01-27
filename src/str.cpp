@@ -24,7 +24,105 @@
 #include <cstdlib>
 #include <cstring>
 #include <math.h>
+#include <stdio.h>
 
+const char *next_from_utf8 (const char *pBytes, unicode_char *out)
+{
+    int n_bytes, i;
+
+    /*
+        The first bits of the first byte determine the length
+        of the utf-8 character. The remaining first byte bits
+        are considered coding.
+     */
+
+    char first = pBytes [0];
+
+    *out = 0x00000000;
+    if ((first & 0xe0) == 0xc0) // 110????? means 2 bytes
+    {
+        *out = first & 0x1f; // ???????? & 00011111
+        n_bytes = 2;
+    }
+    else if ((first & 0xf0) == 0xe0) // 1110???? means 3 bytes
+    {
+        *out = first & 0x0f; // ???????? & 00001111
+        n_bytes = 3;
+    }
+    else if ((first & 0xf8) == 0xf0) // 11110??? means 4 bytes
+    {
+        *out = first & 0x07; // ???????? & 00000111
+        n_bytes = 4;
+    }
+    else // assume ascii
+    {
+        if ((first & 0xc0) == 0x80)
+        {
+            fprintf (stderr, "WARNING: utf-8 byte 1 starting in 10?????? !\n");
+        }
+
+        *out = first;
+        return pBytes + 1;
+    }
+
+    // Complement the unicode identifier from the remaining encoding bits.
+    for (i = 1; i < n_bytes; i++)
+    {
+        if ((pBytes [i] & 0xc0) != 0x80)
+        {
+            fprintf (stderr, "WARNING: utf-8 byte %d not starting in 10?????? !\n", i + 1);
+        }
+
+        *out = (*out << 6) | (pBytes [i] & 0x3f); // ???????? & 00111111
+    }
+
+    return pBytes + n_bytes; // move to the next utf-8 character pointer
+}
+const char *prev_from_utf8 (const char *pBytes, unicode_char *out)
+{
+    int n = 1;
+    *out = 0;
+
+    while ((*(pBytes - n) & 0xc0) == 0x80) // still 10??????
+    {
+        *out |= (*(pBytes - n) & 0x3f) << (6 * (n - 1));
+
+        n ++;
+        if (n >= 4)
+        {
+            fprintf (stderr, "WARNING: 10?????? byte sequence of length %d encountered in utf-8!\n", n);
+        }
+    }
+
+    // Include the first utf-8 byte:
+    *out |= (*(pBytes - n) & (0x000000ff >> (n + 1))) << (6 * (n - 1));;
+
+    return pBytes - n;
+}
+const char *pos_utf8 (const char *pBytes, const std::size_t n)
+{
+    std::size_t i = 0;
+    unicode_char ch;
+    while (i < n)
+    {
+        pBytes = next_from_utf8 (pBytes, &ch);
+        i ++;
+    }
+    return pBytes;
+}
+std::size_t strlen_utf8 (const char *pBytes, const char *end)
+{
+    std::size_t n = 0;
+    unicode_char ch;
+    while (*pBytes)
+    {
+        pBytes = next_from_utf8 (pBytes, &ch);
+        n ++;
+        if (end and pBytes >= end)
+            return n;
+    }
+    return n;
+}
 const char *ParseFloat(const char *in, float *out)
 {
     float f = 10.0f;

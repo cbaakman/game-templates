@@ -95,11 +95,11 @@ MenuObject* LoginScene::UsernameBox::NextInLine() const
 {
     return parent->passwordBox;
 }
-void LoginScene::UsernameBox::OnAddChar(char c)
+void LoginScene::UsernameBox::OnAddChar (const unicode_char c)
 {
     Mix_PlayChannel (-1, parent->pSound, 0);
 }
-void LoginScene::UsernameBox::OnDelChar(char c)
+void LoginScene::UsernameBox::OnDelChar(const unicode_char c)
 {
     Mix_PlayChannel (-1, parent->pSound, 0);
 }
@@ -254,11 +254,11 @@ MenuObject* LoginScene::PasswordBox::NextInLine () const
 {
     return parent->usernameBox;
 }
-void LoginScene::PasswordBox::OnAddChar (char c)
+void LoginScene::PasswordBox::OnAddChar (const unicode_char c)
 {
     Mix_PlayChannel(-1, parent->pSound, 0);
 }
-void LoginScene::PasswordBox::OnDelChar (char c)
+void LoginScene::PasswordBox::OnDelChar (const unicode_char c)
 {
     Mix_PlayChannel(-1, parent->pSound, 0);
 }

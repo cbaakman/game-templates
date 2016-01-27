@@ -90,10 +90,10 @@ private:
     public:
         void Render();
 
-        MenuObject* NextInLine() const;
-        void OnAddChar(char c);
-        void OnDelChar(char c);
-        void OnBlock();
+        MenuObject* NextInLine () const;
+        void OnAddChar (const unicode_char c);
+        void OnDelChar (const unicode_char c);
+        void OnBlock ();
 
         UsernameBox(GLfloat x, GLfloat y, Font*, LoginScene* parent);
 
@@ -115,10 +115,10 @@ private:
     public:
         void Render();
 
-        MenuObject* NextInLine() const;
-        void OnAddChar(char c);
-        void OnDelChar(char c);
-        void OnBlock();
+        MenuObject* NextInLine () const;
+        void OnAddChar (const unicode_char c);
+        void OnDelChar (const unicode_char c);
+        void OnBlock ();
 
         PasswordBox(GLfloat x, GLfloat y, Font*, LoginScene* parent);
 

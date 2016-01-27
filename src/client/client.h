@@ -32,16 +32,19 @@
 
 #include <stdio.h>
 
-class EventListener {
+class EventListener
+{
 public:
-    virtual void OnEvent(const SDL_Event *event);
+    virtual void OnEvent (const SDL_Event *event);
     virtual void OnShutDown () {}
 
 protected:
-    virtual void OnMouseClick (const SDL_MouseButtonEvent *event) {}
-    virtual void OnMouseMove (const SDL_MouseMotionEvent *event) {}
-    virtual void OnKeyPress (const SDL_KeyboardEvent *event) {}
-    virtual void OnMouseWheel (const SDL_MouseWheelEvent *event) {}
+    virtual void OnMouseClick (const SDL_MouseButtonEvent *) {}
+    virtual void OnMouseMove (const SDL_MouseMotionEvent *) {}
+    virtual void OnKeyPress (const SDL_KeyboardEvent *) {}
+    virtual void OnMouseWheel (const SDL_MouseWheelEvent *) {}
+    virtual void OnTextEdit (const SDL_TextEditingEvent *) {}
+    virtual void OnTextInput (const SDL_TextInputEvent *) {}
 };
 
 class Client

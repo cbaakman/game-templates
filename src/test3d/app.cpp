@@ -130,7 +130,10 @@ int ProgressLoop (SDL_Window *pWindow, Progress *pProgress, bool &bStillLoading)
         glEnd ();
 
         // progress bar
-        f = float (passed) / total;
+        if (total > 0 && passed <= total)
+            f = float (passed) / total;
+        else
+            f = 0;
         x1 = rects [2][0];
         x2 = x1 + f * (rects [2][2] - rects [2][0]);
         glBegin (GL_QUADS);

@@ -23,6 +23,7 @@
 
 #include <string>
 #include <list>
+#include <cstddef>
 
 /*
     Here, the PATH_SEPARATOR macro is used
@@ -35,6 +36,36 @@
 #else
     #define PATH_SEPARATOR '/'
 #endif
+
+typedef int unicode_char; // these codes are backbards compatible with ascii chars
+
+/**
+ * Picks one unicode character from the utf-8 byte array and returns
+ * a pointer to the utf-8 data after it.
+ *
+ * See also: https://nl.wikipedia.org/wiki/UTF-8
+ */
+const char *next_from_utf8 (const char *pBytes, unicode_char *out);
+
+/**
+ * Picks one unicode character from the utf-8 byte array and returns
+ * a pointer to the utf-8 data before it.
+ *
+ * See also: https://nl.wikipedia.org/wiki/UTF-8
+ */
+const char *prev_from_utf8 (const char *pBytes, unicode_char *out);
+
+/**
+ * Tells the number of utf-8 characters in the given byte array.
+ * Set 'end' to break out before a terminating null.
+ */
+std::size_t strlen_utf8 (const char *pBytes, const char *end = 0);
+
+/**
+ * returns a pointer in the byte array where the n'th utf-8
+ * character is located. (starting from 0)
+ */
+const char *pos_utf8 (const char *pBytes, const std::size_t n);
 
 bool isnewline (const int c);
 bool emptyline (const char *line);

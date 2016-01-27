@@ -151,6 +151,10 @@ void Menu::OnEvent (const SDL_Event *event)
     if (inputEnabled)
         EventListener::OnEvent (event);
 }
+void Menu::OnTextInput (const SDL_TextInputEvent *event)
+{
+    focussed->OnTextInput (event);
+}
 void Menu::OnKeyPress (const SDL_KeyboardEvent *event)
 {
     switch (event->keysym.sym)
@@ -304,16 +308,17 @@ TextInputBox::TextInputBox(const GLfloat x, const GLfloat y,
     else showText=NULL;
 
     cursor_time=button_time=0;
-    lastCharKey=NULL;
-    lastCharKeyChar=NULL;
 }
 void TextInputBox::UpdateShowText()
 {
     if (textMask) // only used when masking
     {
+        // one mask char per utf-8 char
         int i;
-        for(i=0; text[i]; i++)
-            showText[i] = textMask;
+        const char *p;
+        unicode_char ch;
+        for (i = 0, p = text; *p; p = next_from_utf8 (p, &ch), i++)
+            showText [i] = textMask;
         showText [i] = NULL;
     }
 }
@@ -356,34 +361,43 @@ void TextInputBox::CopySelectedText() const
 
     int start = (cursorPos < fixedCursorPos) ? cursorPos : fixedCursorPos,
         end = (cursorPos > fixedCursorPos) ? cursorPos : fixedCursorPos;
+    const char *pstart, *pend, *t;
 
     // There might be no selection:
     if (start >= end)
         return;
 
     // If a text mask was used, the masked text is copied:
-    std::string ctxt;
     if (textMask)
-        ctxt = std::string (showText + start, end - start);
+        t = showText;
     else
-        ctxt = std::string (text + start, end - start);
+        t = text;
+
+    pstart = pos_utf8 (t, start);
+    pend = pos_utf8 (t, end);
+    std::string ctxt (pstart, pend - pstart);
 
     // SDL must fill the clipboard for us
-    SDL_SetClipboardText (ctxt.c_str());
+    SDL_SetClipboardText (ctxt.c_str ());
 }
-void TextInputBox::PasteText()
+void TextInputBox::PasteText ()
 {
     // Determine where selection starts and where it ends:
 
-    int start = (cursorPos < fixedCursorPos) ? cursorPos : fixedCursorPos,
-        end = (cursorPos > fixedCursorPos) ? cursorPos : fixedCursorPos,
-        n, i,
+    const char *c = SDL_GetClipboardText ();
+    unicode_char ch;
+    int n, i, f,
         space,
-        charsPasted;
+        bytesPasted,
+        cursorLeft = std::min (cursorPos, fixedCursorPos),
+        cursorRight = std::max (cursorPos, fixedCursorPos),
 
-    if(end > start) // Some text was selected, clear it first
+        start = pos_utf8 (text, cursorLeft) - text,
+        end = pos_utf8 (text, cursorRight) - text;
+
+    if (cursorRight > cursorLeft) // Some text was selected, clear it first
     {
-        ClearText (start, end);
+        ClearText (cursorLeft, cursorRight);
     }
 
     /*
@@ -393,32 +407,46 @@ void TextInputBox::PasteText()
     n = strlen (text);
     space = maxTextLength - n; // space remaining for fill
 
-    // move the right side of the cursor maximally to the right:
-    // (including null)
-    for(i=n+1; i>=start; i--)
+    /*
+        move the bytes on the right side of the cursor maximally to the right:
+        (including null)
+     */
+    for (i = n; i >= start; i--)
     {
-        text [i + space] = text[i];
+        text [i + space] = text [i];
     }
 
-    // Let sdl fetch the clipboard contents for us, then insert it:
-    strncpy (text + start, SDL_GetClipboardText (), space);
-    charsPasted = std::min ((int)strlen (SDL_GetClipboardText ()), space);
+    /*
+        Insert as much of the clipboard contents as possible,
+        Without cutting a utf-8 character in half.
+     */
+    i = f = 0;
+    while (c [i])
+    {
+        i = f;
+        f = (int) (next_from_utf8 (c + i, &ch) - c);
+        if (f > space || !ch)
+            break;
 
-    // move the cursor after the inserted part:
-    cursorPos = fixedCursorPos = start + charsPasted;
+        strncpy (text + start + i, c + i, f - i);
+        bytesPasted = f;
+    }
+
+    // put the cursor after the inserted part:
+    cursorPos = fixedCursorPos = strlen_utf8 (text, text + start + bytesPasted);
 
     // Move the right half of the original text back to the left,
     // to follow after the inserted text.
-    if (charsPasted < space)
+    if (bytesPasted < space)
     {
-        int holeSize = space - charsPasted;
-        start = start + charsPasted;
-        end = maxTextLength - holeSize;
+        int gapSize = space - bytesPasted;
+        start += bytesPasted;
+        end = maxTextLength - gapSize;
 
         // move back to the left:
-        for(i = start; i <= end; i++)
+        for (i = start; i <= end; i++)
         {
-            text[i] = text[i + holeSize];
+            text [i] = text [i + gapSize];
         }
     }
 
@@ -539,38 +567,43 @@ bool TextInputBox::MouseOver (GLfloat mX, GLfloat mY) const
     }
     return false;
 }
-void TextInputBox::OnDelChar (char) {}
-void TextInputBox::OnAddChar (char) {}
+void TextInputBox::OnDelChar (const unicode_char) {}
+void TextInputBox::OnAddChar (const unicode_char) {}
 void TextInputBox::OnBlock () {}
 void TextInputBox::OnMoveCursor (int direction) {}
-void TextInputBox::ClearText (int start, int end)
+void TextInputBox::ClearText (const std::size_t start, const std::size_t end)
 {
-    // clamp start to the string's fist character.
-    // clamp end to the string's last character.
-    int n = strlen (text), i, d;
+    // clamp start to the utf-8 string's fist character.
+    // clamp end to the utf-8 string's last character.
+    int n = strlen_utf8 (text),
+        dist, i, m;
+    const char *pstart = pos_utf8 (text, start),
+               *pend = pos_utf8 (text, end);
 
     if (start < 0)
-        start = 0;
+        pstart = 0;
 
     if (end > n)
-        end = n;
+        pend = text + strlen (text); // position of terminating null
 
-    d = end - start;
-    if (d < 0)
+    dist = pend - pstart;
+
+    if (dist <= 0)
         return; // invalid function arguments
 
-    // Move characters to the left:
-    for(i = start; i < (n - d + 1); i++)
+    // Move bytes to the left. (including terminating null)
+    m = strlen (text) + 1 - dist;
+    for (i = pstart - text; i < m; i++)
     {
-        text [i] = text [i + d];
+        text [i] = text [i + dist];
     }
 
     // If the text changes, then the masked text should also change:
-    UpdateShowText();
+    UpdateShowText ();
 }
 void TextInputBox::BackspaceProc()
 {
-    int n = strlen(text);
+    int n = strlen_utf8 (text);
     if (n > 0)
     {
         /*
@@ -591,10 +624,13 @@ void TextInputBox::BackspaceProc()
         {
             // Remove a single character:
 
-            OnDelChar (text [cursorPos - 1]);
+            unicode_char ch;
+            const char *prev = prev_from_utf8 (text + cursorPos, &ch);
+
+            OnDelChar (ch);
 
             ClearText (cursorPos - 1, cursorPos);
-            cursorPos--;
+            cursorPos --;
             fixedCursorPos = cursorPos;
         }
         else OnBlock (); // cannot go further
@@ -606,7 +642,7 @@ void TextInputBox::BackspaceProc()
 }
 void TextInputBox::DelProc()
 {
-    int n = strlen (text);
+    int n = strlen_utf8 (text);
     if (n > 0)
     {
         /*
@@ -627,8 +663,10 @@ void TextInputBox::DelProc()
         else if (cursorPos < n)
         {
             // Remove a single character:
+            unicode_char ch;
+            const char *next = next_from_utf8 (text + cursorPos, &ch);
 
-            OnDelChar (text [cursorPos]);
+            OnDelChar (ch);
 
             ClearText (cursorPos, cursorPos + 1);
             fixedCursorPos = cursorPos;
@@ -638,11 +676,11 @@ void TextInputBox::DelProc()
     else OnBlock(); // cannot go further
 
     // If the text changes, then the masked text should also change:
-    UpdateShowText(); 
+    UpdateShowText();
 }
 void TextInputBox::LeftProc()
 {
-    const Uint8 *keystate = SDL_GetKeyboardState(NULL);
+    const Uint8 *keystate = SDL_GetKeyboardState (NULL);
     const bool shift = keystate [SDL_SCANCODE_LSHIFT] || keystate [SDL_SCANCODE_RSHIFT];
 
     // See if we can move the cursor one to the left:
@@ -667,7 +705,7 @@ void TextInputBox::LeftProc()
 }
 void TextInputBox::RightProc()
 {
-    int n = strlen(text);
+    int n = strlen_utf8 (text);
 
     const Uint8 *keystate = SDL_GetKeyboardState (NULL);
     const bool shift = keystate [SDL_SCANCODE_LSHIFT] || keystate [SDL_SCANCODE_RSHIFT];
@@ -692,36 +730,46 @@ void TextInputBox::RightProc()
     // If the text changes, then the masked text should also change:
     UpdateShowText ();
 }
-void TextInputBox::AddCharProc(char c)
+void TextInputBox::AddCharProc (const char *c)
 {
     // clear the selection first, if any
     if (fixedCursorPos > cursorPos)
     {
-        ClearText (cursorPos,fixedCursorPos);
+        ClearText (cursorPos, fixedCursorPos);
         fixedCursorPos = cursorPos;
     }
     else if (fixedCursorPos < cursorPos)
     {
-        ClearText (fixedCursorPos,cursorPos);
+        ClearText (fixedCursorPos, cursorPos);
         cursorPos = fixedCursorPos;
     }
 
-    int n = strlen (text), i;
+    const char *pcursor = pos_utf8 (text, cursorPos);
+    int n = strlen (text),
+        m = strlen (c),
+        cursorOffset = pcursor - text;
+    char *p;
 
-    if (n < maxTextLength) // room for more?
+    if ((n + m) <= maxTextLength) // room for more?
     {
-        // move everything on the right of the cursor to the right
-        for(i = n + 1; i>cursorPos; i--)
+        /*
+            Move everything on the right of the cursor to the right,
+            including the terminating null.
+         */
+        for (p = text + n + 1; p > (text + cursorOffset); p--)
         {
-            text[i]=text[i-1]; // also moves the null
+            *p = *(p - m);
         }
-        text[cursorPos] = c;
+        // insert:
+        strncpy (text + cursorOffset, c, m);
 
         // move the cursor to the right, also
-        cursorPos++;
+        cursorPos ++;
         fixedCursorPos = cursorPos;
 
-        OnAddChar(c);
+        unicode_char ch;
+        next_from_utf8 (c, &ch);
+        OnAddChar (ch);
     }
     else
     {
@@ -735,59 +783,11 @@ void TextInputBox::AddCharProc(char c)
 }
 #define TEXT_BUTTON_INTERVAL 0.03f
 #define FIRST_TEXT_BUTTON_INTERVAL 0.3f
-void TextInputBox::Update(const float dt)
+void TextInputBox::Update (const float dt)
 {
     if (IsFocussed ())
     {
         cursor_time += dt; // for cursor blinking
-
-        if (button_time < 0)
-            button_time += dt;
-
-        const Uint8 *keystate = SDL_GetKeyboardState (NULL);
-
-        if (button_time >= 0)
-        {
-            /*
-                If a button is held down for a certain amount of time
-                it must be repeated.
-             */
-
-            if (keystate [SDL_SCANCODE_BACKSPACE] )
-            {
-                BackspaceProc ();
-                button_time = -TEXT_BUTTON_INTERVAL;
-            }
-            else if (keystate [SDL_SCANCODE_DELETE] )
-            {
-                DelProc ();
-                button_time = -TEXT_BUTTON_INTERVAL;
-            }
-            else if (keystate[SDL_SCANCODE_LEFT] )
-            {
-                LeftProc ();
-                button_time = -TEXT_BUTTON_INTERVAL;
-            }
-            else if (keystate [SDL_SCANCODE_RIGHT] )
-            {
-                RightProc ();
-                button_time = -TEXT_BUTTON_INTERVAL;
-            }
-
-            if (keystate [lastCharKey])
-            {
-                AddCharProc (lastCharKeyChar);
-                button_time = -TEXT_BUTTON_INTERVAL;
-            }
-            else
-            {
-                lastCharKey = NULL;
-                lastCharKeyChar = NULL;
-            }
-        }
-
-        // If the text changes, then the masked text should also change:
-        UpdateShowText ();
     }
 }
 void TextInputBox::OnMouseMove (const SDL_MouseMotionEvent *event)
@@ -870,6 +870,10 @@ void TextInputBox::OnMouseClick (const SDL_MouseButtonEvent *event)
             fixedCursorPos = prev_fixedCursorPos;
     }
 }
+void TextInputBox::OnTextInput (const SDL_TextInputEvent *event)
+{
+    AddCharProc (event->text);
+}
 void TextInputBox::OnKeyPress (const SDL_KeyboardEvent *event)
 {
     const SDL_Keycode sym = event->keysym.sym;
@@ -899,7 +903,7 @@ void TextInputBox::OnKeyPress (const SDL_KeyboardEvent *event)
     {
         // CTRL + V
 
-        PasteText();
+        PasteText ();
     }
     else if (sym == SDLK_BACKSPACE)
     {
@@ -920,20 +924,6 @@ void TextInputBox::OnKeyPress (const SDL_KeyboardEvent *event)
     {
         button_time = -FIRST_TEXT_BUTTON_INTERVAL;
         RightProc();
-    }
-    else
-    {
-        char c = GetKeyChar (event);
-
-        if (c) // character key pressed
-        {
-            button_time = -FIRST_TEXT_BUTTON_INTERVAL;
-            lastCharKey = scn;
-            lastCharKeyChar = c;
-            AddCharProc (c);
-        }
-        else
-            return;
     }
 
     // When the text changes, the masked text should also change:

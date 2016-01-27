@@ -133,6 +133,7 @@ public:
     virtual void OnKeyPress (const SDL_KeyboardEvent *);
     virtual void OnMouseWheel (const SDL_MouseWheelEvent *);
     virtual void OnMouseMove (const SDL_MouseMotionEvent *);
+    virtual void OnTextInput (const SDL_TextInputEvent *);
 
     /*
         Any object added with AddMenuObject is automatically deleted when
@@ -167,6 +168,8 @@ private:
            cursorPos is the current cursor position,
            fixedCursorPos is where selection started
            when either shift or the left mouse key was down.
+
+           Both are measured in utf-8 character positions.
          */
         cursorPos,
         fixedCursorPos;
@@ -185,25 +188,21 @@ private:
     float button_time,
           cursor_time;
 
-    // Variables that remember which char key was last pressed:
-    int lastCharKey;
-    char lastCharKeyChar;
-
     // This changes the masked text, must be called when input text changes.
     void UpdateShowText();
 
     // Removes the characters at given positions from the text string.
-    void ClearText(const int start, const int end);
+    void ClearText (const std::size_t start, const std::size_t end);
 
     /*
        The following routines are called whenever a key press
        changes something to the state of the input box.
      */
-    void AddCharProc(char c);
-    void BackspaceProc();
-    void DelProc();
-    void LeftProc(); // when left key is pressed
-    void RightProc(); // when right key is pressed
+    void AddCharProc (const char *);
+    void BackspaceProc ();
+    void DelProc ();
+    void LeftProc (); // when left key is pressed
+    void RightProc (); // when right key is pressed
 
     // Render subroutines:
     void RenderText() const;
@@ -220,8 +219,8 @@ protected:
         do nothing by default, but they are called when the corresponding change occurs.
         They can be overridden.
      */
-    virtual void OnDelChar (char);
-    virtual void OnAddChar (char);
+    virtual void OnDelChar (const unicode_char);
+    virtual void OnAddChar (const unicode_char);
     virtual void OnMoveCursor (int direction); // -1: left, 1: right
     virtual void OnBlock (); // user tries to move the cursor, but can't go any further
 
@@ -229,9 +228,10 @@ protected:
     virtual void OnFocusLose ();
 
     // The input box needs to respond to the following input events:
-    void OnMouseClick (const SDL_MouseButtonEvent *event);
-    void OnMouseMove (const SDL_MouseMotionEvent *event);
-    void OnKeyPress (const SDL_KeyboardEvent *event);
+    void OnMouseClick (const SDL_MouseButtonEvent *);
+    void OnMouseMove (const SDL_MouseMotionEvent *);
+    void OnKeyPress (const SDL_KeyboardEvent *);
+    void OnTextInput (const SDL_TextInputEvent *);
 
 public:
     TextInputBox (const GLfloat x, const GLfloat y,

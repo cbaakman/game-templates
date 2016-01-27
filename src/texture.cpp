@@ -219,8 +219,9 @@ bool LoadPNG (SDL_RWops *io, Texture *pTex)
         glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
         // Make OpenGL fill the texture:
-        gluBuild2DMipmaps ( GL_TEXTURE_2D, format, (GLsizei)png_width, (GLsizei)png_height, format, GL_UNSIGNED_BYTE, png_data);
-        //glTexImage2D( GL_TEXTURE_2D, 0, format, (GLsizei)png_width, (GLsizei)png_height, 0, format, GL_UNSIGNED_BYTE, data);
+        //gluBuild2DMipmaps ( GL_TEXTURE_2D, format, (GLsizei)png_width, (GLsizei)png_height, format, GL_UNSIGNED_BYTE, png_data);
+        glTexImage2D (GL_TEXTURE_2D, 0, format, (GLsizei)png_width, (GLsizei)png_height, 0, format, GL_UNSIGNED_BYTE, png_data);
+        glGenerateMipmap (GL_TEXTURE_2D);
 
         pTex->tex = tex;
         pTex->w = (GLsizei)png_width;

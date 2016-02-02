@@ -26,51 +26,57 @@
 #include <math.h>
 #include <stdio.h>
 
+int count_successive_left_1bits (const char byte)
+{
+    int n = 0;
+    while (n < 8 && (byte & (0x0080 >> n)))
+
+        n ++;
+
+    return n;
+}
 const char *next_from_utf8 (const char *pBytes, unicode_char *out)
 {
     int n_bytes, i;
 
     /*
         The first bits of the first byte determine the length
-        of the utf-8 character. The remaining first byte bits
-        are considered coding.
+        of the utf-8 character. The number of bytes equals the
+        number of uninterrupted 1 bits at the beginning.
+        The remaining first byte bits are considered coding.
+
+        ???????? : 0 bytes
+        1??????? : 1 bytes
+        11?????? : 2 bytes
+        110????? : stop, take 6 coding bits and assume 2 byte code!
+          ^^^^^^
      */
 
-    char first = pBytes [0];
+    n_bytes = count_successive_left_1bits (pBytes [0]);
 
-    *out = 0x00000000;
-    if ((first & 0xe0) == 0xc0) // 110????? means 2 bytes
+    if (n_bytes > 0 && n_bytes < 8)
     {
-        *out = first & 0x1f; // ???????? & 00011111
-        n_bytes = 2;
-    }
-    else if ((first & 0xf0) == 0xe0) // 1110???? means 3 bytes
-    {
-        *out = first & 0x0f; // ???????? & 00001111
-        n_bytes = 3;
-    }
-    else if ((first & 0xf8) == 0xf0) // 11110??? means 4 bytes
-    {
-        *out = first & 0x07; // ???????? & 00000111
-        n_bytes = 4;
+         // get the remaining first byte bits:
+
+        *out = pBytes [0] & (0x00ff >> n_bytes);
     }
     else // assume ascii
     {
-        if ((first & 0xc0) == 0x80)
-        {
-            fprintf (stderr, "WARNING: utf-8 byte 1 starting in 10?????? !\n");
-        }
-
-        *out = first;
+        *out = pBytes [0];
         return pBytes + 1;
     }
 
-    // Complement the unicode identifier from the remaining encoding bits.
+    /*
+        Complement the unicode identifier from the remaining encoding bits.
+        All but the first UTF-8 byte must start in 10.., so six coding
+        bits per byte:
+                        .. 10?????? 10?????? 10?????? ..
+     */
     for (i = 1; i < n_bytes; i++)
     {
-        if ((pBytes [i] & 0xc0) != 0x80)
+        if ((pBytes [i] & 0xc0) != 0x80)// (???????? & 11000000) != 10000000
         {
-            fprintf (stderr, "WARNING: utf-8 byte %d not starting in 10?????? !\n", i + 1);
+            fprintf (stderr, "WARNING: utf-8 byte %d not starting in 10.. !\n", i + 1);
         }
 
         *out = (*out << 6) | (pBytes [i] & 0x3f); // ???????? & 00111111
@@ -80,24 +86,38 @@ const char *next_from_utf8 (const char *pBytes, unicode_char *out)
 }
 const char *prev_from_utf8 (const char *pBytes, unicode_char *out)
 {
-    int n = 1;
+    int n_bytes = 0;
+    bool begin_found = false;
+    char mask, byte;
+
     *out = 0;
-
-    while ((*(pBytes - n) & 0xc0) == 0x80) // still 10??????
+    while (!begin_found)
     {
-        *out |= (*(pBytes - n) & 0x3f) << (6 * (n - 1));
+        // Take one byte:
+        n_bytes ++;
+        byte = *(pBytes - n_bytes);
 
-        n ++;
-        if (n >= 4)
-        {
-            fprintf (stderr, "WARNING: 10?????? byte sequence of length %d encountered in utf-8!\n", n);
-        }
+        // is it 10??????
+        begin_found = (byte & 0xc0) == 0x80;
+
+        if (begin_found)
+            mask = 0x3f; // takes rightmost 6 bits
+        else
+            mask = 0x00ff >> n_bytes; // takes coding bits from 1st byte
+
+        *out |= unicode_char (byte & mask) << (6 * n_bytes);
     }
 
-    // Include the first utf-8 byte:
-    *out |= (*(pBytes - n) & (0x000000ff >> (n + 1))) << (6 * (n - 1));;
+    if (n_bytes <= 1 ||
+        count_successive_left_1bits (byte) != n_bytes)
+        // assume ascii
+    {
+        *out = *(pBytes - 1);
 
-    return pBytes - n;
+        return pBytes - 1;
+    }
+
+    return pBytes - n_bytes;
 }
 const char *pos_utf8 (const char *pBytes, const std::size_t n)
 {

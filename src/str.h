@@ -37,7 +37,7 @@
     #define PATH_SEPARATOR '/'
 #endif
 
-typedef int unicode_char; // these codes are backbards compatible with ascii chars
+typedef char32_t unicode_char; // these codes are backbards compatible with ascii chars
 
 /**
  * Picks one unicode character from the utf-8 byte array and returns
@@ -99,5 +99,52 @@ void split (const char *s, const char by, std::list<std::string> &out);
  * Gives the start and end position of the word at pos in the string.
  */
 void WordAt (const char *s, const int pos, int &start, int &end);
+
+/**
+ * Shows the input value's bits as a string of
+ * '1's and '0's.
+ * Can be used in print statements for debugging.
+ * Output depends on endianness.
+ */
+template <typename Type>
+std::string bitstr (const Type &value)
+{
+    const char *p = (const char *)&value;
+    int i, j, n = sizeof (Type);
+    bool bit;
+    char byte;
+
+    std::string s;
+    for (i = 0; i < n; i++)
+    {
+        byte = p [i];
+        for (j = 0; j < 8; j++)
+        {
+            bit = byte & (0x80 >> j);
+            s += bit? '1' : '0';
+        }
+    }
+    return s;
+}
+
+
+/**
+ * Like bitstr, but doesn't work for non-numerical data.
+ * The output is independent of endianness.
+ */
+template <typename Number>
+std::string bitstr_noendian (const Number &value)
+{
+    int i, n = 8 * sizeof (Number);
+    bool bit;
+
+    std::string s;
+    for (i = n - 1; i >= 0; i--)
+    {
+        bit = value & (0x01 << i);
+        s += bit? '1' : '0';
+    }
+    return s;
+}
 
 #endif // STR_H

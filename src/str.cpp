@@ -314,3 +314,23 @@ void WordAt (const char *s, const int pos, int &start, int &end)
     while (s[end] && isspace (s [end]) == bSpace)
         end++;
 }
+std::string bitstr (const std::string &str)
+{
+    return bitstr (str.c_str()) + "(c++)";
+}
+std::string bitstr (const char *str)
+{
+    int i, j;
+    bool bit;
+
+    std::string s;
+    for (i = 0; str [i]; i++)
+    {
+        for (j = 0; j < 8; j++)
+        {
+            bit = str [i] & (0x80 >> j);
+            s += bit? '1' : '0';
+        }
+    }
+    return s;
+}

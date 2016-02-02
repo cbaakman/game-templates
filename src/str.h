@@ -126,7 +126,11 @@ std::string bitstr (const Type &value)
     }
     return s;
 }
-
+/**
+ * Does not generate output for the terminating null!
+ */
+std::string bitstr (const std::string &);
+std::string bitstr (const char *);
 
 /**
  * Like bitstr, but doesn't work for non-numerical data.

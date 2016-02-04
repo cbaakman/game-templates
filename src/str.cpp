@@ -17,7 +17,6 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 
-
 #include "str.h"
 
 #include <cctype>
@@ -29,7 +28,7 @@
 int count_successive_left_1bits (const char byte)
 {
     int n = 0;
-    while (n < 8 && (byte & (0x0080 >> n)))
+    while (n < 8 && (byte & (0b0000000010000000 >> n)))
 
         n ++;
 
@@ -58,7 +57,7 @@ const char *next_from_utf8 (const char *pBytes, unicode_char *out)
     {
          // get the remaining first byte bits:
 
-        *out = pBytes [0] & (0x00ff >> n_bytes);
+        *out = pBytes [0] & (0b0000000011111111 >> n_bytes);
     }
     else // assume ascii
     {
@@ -74,12 +73,12 @@ const char *next_from_utf8 (const char *pBytes, unicode_char *out)
      */
     for (i = 1; i < n_bytes; i++)
     {
-        if ((pBytes [i] & 0xc0) != 0x80)// (???????? & 11000000) != 10000000
+        if ((pBytes [i] & 0b11000000) != 0b10000000)
         {
             fprintf (stderr, "WARNING: utf-8 byte %d not starting in 10.. !\n", i + 1);
         }
 
-        *out = (*out << 6) | (pBytes [i] & 0x3f); // ???????? & 00111111
+        *out = (*out << 6) | (pBytes [i] & 0b00111111);
     }
 
     return pBytes + n_bytes; // move to the next utf-8 character pointer
@@ -98,12 +97,12 @@ const char *prev_from_utf8 (const char *pBytes, unicode_char *out)
         byte = *(pBytes - n_bytes);
 
         // is it 10??????
-        begin_found = (byte & 0xc0) == 0x80;
+        begin_found = (byte & 0b11000000) == 0b10000000;
 
         if (begin_found)
-            mask = 0x3f; // takes rightmost 6 bits
+            mask = 0b00111111; // takes rightmost 6 bits
         else
-            mask = 0x00ff >> n_bytes; // takes coding bits from 1st byte
+            mask = 0b0000000011111111 >> n_bytes; // takes coding bits from 1st byte
 
         *out |= unicode_char (byte & mask) << (6 * n_bytes);
     }
@@ -316,7 +315,7 @@ void WordAt (const char *s, const int pos, int &start, int &end)
 }
 std::string bitstr (const std::string &str)
 {
-    return bitstr (str.c_str()) + "(c++)";
+    return bitstr (str.c_str());
 }
 std::string bitstr (const char *str)
 {
@@ -328,7 +327,7 @@ std::string bitstr (const char *str)
     {
         for (j = 0; j < 8; j++)
         {
-            bit = str [i] & (0x80 >> j);
+            bit = str [i] & (0b10000000 >> j);
             s += bit? '1' : '0';
         }
     }

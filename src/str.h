@@ -120,7 +120,7 @@ std::string bitstr (const Type &value)
         byte = p [i];
         for (j = 0; j < 8; j++)
         {
-            bit = byte & (0x80 >> j);
+            bit = byte & (0b10000000 >> j);
             s += bit? '1' : '0';
         }
     }
@@ -145,7 +145,7 @@ std::string bitstr_noendian (const Number &value)
     std::string s;
     for (i = n - 1; i >= 0; i--)
     {
-        bit = value & (0x01 << i);
+        bit = value & (0b00000001 << i);
         s += bit? '1' : '0';
     }
     return s;

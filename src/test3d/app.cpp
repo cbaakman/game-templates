@@ -65,7 +65,7 @@ App :: Scene :: Scene (App *p) : pApp (p)
 #define LOAD_BAR_WIDTH 200.0f
 #define LOAD_BAR_HEIGHT 20.0f
 #define LOAD_BAR_EDGE 3.0f
-int ProgressLoop (SDL_Window *pWindow, Progress *pProgress, bool &bStillLoading)
+int ProgressLoop (SDL_Window *pWindow, Progress *pProgress, bool &error)
 {
     /*
         Since this function runs in a separate thread, we need
@@ -145,7 +145,7 @@ int ProgressLoop (SDL_Window *pWindow, Progress *pProgress, bool &bStillLoading)
 
         SDL_GL_SwapWindow (pWindow);
     }
-    while (bStillLoading && passed < total); // keep rendering until all jobs are done
+    while (!error && passed < total); // keep rendering as long as the other thread loads
 
     SDL_GL_DeleteContext (glContext);
 
@@ -195,9 +195,9 @@ bool App::InitApp (void)
     pScene->AddAll (&loader);
 
     // Progress bar is rendered in a different thread while the scene loads:
-    bool notifyLoading = true;
+    bool error = false;
     SDL_Thread* progressThread = MakeSDLThread (
-                                    [&] () { return ProgressLoop (mainWindow, &progress, notifyLoading); },
+                                    [&] () { return ProgressLoop (mainWindow, &progress, error); },
                                     "progress"
                                  );
     if (!progressThread)
@@ -212,10 +212,12 @@ bool App::InitApp (void)
      */
     if (!loader.LoadAll (&progress))
     {
-        notifyLoading = false;
+        error = true;
         SDL_DetachThread (progressThread);
         return false;
     }
+
+    // progressThread will finish automatically, now that everything is loaded ..
 
     // Check for other errors:
     if (!CheckGLOK ("scene init"))
@@ -354,8 +356,9 @@ void ShowError (const char *msg)
         fprintf (stderr, "%s\n", msg);
     #else
         if (SDL_ShowSimpleMessageBox (SDL_MESSAGEBOX_ERROR, "An Error Occurred", msg, NULL) < 0)
-        { // if box display failed
-            fprintf (stderr, "%s\n", msg);
+        {
+            // if box display failed
+            fprintf (stderr, "An Error Occurred: %s\n", msg);
         }
     #endif // DEBUG
 }

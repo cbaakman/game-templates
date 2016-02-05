@@ -1194,5 +1194,5 @@ bool LoadMesh (const char *zipPath, const char *xmlPath, MeshData *pData)
 }
 bool LoadMesh (const std::string &zipPath, const std::string &xmlPath, MeshData *pData)
 {
-    LoadMesh (zipPath.c_str(), xmlPath.c_str (), pData);
+    return LoadMesh (zipPath.c_str(), xmlPath.c_str (), pData);
 }

@@ -1,4 +1,4 @@
-Game templates version 1.7.4
+Game templates version 1.7.5
 
 [test3d]
 

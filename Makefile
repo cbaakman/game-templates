@@ -10,7 +10,7 @@ TEST3DLIBS = GL SDL2 GLEW png xml2 cairo unzip
 
 CC = /usr/bin/g++
 
-CFLAGS = -std=c++11 -pthread
+CFLAGS = -std=c++14 -pthread
 ifdef DEBUG
 CFLAGS += -g -D DEBUG
 else

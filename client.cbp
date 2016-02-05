@@ -31,8 +31,8 @@
 			</Target>
 		</Build>
 		<Compiler>
-			<Add option="-std=c++11" />
 			<Add option="-Wall" />
+			<Add option="-std=c++14" />
 		</Compiler>
 		<Linker>
 			<Add library="mingw32" />
@@ -64,8 +64,6 @@
 		<Unit filename="src/client/winres.rc">
 			<Option compilerVar="WINDRES" />
 		</Unit>
-		<Unit filename="src/thread.cpp" />
-		<Unit filename="src/thread.h" />
 		<Unit filename="src/err.cpp" />
 		<Unit filename="src/err.h" />
 		<Unit filename="src/font.cpp" />
@@ -80,6 +78,8 @@
 		<Unit filename="src/str.h" />
 		<Unit filename="src/texture.cpp" />
 		<Unit filename="src/texture.h" />
+		<Unit filename="src/thread.cpp" />
+		<Unit filename="src/thread.h" />
 		<Unit filename="src/util.cpp" />
 		<Unit filename="src/util.h" />
 		<Unit filename="src/xml.cpp" />

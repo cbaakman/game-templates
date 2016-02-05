@@ -46,7 +46,7 @@ Sint64 ZipArchiveSizeCallBack (SDL_RWops *context)
     int res = unzGetCurrentFileInfo (zip, &info, NULL, 0, NULL, 0, NULL, 0);
     if (res != UNZ_OK)
     {
-        SetError ("unzip: error getting current file info");
+        SDL_SetError ("unzip: error getting current file info");
         return -1;
     }
 
@@ -90,7 +90,7 @@ SDL_RWops *SDL_RWFromZipArchive (const char *_archive, const char *_entry)
     unzFile zip = unzOpen(_archive);
     if (!zip)
     {
-        SetError ("failed to open %s", _archive);
+        SDL_SetError ("failed to open %s", _archive);
         return NULL;
     }
 
@@ -99,7 +99,7 @@ SDL_RWops *SDL_RWFromZipArchive (const char *_archive, const char *_entry)
 
     if (result != UNZ_OK)
     {
-        SetError ("not found in %s: %s", _archive, _entry);
+        SDL_SetError ("not found in %s: %s", _archive, _entry);
         unzClose (zip);
 
         return NULL;

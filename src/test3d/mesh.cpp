@@ -420,6 +420,7 @@ bool ParseFace (const xmlNodePtr pTag,
                 !ParseFloatAttrib(pChild, (const xmlChar *)"tex_v", &faces[id].texels[ncorner].v))
             {
                 faces.erase(id);
+                SetError ("face corner incomplete, should have attributes: vertex_id and numbers tex_u and tex_v\n");
                 return false;
             }
 
@@ -751,6 +752,7 @@ bool ParseMesh(const xmlDocPtr pDoc, MeshData *pData)
                 if (StrCaseCompare((const char *) pTag->name, "vertex") == 0)
                     if (!ParseVertex(pTag, pData->vertices))
                     {
+                        // 'ParseVertex' calls 'SetError'
                         return false;
                     }
                 pTag = pTag->next;
@@ -770,12 +772,18 @@ bool ParseMesh(const xmlDocPtr pDoc, MeshData *pData)
                 if (StrCaseCompare((const char *) pTag->name, "quad") == 0)
                 {
                     if (!ParseFace(pTag, pData->vertices, pData->quads))
+                    {
+                        // 'ParseFace' calls 'SetError'
                         return false;
+                    }
                 }
                 else if(StrCaseCompare((const char *) pTag->name, "triangle") == 0)
                 {
                     if (!ParseFace(pTag, pData->vertices, pData->triangles))
+                    {
+                        // 'ParseFace' calls 'SetError'
                         return false;
+                    }
                 }
 
                 pTag = pTag->next;
@@ -881,7 +889,10 @@ bool ParseMesh(const xmlDocPtr pDoc, MeshData *pData)
                         if(StrCaseCompare((const char *) pTag->name, "animation") == 0)
                         {
                             if (!ParseAnimation(pTag, pData->bones, pData->animations))
+                            {
+                                // 'ParseAnimation' calls 'SetError'
                                 return false;
+                            }
                         }
 
                         pTag = pTag->next;
@@ -1168,9 +1179,12 @@ bool LoadMesh (const char *zipPath, const char *xmlPath, MeshData *pData)
 {
     SDL_RWops *f = SDL_RWFromZipArchive (zipPath, xmlPath);
     if (!f)
+    {
+        SetError (SDL_GetError ());
         return false;
+    }
 
-    xmlDocPtr  pDoc = ParseXML (f);
+    xmlDocPtr pDoc = ParseXML (f);
     f->close(f);
 
     if (!pDoc)

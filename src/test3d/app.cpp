@@ -248,9 +248,9 @@ bool App::InitializeGL(void)
         return false;
     }
 
-    if (!GL_VERSION_2_0)
+    if (!GLEW_VERSION_3_2)
     {
-        SetError ("OpenGL version 2.0 is not enabled.");
+        SetError ("OpenGL version 3.2 is not enabled.");
         return false;
     }
 

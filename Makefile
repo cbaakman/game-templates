@@ -9,8 +9,16 @@ MANAGERLIBS = crypto ncurses SDL2
 TEST3DLIBS = GL SDL2 GLEW png xml2 cairo unzip
 
 CC = /usr/bin/g++
+CCVERSION = $(strip $(shell $(CC) --version | grep -o ' [0-9\.]\+$$'))
 
-CFLAGS = -std=c++14 -pthread
+# The 4.8 compiler only knows c++1y, but it's deprecated
+CFLAGS = -pthread
+ifeq ($(shell echo $(CCVERSION) | cut -c1-3), 4.8)
+CFLAGS += -std=c++1y
+else
+CFLAGS += -std=c++14
+endif
+
 ifdef DEBUG
 CFLAGS += -g -D DEBUG
 else

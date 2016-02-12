@@ -22,7 +22,8 @@
 #include <cstring>
 #include <cctype>
 
-#define ACCOUNT_DIR "accounts"
+#define SETTINGS_FILE "settings.ini"
+#include "../ini.h"
 
 #include "../account.h" // MakeAccount
 
@@ -87,12 +88,18 @@ void PromptPassword (char *password, const int maxLength)
 }
 void OnMakeAccount (const std::string &exe_dir)
 {
-    char    username [USERNAME_MAXLENGTH],
-            password [PASSWORD_MAXLENGTH],
-            dirPath [FILENAME_MAX];
+    char username [USERNAME_MAXLENGTH],
+         password [PASSWORD_MAXLENGTH];
+
+    std::string dirPath;
 
     bool usernameError;
     int i;
+
+    if (!LoadSettingString (SETTINGS_FILE, "accounts-dir", dirPath))
+
+        dirPath = exe_dir + "accounts";
+
     do // keep asking for a user name until a correct input is recieved
     {
         usernameError = false;
@@ -113,7 +120,7 @@ void OnMakeAccount (const std::string &exe_dir)
     PromptPassword (password, PASSWORD_MAXLENGTH);
 
     // Create an account file for the server to read
-    if (MakeAccount ((exe_dir + ACCOUNT_DIR).c_str(), username, password))
+    if (MakeAccount (dirPath.c_str(), username, password))
     {
         printw ("created file successfully\n");
     }

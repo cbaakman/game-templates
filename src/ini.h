@@ -21,6 +21,8 @@
 #ifndef INI_H
 #define INI_H
 
+#include <string>
+
 /*
  Syntax of settings files:
     <setting1> = <value1>
@@ -34,6 +36,7 @@
 
 int LoadSetting (const char *filename, const char *setting);
 bool LoadSettingString (const char *filename, const char *setting, char *value);
+bool LoadSettingString (const std::string &filename, const std::string &setting, std::string &value);
 void SaveSetting (const char *filename, const char *setting, const int value);
 void SaveSettingString (const char *filename, const char *setting, const char *value);
 

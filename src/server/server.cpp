@@ -18,9 +18,11 @@
 */
 
 
-#include<stdio.h>
-#include<stdlib.h>
-#include<string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <cstring>
+#include <string.h>
+#include <errno.h>
 
 #include "server.h"
 
@@ -33,6 +35,7 @@
 
 #define PORT_SETTING "port"
 #define MAXLOGIN_SETTING "max-login"
+#define ACCOUNTSDIR_SETTING "accounts-dir"
 
 #define ACCOUNT_DIR "accounts"
 #define CONNECTION_PINGPERIOD 1000 // ticks
@@ -286,8 +289,10 @@ Server::~Server()
 }
 bool Server::Init()
 {
-    settingsPath = std::string(SDL_GetBasePath()) + SETTINGS_FILE;
-    accountsPath = std::string(SDL_GetBasePath()) + ACCOUNT_DIR;
+    settingsPath = std::string (SDL_GetBasePath()) + SETTINGS_FILE;
+
+    if (!LoadSettingString (settingsPath, ACCOUNTSDIR_SETTING, accountsPath))
+        accountsPath = std::string (SDL_GetBasePath()) + ACCOUNT_DIR;
 
     // load the maxUsers setting from the config
     maxUsers = LoadSetting(settingsPath.c_str(), MAXLOGIN_SETTING);

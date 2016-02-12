@@ -24,7 +24,18 @@
 #include <cstring>
 #include <cstdlib>
 
-bool LoadSettingString(const char* filename, const char* setting, char* val)
+bool LoadSettingString (const std::string &filename, const std::string &setting, std::string &val)
+{
+    char buf [260];
+    if (LoadSettingString (filename.c_str (), setting.c_str (), buf))
+    {
+        val.assign (buf);
+        return true;
+    }
+    return false;
+}
+
+bool LoadSettingString (const char* filename, const char* setting, char* val)
 {
     char var[100], c;
     int i;

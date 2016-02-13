@@ -45,5 +45,5 @@ bin/test3d: obj/test3d/grass.o obj/load.o obj/thread.o obj/progress.o obj/test3d
 	obj/io.o obj/texture.o obj/test3d/mesh.o obj/util.o obj/font.o obj/test3d/collision.o obj/test3d/toon.o
 	$(CC) $^ -o $@ $(TEST3DLIBS:%=-l%) $(LIBDIRS:%=-L%)
 
-bin/manager: obj/manager/manager.o obj/str.o obj/account.o obj/err.o
+bin/manager: obj/manager/manager.o obj/ini.o obj/str.o obj/account.o obj/err.o
 	$(CC) $^ -o $@ -lstdc++ $(MANAGERLIBS:%=-l%) $(LIBDIRS:%=-L%)

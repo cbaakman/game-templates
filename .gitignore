@@ -23,6 +23,9 @@ make.config
 *.xml
 *.png
 
+# Log files
+*.log
+
 # VI editor
 *.swp
 

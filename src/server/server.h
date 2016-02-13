@@ -21,10 +21,21 @@
 #ifndef SERVER_H
 #define SERVER_H
 
+#ifdef __unix__
+    #define IMPL_UNIX_DEAMON
+#elif defined _WIN32
+    #include <windows.h>
+
+    #define IMPL_WINDOWS_SERVICE
+#else
+    #define IMPL_CONSOLE_SERVER
+#endif
+
 #include <SDL2/SDL_net.h>
 #include <openssl/rsa.h>
 #include <string>
 #include <list>
+#include <cstdarg>
 
 #include "../geo2d.h"
 #include "../account.h"
@@ -87,17 +98,53 @@ struct ChatEntry // must fit inside PACKET_MAXSIZE
          message [MAX_CHAT_LENGTH]; // what was said?
 };
 
+enum MessageType {SERVER_MSG_INFO, SERVER_MSG_ERROR};
+class MessageAppender
+{
+public:
+    virtual void Message (MessageType, const char *format, va_list args) = 0;
+};
+
+class STDAppender : public MessageAppender
+{
+public:
+    void Message (MessageType, const char *format, va_list args);
+};
+
+class FileLogAppender : public MessageAppender
+{
+private:
+    char path [FILENAME_MAX];
+public:
+    FileLogAppender (const char *log_path);
+    FileLogAppender (const std::string &log_path);
+
+    void Message (MessageType, const char *format, va_list args);
+};
+
+#ifdef IMPL_UNIX_DEAMON
+class SyslogAppender : public MessageAppender
+{
+public:
+    SyslogAppender ();
+    ~SyslogAppender ();
+
+    void Message (MessageType, const char *format, va_list args);
+};
+#endif
+
 #define RANDSTOCK_SIZE 25
 
 class Server
 {
 private:
-    enum MessageType {SERVER_MSG_INFO, SERVER_MSG_ERROR};
-
     // Used for random number generation from within any thread:
     SDL_mutex *pRandMutex;
     unsigned int rseed;
     unsigned int GetNextRand (void);
+
+    MessageAppender *pMessageAppender;
+    void Message (MessageType, const char *format, ...);
 
     struct User // created after login, identified by IP-adress
     {
@@ -127,6 +174,12 @@ private:
     std::list <ChatEntry> chat_history;
 
     std::string settingsPath,
+
+            #ifdef IMPL_UNIX_DEAMON
+
+                pidPath,
+
+            #endif
                 accountsPath;
 
     char command [COMMAND_MAXLENGTH];
@@ -138,13 +191,17 @@ private:
     TCPsocket tcp_socket;
     IPaddress mAddress;
 
-    bool done; // if true, loopThread ends
-    SDL_Thread *loopThread;
-    int LoopThreadFunc (void);
+    #if defined IMPL_UNIX_DEAMON || defined IMPL_CONSOLE_SERVER
+
+        // If true, stops the server:
+        bool done;
+    #endif
+
+    int MainLoop (void);
 
     void Update (Uint32 ticks);
 
-    void PrintUsers () const;
+    void PrintUsers ();
     void PrintChatHistory () const;
 
     void TellAboutLogout (UserP to, const char *loggedOutUsername);
@@ -166,15 +223,44 @@ private:
 
     void SendToAll (const Uint8 *, const int len);
 
-    void OnMessage (MessageType, const char *format, ...);
+    bool StopCondition (void);
+
+#ifdef IMPL_UNIX_DEAMON
+
+    bool Deamonize (void);
+    static void DeamonStopCallBack (int param);
+    static void DeamonKickCallBack (int param);
+    pid_t GetDeamonPID (void); // returns -1 if not running
+#endif
 
 public:
 
+    bool Configure (void);
+
+    bool NetInit (void);
+    void NetCleanUp (void);
+
+#ifdef IMPL_UNIX_DEAMON
+
+    bool Start (void);
+    bool Stop (void);
+    bool Reload (void);
+    void Status (void);
+
+#elif defined IMPL_WINDOWS_SERVICE
+
+    static VOID WINAPI ServiceControlHandler (DWORD controlCode);
+    static DWORD WINAPI ServiceWorkerThread (LPVOID lpParam);
+    static VOID WINAPI ServiceMain (DWORD argc, LPTSTR *argv);
+    static void SetServiceStatusWithDebug (SERVICE_STATUS_HANDLE, SERVICE_STATUS *pServiceStatus);
+
+#elif defined IMPL_CONSOLE_SERVER
+
+    static int ConsoleRun (void);
+#endif
+
     Server ();
     ~Server ();
-
-    bool Init ();
-    void CleanUp ();
 };
 
 #endif // SERVER_H

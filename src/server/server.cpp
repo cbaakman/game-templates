@@ -40,6 +40,8 @@
 #define ACCOUNT_DIR "accounts"
 #define CONNECTION_PINGPERIOD 1000 // ticks
 
+#define PROCESS_TAG "server"
+
 const int CONNECTION_TIMEOUT_TICKS = CONNECTION_TIMEOUT * 1000;
 
 Server::User::User (const IPaddress *pAddr, const char *_accountName, const UserParams *pParams)
@@ -78,7 +80,8 @@ void Server::OnLogin (TCPsocket clientSocket, const IPaddress *pClientIP)
         signal = NETSIG_SERVERFULL;
         if (SDLNet_TCP_Send (clientSocket, &signal, 1) != 1)
         {
-            fprintf (stderr, "WARNING, could not send server full error to user: %s\n", SDLNet_GetError ());
+            Message (SERVER_MSG_ERROR, "WARNING, could not send server full error to user: %s",
+                     SDLNet_GetError ());
         }
         return;
     }
@@ -93,13 +96,14 @@ void Server::OnLogin (TCPsocket clientSocket, const IPaddress *pClientIP)
 
     if (!keySuccess)
     {
-        fprintf (stderr, "rsa key generation failed\n");
+        Message (SERVER_MSG_ERROR, "rsa key generation failed");
         RSA_free (key);
 
         signal = NETSIG_INTERNALERROR;
         if (SDLNet_TCP_Send (clientSocket, &signal, 1) != 1)
         {
-            fprintf (stderr, "WARNING, could not send internal error to user: %s\n", SDLNet_GetError ());
+            Message (SERVER_MSG_ERROR, "WARNING, could not send internal error to user: %s",
+                     SDLNet_GetError ());
         }
 
         return;
@@ -118,7 +122,7 @@ void Server::OnLogin (TCPsocket clientSocket, const IPaddress *pClientIP)
 
     if (n_sent != keyDataSize)
     {
-        fprintf (stderr, "error sending key: %s\n", SDLNet_GetError());
+        Message (SERVER_MSG_ERROR, "error sending key: %s", SDLNet_GetError());
         RSA_free (key);
         return;
     }
@@ -128,12 +132,12 @@ void Server::OnLogin (TCPsocket clientSocket, const IPaddress *pClientIP)
     if (n_recieved <= 0)
     {
         if (n_recieved < 0)
-            fprintf (stderr, "error recieving encrypted login: %s\n", SDLNet_GetError());
+            Message (SERVER_MSG_ERROR, "error recieving encrypted login: %s", SDLNet_GetError());
         else
         {
             char ip [100];
             ip2String (*pClientIP, ip);
-            fprintf (stderr, "client at %s hung up while recieving encrypted login\n", ip);
+            Message (SERVER_MSG_ERROR, "client at %s hung up while recieving encrypted login", ip);
         }
 
         RSA_free (key);
@@ -149,13 +153,16 @@ void Server::OnLogin (TCPsocket clientSocket, const IPaddress *pClientIP)
 
     if (decryptedSize != sizeof (LoginParams))
     {
-        fprintf (stderr, "error decrypting login parameters, wrong size\n");
+        Message (SERVER_MSG_ERROR,
+                 "error decrypting login parameters, wrong size");
         delete [] decrypted;
 
         signal = NETSIG_AUTHENTICATIONERROR;
         if (SDLNet_TCP_Send (clientSocket, &signal, 1) != 1)
         {
-            fprintf (stderr, "WARNING, could not send authentication error to user: %s\n", SDLNet_GetError ());
+            Message (SERVER_MSG_ERROR,
+                     "WARNING, could not send authentication error to user: %s",
+                     SDLNet_GetError ());
         }
 
         return;
@@ -169,7 +176,8 @@ void Server::OnLogin (TCPsocket clientSocket, const IPaddress *pClientIP)
         Uint8 signal = NETSIG_ALREADYLOGGEDIN;
         if (SDLNet_TCP_Send (clientSocket, &signal, 1) != 1)
         {
-            fprintf (stderr, "WARNING, could not send already logged in error to user: %s\n", SDLNet_GetError ());
+            Message (SERVER_MSG_ERROR,
+                     "WARNING, could not send already logged in error to user: %s", SDLNet_GetError ());
         }
     }
     else if (authenticate (accountsPath.c_str(), pParams->username, pParams->password))
@@ -201,10 +209,11 @@ void Server::OnLogin (TCPsocket clientSocket, const IPaddress *pClientIP)
 
             if (n_sent != len)
             {
-                fprintf (stderr, "WARNING, could not send login conformation to user: %s\n", SDLNet_GetError ());
+                Message (SERVER_MSG_ERROR, "WARNING, could not send login conformation to user: %s",
+                         SDLNet_GetError ());
             }
 
-            OnMessage (SERVER_MSG_INFO, "%s just logged in", pUser->accountName);
+            Message (SERVER_MSG_INFO, "%s just logged in", pUser->accountName);
 
             // Tell other users about this new user:
             if (SDL_LockMutex (pUsersMutex) == 0)
@@ -221,14 +230,16 @@ void Server::OnLogin (TCPsocket clientSocket, const IPaddress *pClientIP)
                 SDL_UnlockMutex (pUsersMutex);
             }
             else
-                fprintf (stderr, "Error telling users about new user, could not lock mutex: %s\n", SDL_GetError ());
+                Message (SERVER_MSG_ERROR, "Error telling users about new user, could not lock mutex: %s",
+                         SDL_GetError ());
         }
         else // AddUser failed, server full
         {
             signal = NETSIG_SERVERFULL;
             if (SDLNet_TCP_Send (clientSocket, &signal, 1) != 1)
             {
-                fprintf (stderr, "WARNING, could not send server full error to user: %s\n", SDLNet_GetError ());
+                Message (SERVER_MSG_ERROR, "WARNING, could not send server full error to user: %s",
+                         SDLNet_GetError ());
             }
         }
     }
@@ -237,46 +248,79 @@ void Server::OnLogin (TCPsocket clientSocket, const IPaddress *pClientIP)
         signal = NETSIG_AUTHENTICATIONERROR;
         if (SDLNet_TCP_Send (clientSocket, &signal, 1) != 1)
         {
-            fprintf (stderr, "WARNING, could not send authentication error to user: %s\n", SDLNet_GetError ());
+            Message (SERVER_MSG_ERROR, "WARNING, could not send authentication error to user: %s",
+                     SDLNet_GetError ());
         }
     }
 
     delete [] decrypted;
 }
 
-void Server::OnMessage (Server::MessageType type, const char *format, ...)
+void STDAppender::Message (MessageType type, const char *format, va_list args)
 {
-    va_list args;
-    va_start (args, format);
+    FILE *stream;
+    switch (type)
+    {
+    case SERVER_MSG_INFO:
+        stream = stdout;
+    break;
+    case SERVER_MSG_ERROR:
+        stream = stderr;
+    break;
+    }
+
+    vfprintf (stream, format, args);
+    fprintf (stream, "\n");
+}
+FileLogAppender::FileLogAppender (const char *log_path)
+{
+    strcpy (path, log_path);
+
+    // Empty the log file, before appending:
+    FILE *pFile = fopen (path, "w");
+    fclose (pFile);
+}
+FileLogAppender::FileLogAppender (const std::string &log_path)
+    : FileLogAppender (log_path.c_str ()) {}
+void FileLogAppender::Message (MessageType type, const char *format, va_list args)
+{
+    // Append to log file
+    FILE *pFile = fopen (path, "a");
 
     switch (type)
     {
     case SERVER_MSG_INFO:
-        fprintf (stdout, "INFO: ");
-        vfprintf (stdout, format, args);
-        fprintf (stdout, "\n");
+
+        fprintf (pFile, "INFO: ");
     break;
     case SERVER_MSG_ERROR:
-        fprintf (stderr, "ERROR: ");
-        vfprintf (stderr, format, args);
-        fprintf (stderr, "\n");
+
+        fprintf (pFile, "ERROR: ");
     break;
     }
 
+    vfprintf (pFile, format, args);
+    fprintf (pFile, "\n");
+
+    fclose (pFile);
+}
+void Server::Message (MessageType type, const char *format, ...)
+{
+    va_list args;
+    va_start (args, format);
+
+    pMessageAppender->Message (type, format, args);
+
     va_end (args);
 }
-
 Server::Server() :
-    done(false),
-    pUsersMutex (NULL),
+    pMessageAppender(new STDAppender),
+    pUsersMutex(NULL),
     maxUsers(0),
-    loopThread(NULL),
     in(NULL), out(NULL),
     udpPackets(NULL),
     tcp_socket(NULL), udp_socket(NULL)
 {
-    settingsPath[0]=NULL;
-
     pUsersMutex = SDL_CreateMutex ();
     pRandMutex = SDL_CreateMutex ();
 
@@ -284,21 +328,30 @@ Server::Server() :
 }
 Server::~Server()
 {
+    // Clean up anything that was allocated/linked:
+    NetCleanUp ();
+
+    // These must be destroyed last!
     SDL_DestroyMutex (pUsersMutex);
     SDL_DestroyMutex (pRandMutex);
+    delete pMessageAppender;
 }
-bool Server::Init()
+bool Server::Configure (void)
 {
     settingsPath = std::string (SDL_GetBasePath()) + SETTINGS_FILE;
 
     if (!LoadSettingString (settingsPath, ACCOUNTSDIR_SETTING, accountsPath))
         accountsPath = std::string (SDL_GetBasePath()) + ACCOUNT_DIR;
 
+    #ifdef IMPL_UNIX_DEAMON
+        pidPath = "/var/run/server.pid";
+    #endif
+
     // load the maxUsers setting from the config
-    maxUsers = LoadSetting(settingsPath.c_str(), MAXLOGIN_SETTING);
+    maxUsers = LoadSetting (settingsPath.c_str(), MAXLOGIN_SETTING);
     if (maxUsers <= 0)
     {
-        fprintf (stderr, "Max Login not found in %s\n", settingsPath.c_str());
+        Message (SERVER_MSG_ERROR, "Max Login not found in %s", settingsPath.c_str());
         return false;
     }
 
@@ -306,62 +359,52 @@ bool Server::Init()
     port = LoadSetting (settingsPath.c_str(), PORT_SETTING);
     if (port <= 0)
     {
-        fprintf (stderr,"Port not set in %s\n", settingsPath.c_str());
+        Message (SERVER_MSG_ERROR, "Port not set in %s", settingsPath.c_str());
         return false;
     }
 
-    // Init SDL_net
+    return true;
+}
+bool Server::NetInit (void)
+{
     if (SDLNet_Init() < 0)
     {
-        fprintf (stderr,"SDLNet_Init: %s\n", SDLNet_GetError());
+        Message (SERVER_MSG_ERROR, "SDLNet_Init: %s", SDLNet_GetError());
         return false;
     }
 
     // Open a socket and listen at the configured port:
     if (!(udp_socket = SDLNet_UDP_Open (port)))
     {
-        fprintf (stderr,"SDLNet_UDP_Open: %s\n", SDLNet_GetError());
+        Message (SERVER_MSG_ERROR, "SDLNet_UDP_Open: %s", SDLNet_GetError());
         return false;
     }
 
     if (SDLNet_ResolveHost (&mAddress, NULL, port) < 0)
     {
-        fprintf(stderr, "SDLNet_ResolveHost: %s\n", SDLNet_GetError());
+        Message (SERVER_MSG_ERROR, "SDLNet_ResolveHost: %s", SDLNet_GetError());
         return false;
     }
 
     // Open a socket and listen at the configured port:
     if (!(tcp_socket = SDLNet_TCP_Open (&mAddress)))
     {
-        fprintf (stderr,"SDLNet_TCP_Open: %s\n", SDLNet_GetError());
-        return false;
-    }
-
-    // Start the request handling thread
-    loopThread = MakeSDLThread (
-        [this]
-        {
-            return this->LoopThreadFunc ();
-        }
-        ,"server_request_handler_thread");
-    if(!loopThread)
-    {
-        fprintf (stderr,"Server loop thread not started\n");
+        Message (SERVER_MSG_ERROR, "SDLNet_TCP_Open: %s", SDLNet_GetError());
         return false;
     }
 
     // Allocate packets of the size we need, one for incoming, one for outgoing
     if (!(udpPackets = SDLNet_AllocPacketV (2, PACKET_MAXSIZE)))
     {
-        fprintf (stderr, "SDLNet_AllocPacketV: %s\n", SDLNet_GetError());
+        Message (SERVER_MSG_ERROR, "SDLNet_AllocPacketV: %s", SDLNet_GetError());
         return false;
     }
     in = udpPackets [0];
     out = udpPackets [1];
 
-    done = false;
     return true;
 }
+
 /**
  * Can be used from any thread.
  */
@@ -378,14 +421,13 @@ unsigned int Server::GetNextRand (void)
     }
     else
     {
-        fprintf (stderr, "Warning: could not lock rand mutex: %s\n", SDL_GetError ());
+        Message (SERVER_MSG_ERROR, "Warning: could not lock rand mutex: %s",
+                 SDL_GetError ());
         return 0;
     }
 }
-void Server::CleanUp()
+void Server::NetCleanUp()
 {
-    int status;
-
     if(udpPackets)
     {
         SDLNet_FreePacketV (udpPackets);
@@ -403,17 +445,6 @@ void Server::CleanUp()
         tcp_socket = NULL;
     }
 
-    /*
-        Tell the request handling thread that it should return
-        and wait for it to finish.
-     */
-    done = true;
-    if (loopThread)
-    {
-        SDL_WaitThread (loopThread, &status);
-        loopThread = NULL;
-    }
-
     SDLNet_Quit();
 
     if (SDL_LockMutex (pUsersMutex) == 0)
@@ -425,13 +456,14 @@ void Server::CleanUp()
         SDL_UnlockMutex (pUsersMutex);
     }
     else
-        fprintf (stderr, "Error deleting users, could not lock mutex!\n");
+        Message (SERVER_MSG_ERROR, "Error deleting users, could not lock mutex!");
 }
 bool Server::IsServerFull (void)
 {
     if (SDL_LockMutex (pUsersMutex) != 0)
     {
-        fprintf (stderr, "Error checking server full, could not lock mutex: %s\n", SDL_GetError ());
+        Message (SERVER_MSG_ERROR, "Error checking server full, could not lock mutex: %s",
+                 SDL_GetError ());
         return true;
     }
 
@@ -447,7 +479,8 @@ bool Server::AddUser (UserP pUser)
     {
         if (SDL_LockMutex (pUsersMutex) != 0)
         {
-            fprintf (stderr, "Error adding user, could not lock mutex: %s\n", SDL_GetError ());
+            Message (SERVER_MSG_ERROR, "Error adding user, could not lock mutex: %s",
+                     SDL_GetError ());
             return false;
         }
 
@@ -463,7 +496,8 @@ Server::UserP Server::GetUser (const IPaddress *pAddress)
 {
     if (SDL_LockMutex (pUsersMutex) != 0)
     {
-        fprintf (stderr, "Error getting user, could not lock mutex: %s\n", SDL_GetError ());
+        Message (SERVER_MSG_ERROR, "Error getting user, could not lock mutex: %s",
+                 SDL_GetError ());
         return NULL;
     }
 
@@ -484,7 +518,8 @@ Server::UserP Server::GetUser (const char* accountName)
 {
     if (SDL_LockMutex (pUsersMutex) != 0)
     {
-        fprintf (stderr, "Error getting user, could not lock mutex: %s\n", SDL_GetError ());
+        Message (SERVER_MSG_ERROR, "Error getting user, could not lock mutex: %s",
+                 SDL_GetError ());
         return NULL;
     }
 
@@ -522,7 +557,7 @@ void Server::OnPlayerRemove (Server::UserP pUser)
         SDL_UnlockMutex (pUsersMutex);
     }
     else
-        fprintf (stderr, "OnPlayerRemove, error locking mutex: %s", SDL_GetError ());
+        Message (SERVER_MSG_ERROR, "OnPlayerRemove, error locking mutex: %s", SDL_GetError ());
 
     delete[] data;
 }
@@ -561,7 +596,8 @@ void Server::DelUser (Server::UserP pUser)
 {
     if (SDL_LockMutex (pUsersMutex) != 0)
     {
-        fprintf (stderr, "Error removing user, could not lock mutex: %s\n", SDL_GetError ());
+        Message (SERVER_MSG_ERROR, "Error removing user, could not lock mutex: %s",
+                 SDL_GetError ());
         return;
     }
 
@@ -574,7 +610,8 @@ void Server::Update (Uint32 ticks)
 {
     if (SDL_LockMutex (pUsersMutex) != 0)
     {
-        fprintf (stderr, "Error updating users, could not lock mutex: %s\n", SDL_GetError ());
+        Message (SERVER_MSG_ERROR, "Error updating users, could not lock mutex: %s",
+                 SDL_GetError ());
         return;
     }
 
@@ -592,7 +629,7 @@ void Server::Update (Uint32 ticks)
         }
         if (pUser->ticksSinceLastContact > CONNECTION_TIMEOUT_TICKS )
         {
-            OnMessage (SERVER_MSG_INFO, "%s timed out", pUser->accountName);
+            Message (SERVER_MSG_INFO, "%s timed out", pUser->accountName);
 
             toRemove.push_back (pUser);
         }
@@ -622,7 +659,8 @@ void Server::OnStateSet (UserP user, const UserState* state)
         SDL_UnlockMutex (pUsersMutex);
     }
     else
-        fprintf (stderr, "Error setting user state, could not lock mutex: %s\n", SDL_GetError ());
+        Message (SERVER_MSG_ERROR, "Error setting user state, could not lock mutex: %s",
+                 SDL_GetError ());
 
     SendUserStateToAll (user);
 }
@@ -634,7 +672,7 @@ void Server::OnChatMessage (const UserP pUser, const char *msg)
 
     chat_history.push_back (e);
 
-    OnMessage (SERVER_MSG_INFO, "%s said: %s", pUser->accountName, msg);
+    Message (SERVER_MSG_INFO, "%s said: %s", pUser->accountName, msg);
 
     // Tell everybody about this chat message:
 
@@ -672,7 +710,8 @@ void Server::SendToAll (const Uint8 *data, const int len)
         SDL_UnlockMutex (pUsersMutex);
     }
     else
-        fprintf (stderr, "WARNING, failed to lock mutex while sending a message to all: %s", SDL_GetError ());
+        Message (SERVER_MSG_ERROR, "WARNING, failed to lock mutex while sending a message to all: %s",
+                 SDL_GetError ());
 }
 void Server::OnLogout (Server::User* user)
 {
@@ -681,7 +720,7 @@ void Server::OnLogout (Server::User* user)
     OnPlayerRemove (user);
     DelUser (user);
 
-    OnMessage (SERVER_MSG_INFO, "%s just logged out", user->accountName);
+    Message (SERVER_MSG_INFO, "%s just logged out", user->accountName);
 }
 void Server::OnUDPPackage (const IPaddress& clientAddress, Uint8 *data, int len)
 {
@@ -755,7 +794,8 @@ void Server::OnTCPConnection (TCPsocket clientSocket)
     IPaddress *pClientIP = SDLNet_TCP_GetPeerAddress (clientSocket);
     if (!pClientIP)
     {
-        fprintf (stderr, "SDLNet_TCP_GetPeerAddress: %s\n", SDLNet_GetError());
+        Message (SERVER_MSG_ERROR, "SDLNet_TCP_GetPeerAddress: %s",
+                 SDLNet_GetError());
         return;
     }
 
@@ -767,7 +807,8 @@ void Server::OnTCPConnection (TCPsocket clientSocket)
             OnLogin (clientSocket, pClientIP);
     }
     else
-        fprintf (stderr, "Recieved no signal from newly opened tcp socket: %s\n", SDLNet_GetError());
+        Message (SERVER_MSG_ERROR, "Recieved no signal from newly opened tcp socket: %s",
+                 SDLNet_GetError());
 
     SDLNet_TCP_Close (clientSocket);
 }
@@ -797,7 +838,7 @@ void Server::PrintChatHistory () const
         printf ("%s said: %s\n", entry.username, entry.message);
     }
 }
-void Server::PrintUsers () const
+void Server::PrintUsers ()
 {
     bool printedHeader = false;
     char ipStr[IP_STRINGLENGTH];
@@ -823,16 +864,17 @@ void Server::PrintUsers () const
             printf ("nobody is logged in right now\n");
     }
     else
-        fprintf (stderr, "error printing users, couldn't lock mutex: %s\n", SDL_GetError ());
+        Message (SERVER_MSG_ERROR, "error printing users, couldn't lock mutex: %s",
+                 SDL_GetError ());
 }
-int Server::LoopThreadFunc (void)
+int Server::MainLoop (void)
 {
     // This function continually runs in a separate thread to handle client requests
 
     Uint32 ticks0 = SDL_GetTicks(), ticks;
     TCPsocket clientSocket;
 
-    while (!done) // is the server still running?
+    while (!StopCondition ())
     {
         // Poll for incoming tcp connections:
         while ((clientSocket = SDLNet_TCP_Accept (tcp_socket)))
@@ -843,7 +885,7 @@ int Server::LoopThreadFunc (void)
                 OnTCPConnection (clientSocket);
                 return 0;
             },
-            "server_tcp_thread");
+            (std::string (PROCESS_TAG) + "_tcp_thread").c_str ());
 
             // Don't wait for completion:
             SDL_DetachThread (pThread);
@@ -868,21 +910,465 @@ int Server::LoopThreadFunc (void)
 
 Server server;
 
-void exit (void)
+#ifdef IMPL_UNIX_DEAMON
+
+#include <sys/stat.h>
+#include <unistd.h>
+#include <syslog.h>
+#include <signal.h>
+
+SyslogAppender::SyslogAppender ()
 {
-    server.CleanUp ();
+    openlog (PROCESS_TAG, LOG_CONS | LOG_PID | LOG_NDELAY, LOG_LOCAL1);
+}
+SyslogAppender::~SyslogAppender ()
+{
+    closelog ();
+}
+void SyslogAppender::Message (MessageType type, const char *format, va_list args)
+{
+    int priority;
+    switch (type)
+    {
+    case SERVER_MSG_INFO:
+        priority = LOG_INFO;
+    break;
+    case SERVER_MSG_ERROR:
+        priority = LOG_ERR;
+    break;
+    }
+
+    vsyslog (priority, format, args);
+}
+struct stat sts;
+bool ProcessExists (const pid_t pid)
+{
+    char procPath [26];
+    sprintf (procPath, "/proc/%d", pid);
+
+    return (stat (procPath, &sts) == 0);
+}
+bool Server::Start (void)
+{
+    if (!NetInit ())
+        return false;
+
+    if (!Deamonize ())
+        return false;
+
+    return true;
+}
+void Server::Status (void)
+{
+    pid_t pid = GetDeamonPID ();
+
+    if (pid > 0 && ProcessExists (pid))
+
+        printf ("%s is running as process %d\n", PROCESS_TAG, pid);
+    else
+        printf ("%s is not running\n", PROCESS_TAG);
+}
+bool Server::Stop (void)
+{
+    pid_t pid = GetDeamonPID ();
+
+    if (pid <= 0 || !ProcessExists (pid))
+    {
+        Message (SERVER_MSG_ERROR, "deamon is not running");
+        return false;
+    }
+
+    if (kill (pid, SIGINT) != 0)
+    {
+        Message (SERVER_MSG_ERROR, "failed to stop deamon: %s", std::strerror (errno));
+        return false;
+    }
+
+    return true;
+}
+bool Server::Reload (void)
+{
+    pid_t pid = GetDeamonPID ();
+    if (pid <= 0)
+    {
+        Message (SERVER_MSG_ERROR, "deamon is not running");
+        return false;
+    }
+
+    if (kill (pid, SIGHUP) != 0)
+    {
+        Message (SERVER_MSG_ERROR, "failed to kick deamon: %s", std::strerror (errno));
+        return false;
+    }
+    return true;
+}
+void Server::DeamonStopCallBack (int param)
+{
+    server.done = true;
+}
+void Server::DeamonKickCallBack (int param)
+{
+    server.NetCleanUp ();
+    server.Configure ();
+    server.NetInit ();
+}
+pid_t Server::GetDeamonPID (void)
+{
+    FILE *pFile;
+    pid_t pid;
+    pFile = fopen (pidPath.c_str (), "r");
+    if (!pFile)
+    {
+        return -1;
+    }
+
+    if (1 != fscanf (pFile, "%d", &pid))
+    {
+        return -1;
+    }
+
+    fclose (pFile);
+
+    return pid;
+}
+bool Server::StopCondition (void)
+{
+    return done;
+}
+bool Server::Deamonize (void)
+{
+    MessageAppender *pOldAppender;
+    FILE *pFile;
+    pid_t pid, sid;
+
+    pid = fork ();
+    if (pid < 0)
+    {
+        Message (SERVER_MSG_ERROR, "failed to fork: %s", std::strerror (errno));
+        return false;
+    }
+    else if (pid > 0) // success, but I'm not the deamon process
+        return true;
+
+    sid = setsid ();
+    if (sid < 0)
+    {
+        Message (SERVER_MSG_ERROR, "setsid failed: %s", std::strerror (errno));
+        return false;
+    }
+
+    // ignore these signals:
+    signal (SIGCHLD, SIG_IGN);
+
+    // deamon gets kicked on these signals:
+    signal (SIGHUP, DeamonKickCallBack);
+
+    // deamon must stop if it gets these signals:
+    signal (SIGINT,  DeamonStopCallBack);
+    signal (SIGSEGV, DeamonStopCallBack);
+    signal (SIGSTOP, DeamonStopCallBack);
+    signal (SIGKILL, DeamonStopCallBack);
+
+    pFile = fopen (pidPath.c_str (), "w");
+    if (!pFile)
+    {
+        Message (SERVER_MSG_ERROR, "cannot write to %s: %s", pidPath.c_str (),
+                         std::strerror (errno));
+        return false;
+    }
+
+    fprintf (pFile, "%d", getpid ());
+    fclose (pFile);
+
+    // Change the current working directory
+    if ((chdir("/")) < 0) {
+
+        Message (SERVER_MSG_ERROR, "chdir to \'/\': %s", std::strerror (errno));
+        return false;
+    }
+
+    // Close out the standard file descriptors
+    fclose (stdin);
+    fclose (stdout);
+    fclose (stderr);
+
+    // Begin working as a server:
+    done = false;
+
+    pOldAppender = pMessageAppender;
+    pMessageAppender = new SyslogAppender;
+
+    MainLoop ();
+
+    delete pMessageAppender;
+    pMessageAppender = pOldAppender;
+
+    // Shut down Deamon when recieving the signal:
+    if (std::remove (pidPath.c_str ()) != 0)
+    {
+        Message (SERVER_MSG_ERROR, "cannot remove %s: %s", pidPath.c_str (),
+                         std::strerror (errno));
+        return false;
+    }
+
+    return true;
 }
 int main (int argc, char** argv)
 {
-    if(!server.Init())
+    if (!server.Configure ())
         return 1;
 
-    atexit (exit);
-
-    printf ("Server is now running, press enter to shut down.\n");
-    fgetc (stdin);
-
-    server.CleanUp();
+    if (argc > 1)
+    {
+        if (0 == strcmp (argv [1], "start"))
+        {
+            if (!server.Start ())
+                return 1;
+        }
+        else if (0 == strcmp (argv [1], "stop"))
+        {
+            if (!server.Stop ())
+                return 1;
+        }
+        else if (0 == strcmp (argv [1], "status"))
+        {
+            server.Status ();
+        }
+        else if (0 == strcmp (argv [1], "reload"))
+        {
+            if (!server.Reload ())
+                return 1;
+        }
+        else
+        {
+            printf ("unknown command: %s\n", argv [1]);
+            return 1;
+        }
+    }
+    else
+        printf ("Usage: %s (start|stop|status|reload)\n", argv [0]);
 
     return 0;
 }
+
+#elif defined IMPL_WINDOWS_SERVICE
+
+/*
+    How to run (as admin) ..
+
+    Install service with:
+
+        sc create "server" binPath="path\to\exe"
+
+    Uninstall with:
+
+        sc delete "server"
+
+    Running from Service Controller Manager:
+
+        1. run services.msc
+        2. locate "server"
+        3. press "start"
+ */
+
+#include <Tchar.h>
+
+SERVICE_STATUS serviceStatus = {0};
+SERVICE_STATUS_HANDLE hStatus = NULL;
+
+HANDLE hServiceStopEvent = INVALID_HANDLE_VALUE;
+
+#define SERVICE_NAME _T(PROCESS_TAG)
+
+int _tmain (int argc, TCHAR **argv)
+{
+    if (!server.Configure ())
+        return 1;
+
+    SERVICE_TABLE_ENTRY serviceTable [] =
+    {
+        {SERVICE_NAME, (LPSERVICE_MAIN_FUNCTION) Server::ServiceMain},
+        {NULL, NULL}
+    };
+
+    if (StartServiceCtrlDispatcher (serviceTable) == FALSE)
+    {
+        return GetLastError ();
+    }
+
+    return 0;
+}
+
+void Server::SetServiceStatusWithDebug (SERVICE_STATUS_HANDLE, SERVICE_STATUS *pServiceStatus)
+{
+    if (SetServiceStatus (hStatus, pServiceStatus) == FALSE)
+    {
+        server.Message (SERVER_MSG_ERROR, "error setting service status");
+    }
+}
+
+VOID WINAPI Server::ServiceMain (DWORD argc, LPTSTR *argv)
+{
+    MessageAppender *pOldAppender = server.pMessageAppender;
+    server.pMessageAppender = new FileLogAppender (std::string (SDL_GetBasePath()) + "server.log");
+
+    // Register our ServiceCtrlHandler function:
+
+    hStatus = RegisterServiceCtrlHandler (SERVICE_NAME, ServiceControlHandler);
+
+    // Tell Service controller we are starting:
+
+    ZeroMemory (&serviceStatus, sizeof (serviceStatus));
+    serviceStatus.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
+    serviceStatus.dwControlsAccepted = 0;
+    serviceStatus.dwCurrentState = SERVICE_START_PENDING;
+    serviceStatus.dwWin32ExitCode = 0;
+    serviceStatus.dwServiceSpecificExitCode = 0;
+    serviceStatus.dwCheckPoint = 0;
+
+    SetServiceStatusWithDebug (hStatus, &serviceStatus);
+
+    // Create a service stop event:
+    hServiceStopEvent = CreateEvent (NULL, TRUE, FALSE, NULL);
+    if (hServiceStopEvent == NULL)
+    {
+        DWORD err = GetLastError ();
+
+        server.Message (SERVER_MSG_ERROR, "error creating stop event: Windows error nr. %u", err);
+
+        // Tell service controller we stopped, then exit:
+
+        serviceStatus.dwControlsAccepted = 0;
+        serviceStatus.dwCurrentState = SERVICE_STOPPED;
+        serviceStatus.dwWin32ExitCode = err;
+        serviceStatus.dwCheckPoint = 1;
+
+        SetServiceStatusWithDebug (hStatus, &serviceStatus);
+
+        return;
+    }
+
+    // Init Networking:
+    if (!server.NetInit ())
+    {
+        // Tell service controller we stopped, then exit:
+
+        serviceStatus.dwControlsAccepted = 0;
+        serviceStatus.dwCurrentState = SERVICE_STOPPED;
+        serviceStatus.dwWin32ExitCode = 1;
+        serviceStatus.dwCheckPoint = 1;
+
+        SetServiceStatusWithDebug (hStatus, &serviceStatus);
+
+        return;
+    }
+
+    // Tell service controller we started:
+    serviceStatus.dwControlsAccepted = SERVICE_ACCEPT_STOP;
+    serviceStatus.dwCurrentState = SERVICE_RUNNING;
+    serviceStatus.dwWin32ExitCode = 0;
+    serviceStatus.dwCheckPoint = 0;
+
+    SetServiceStatusWithDebug (hStatus, &serviceStatus);
+
+    // Start Working as a server:
+    HANDLE hThread = CreateThread (NULL, 0, ServiceWorkerThread, NULL, 0, NULL);
+
+    server.Message (SERVER_MSG_INFO, "server is now running");
+
+    // Wait until worker thread exits:
+    WaitForSingleObject (hThread, INFINITE);
+
+    // Clean up:
+    CloseHandle (hServiceStopEvent);
+
+    // Tell service controller we stopped
+    serviceStatus.dwControlsAccepted = 0;
+    serviceStatus.dwCurrentState = SERVICE_STOPPED;
+    serviceStatus.dwWin32ExitCode = 0;
+    serviceStatus.dwCheckPoint = 3;
+
+    SetServiceStatusWithDebug (hStatus, &serviceStatus);
+
+    delete server.pMessageAppender;
+    server.pMessageAppender = pOldAppender;
+}
+VOID WINAPI Server::ServiceControlHandler (DWORD controlCode)
+{
+    switch (controlCode)
+    {
+    case SERVICE_CONTROL_STOP:
+    case SERVICE_CONTROL_SHUTDOWN:
+
+        if (serviceStatus.dwCurrentState != SERVICE_RUNNING)
+            break;
+
+        server.Message (SERVER_MSG_INFO, "stop command recieved from service control");
+
+        // Change service status
+
+        serviceStatus.dwControlsAccepted = 0;
+        serviceStatus.dwCurrentState = SERVICE_STOP_PENDING;
+        serviceStatus.dwWin32ExitCode = 0;
+        serviceStatus.dwCheckPoint = 4;
+
+        SetServiceStatusWithDebug (hStatus, &serviceStatus);
+
+        // Signal the worker thread to stop
+
+        SetEvent (hServiceStopEvent);
+
+    break;
+
+    default:
+    break;
+    }
+}
+bool Server::StopCondition (void)
+{
+    return (WaitForSingleObject (hServiceStopEvent, 0) == WAIT_OBJECT_0);
+}
+DWORD WINAPI Server::ServiceWorkerThread (LPVOID lpParam)
+{
+    return server.MainLoop ();
+}
+#elif defined IMPL_CONSOLE_SERVER
+bool Server::StopCondition (void)
+{
+    return server.done;
+};
+int Server::ConsoleRun (void)
+{
+    int result;
+    SDL_Thread *pThread;
+
+    if (!server.NetInit ())
+        return 1;
+
+    server.done = false;
+    pThread = MakeSDLThread (
+                [server]
+                {
+                    return server.MainLoop ();
+                }
+              , (std::string (PROCESS_TAG) + "_main_loop").c_str ());
+
+    printf ("%s is now running, press enter to shut down.\n", PROCESS_TAG);
+    fgetc (stdin);
+
+    server.done = true;
+    SDL_WaitThread (pThread, &result);
+
+    return result;
+}
+int main (int argc, char** argv)
+{
+    int result;
+    SDL_Thread *pThread;
+
+    if (!server.Configure ())
+        return 1;
+
+    return Server::ConsoleRun ();
+}
+#endif

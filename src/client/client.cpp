@@ -359,7 +359,12 @@ bool Client::Init()
     if (fullscreen)
         flags |= SDL_WINDOW_FULLSCREEN | SDL_WINDOW_INPUT_GRABBED;
 
-    mainWindow = SDL_CreateWindow(WINDOW_TITLE, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, w, h, flags);
+    mainWindow = SDL_CreateWindow (WINDOW_TITLE, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, w, h, flags);
+    if (!mainWindow)
+    {
+        SetError ("SDL_CreateWindow failed: %s", SDL_GetError());
+        return false;
+    }
 
 #ifdef _WIN32
     /*
@@ -386,6 +391,11 @@ bool Client::Init()
 #endif
 
     mainGLContext = SDL_GL_CreateContext(mainWindow);
+    if (!mainGLContext)
+    {
+        SetError ("Failed to create GL context: %s", SDL_GetError ());
+        return false;
+    }
 
     // We use glew to check if our openGL version is at least 2.0
 

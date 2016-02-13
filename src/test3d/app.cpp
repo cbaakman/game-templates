@@ -240,6 +240,11 @@ bool App::InitApp (void)
 bool App::InitializeGL(void)
 {
     mainGLContext = SDL_GL_CreateContext (mainWindow);
+    if (!mainGLContext)
+    {
+        SetError ("Failed to create a GL context: %s", SDL_GetError ());
+        return false;
+    }
 
     GLenum err = glewInit ();
     if (GLEW_OK != err)
@@ -302,6 +307,11 @@ bool App::InitializeSDL (Uint32 width, Uint32 height)
 
     // Create the window
     mainWindow = SDL_CreateWindow ("3D Test", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, flags);
+    if (!mainWindow)
+    {
+        SetError ("SDL_CreateWindow failed: %s", SDL_GetError ());
+        return false;
+    }
 
 #ifdef _WIN32
     /*

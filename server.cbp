@@ -17,7 +17,7 @@
 			</Target>
 			<Target title="Release">
 				<Option output="bin/server" prefix_auto="1" extension_auto="1" />
-				<Option object_output="obj/" />
+				<Option object_output="obj/Release/" />
 				<Option type="1" />
 				<Option compiler="gcc" />
 				<Compiler>

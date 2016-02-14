@@ -8,6 +8,8 @@ SERVERLIBS = SDL2 SDL2_net crypto
 MANAGERLIBS = crypto ncurses SDL2
 TEST3DLIBS = GL SDL2 GLEW png xml2 cairo unzip
 
+BINDIR = /usr/local/bin/game-templates
+
 CC = /usr/bin/g++
 CCVERSION = $(strip $(shell $(CC) --version | grep -o ' [0-9\.]\+$$'))
 
@@ -47,3 +49,15 @@ bin/test3d: obj/test3d/grass.o obj/load.o obj/thread.o obj/progress.o obj/test3d
 
 bin/manager: obj/manager/manager.o obj/ini.o obj/str.o obj/account.o obj/err.o
 	$(CC) $^ -o $@ -lstdc++ $(MANAGERLIBS:%=-l%) $(LIBDIRS:%=-L%)
+
+install: bin/server bin/manager
+	mkdir -p $(BINDIR)/accounts
+	install -m755 bin/server $(BINDIR)/server
+	install -m755 bin/manager $(BINDIR)/account
+	/bin/echo -e 'max-login=10\nport=12000' > $(BINDIR)/settings.ini
+	sed -e "s|__DEAMON__|$(BINDIR)/server|g" init.d/game-templates-server > /etc/init.d/game-templates-server
+	chmod 755 /etc/init.d/game-templates-server
+
+uninstall:
+	rm -rf $(BINDIR)/*
+	/etc/init.d/game-templates-server

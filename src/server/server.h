@@ -245,7 +245,7 @@ public:
     bool Start (void);
     bool Stop (void);
     bool Reload (void);
-    void Status (void);
+    bool Status (void); // true if running, false otherwise
 
 #elif defined IMPL_WINDOWS_SERVICE
 

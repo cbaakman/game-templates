@@ -1156,19 +1156,17 @@ int main (int argc, char** argv)
 /*
     How to run (as admin) ..
 
-    Install service with:
+    Install service with "server-install.cmd" script
 
-        sc create "server" binPath="path\to\exe"
+    Uninstall with "server-uninstall.cmd" script
 
-    Uninstall with:
+    (uninstall needs to be done, before installing anew)
 
-        sc delete "server"
+    Stopping/Starting from Service Controller Manager:
 
-    Running from Service Controller Manager:
-
-        1. run services.msc
-        2. locate "server"
-        3. press "start"
+        1. run "services.msc"
+        2. locate "game-templates-server"
+        3. press "start" or "stop"
  */
 
 #include <Tchar.h>

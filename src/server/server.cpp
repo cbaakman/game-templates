@@ -1367,9 +1367,6 @@ int Server::ConsoleRun (void)
 }
 int main (int argc, char** argv)
 {
-    int result;
-    SDL_Thread *pThread;
-
     if (!server.Configure ())
         return 1;
 

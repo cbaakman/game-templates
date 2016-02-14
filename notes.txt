@@ -21,6 +21,8 @@ Need to run this to create account files that the server can parse. It depends o
 Runs on the command line, handles requests from the client application. Depends on account files to handle login requests.
 Handles public chat messages and updates connected clients about each other's mouse cursor positions.
 
+Install/Uninstall on Windows by running the batch scripts.
+
 [client]
 
 A graphical interface, that shows a simple login screen. Needs the server to be running in order to let the user log in.

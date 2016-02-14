@@ -256,7 +256,7 @@ public:
 
 #elif defined IMPL_CONSOLE_SERVER
 
-    static int ConsoleRun (void);
+    int ConsoleRun (void);
 #endif
 
     Server ();

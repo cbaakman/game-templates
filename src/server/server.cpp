@@ -1339,28 +1339,28 @@ DWORD WINAPI Server::ServiceWorkerThread (LPVOID lpParam)
 #elif defined IMPL_CONSOLE_SERVER
 bool Server::StopCondition (void)
 {
-    return server.done;
+    return done;
 };
 int Server::ConsoleRun (void)
 {
     int result;
     SDL_Thread *pThread;
 
-    if (!server.NetInit ())
+    if (!NetInit ())
         return 1;
 
-    server.done = false;
+    done = false;
     pThread = MakeSDLThread (
-                [server]
+                [this]
                 {
-                    return server.MainLoop ();
+                    return this->MainLoop ();
                 }
               , (std::string (PROCESS_TAG) + "_main_loop").c_str ());
 
     printf ("%s is now running, press enter to shut down.\n", PROCESS_TAG);
     fgetc (stdin);
 
-    server.done = true;
+    done = true;
     SDL_WaitThread (pThread, &result);
 
     return result;
@@ -1373,6 +1373,6 @@ int main (int argc, char** argv)
     if (!server.Configure ())
         return 1;
 
-    return Server::ConsoleRun ();
+    return server.ConsoleRun ();
 }
 #endif

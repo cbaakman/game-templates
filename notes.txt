@@ -22,6 +22,7 @@ Runs on the command line, handles requests from the client application. Depends 
 Handles public chat messages and updates connected clients about each other's mouse cursor positions.
 
 Install/Uninstall on Windows by running the batch scripts.
+Install/Uninstall on unix by running 'make install' as root.
 
 [client]
 

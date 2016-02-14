@@ -958,15 +958,20 @@ bool Server::Start (void)
 
     return true;
 }
-void Server::Status (void)
+bool Server::Status (void)
 {
     pid_t pid = GetDeamonPID ();
 
     if (pid > 0 && ProcessExists (pid))
-
+    {
         printf ("%s is running as process %d\n", PROCESS_TAG, pid);
+        return true;
+    }
     else
+    {
         printf ("%s is not running\n", PROCESS_TAG);
+        return false;
+    }
 }
 bool Server::Stop (void)
 {
@@ -1132,7 +1137,8 @@ int main (int argc, char** argv)
         }
         else if (0 == strcmp (argv [1], "status"))
         {
-            server.Status ();
+            if (!server.Status ())
+                return 1;
         }
         else if (0 == strcmp (argv [1], "reload"))
         {

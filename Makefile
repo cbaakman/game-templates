@@ -59,5 +59,4 @@ install: bin/server bin/manager
 	chmod 755 /etc/init.d/game-templates-server
 
 uninstall:
-	rm -rf $(BINDIR)/*
-	/etc/init.d/game-templates-server
+	rm -rf $(BINDIR)/* /etc/init.d/game-templates-server

@@ -53,7 +53,7 @@ IF NOT EXIST %exePath% (
 )
 COPY %exePath% %installDir%\server.exe
 
-SC CREATE %serverTag% binPath=%installDir%\server.exe start=auto
+SC CREATE %serverTag% binPath= %installDir%\server.exe start= auto
 
 NET START %serverTag%
 IF /I "%ERRORLEVEL%" EQU "0" (

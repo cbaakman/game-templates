@@ -171,6 +171,7 @@ private:
     UserP GetUser (const char* accountName);
     void DelUser (UserP user);
 
+    SDL_mutex *pChatMutex;
     std::list <ChatEntry> chat_history;
 
     std::string settingsPath,
@@ -201,8 +202,8 @@ private:
 
     void Update (Uint32 ticks);
 
-    void PrintUsers ();
-    void PrintChatHistory () const;
+    void UserListJSON (std::string &json);
+    void ChatHistoryJSON (std::string &json);
 
     void TellAboutLogout (UserP to, const char *loggedOutUsername);
 
@@ -224,6 +225,8 @@ private:
     void SendToAll (const Uint8 *, const int len);
 
     bool StopCondition (void);
+
+    void OnHttpGet (TCPsocket clientSocket, const std::string &host, const std::string &path);
 
 #ifdef IMPL_UNIX_DEAMON
 

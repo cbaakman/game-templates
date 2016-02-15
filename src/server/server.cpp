@@ -30,6 +30,7 @@
 #include "../ip.h"
 #include "../str.h"
 #include "../thread.h"
+#include "../http.h"
 
 #define SETTINGS_FILE "settings.ini"
 
@@ -323,6 +324,7 @@ Server::Server() :
 {
     pUsersMutex = SDL_CreateMutex ();
     pRandMutex = SDL_CreateMutex ();
+    pChatMutex = SDL_CreateMutex ();
 
     rseed = time (NULL);
 }
@@ -334,6 +336,8 @@ Server::~Server()
     // These must be destroyed last!
     SDL_DestroyMutex (pUsersMutex);
     SDL_DestroyMutex (pRandMutex);
+     SDL_DestroyMutex (pChatMutex);
+
     delete pMessageAppender;
 }
 bool Server::Configure (void)
@@ -670,7 +674,15 @@ void Server::OnChatMessage (const UserP pUser, const char *msg)
     strcpy (e.username, pUser->accountName);
     strcpy (e.message, msg);
 
-    chat_history.push_back (e);
+    if (SDL_LockMutex (pChatMutex) == 0)
+    {
+        chat_history.push_back (e);
+
+        SDL_UnlockMutex (pChatMutex);
+    }
+    else
+        Message (SERVER_MSG_ERROR, "Error adding chat message, could not lock mutex: %s",
+                 SDL_GetError ());
 
     Message (SERVER_MSG_INFO, "%s said: %s", pUser->accountName, msg);
 
@@ -786,6 +798,7 @@ void Server::OnUDPPackage (const IPaddress& clientAddress, Uint8 *data, int len)
         return;
     }
 }
+#define MAX_RECV 1024
 void Server::OnTCPConnection (TCPsocket clientSocket)
 {
     if (!clientSocket)
@@ -805,12 +818,63 @@ void Server::OnTCPConnection (TCPsocket clientSocket)
         if (signal == NETSIG_LOGINREQUEST)
 
             OnLogin (clientSocket, pClientIP);
+
+        else if (signal == 'G') // is it GET ?
+        {
+            // Collect the rest of the bytes..
+            char data [MAX_RECV];
+            data [0] = signal;
+            int len = SDLNet_TCP_Recv (clientSocket, data + 1, MAX_RECV - 1);
+
+            std::string method,
+                        path,
+                        host;
+
+            if (ParseHttpRequest (data, len, method, path, host) && method == "GET")
+
+                OnHttpGet (clientSocket, host, path);
+        }
     }
     else
         Message (SERVER_MSG_ERROR, "Recieved no signal from newly opened tcp socket: %s",
                  SDLNet_GetError());
 
     SDLNet_TCP_Close (clientSocket);
+}
+void Server::OnHttpGet (TCPsocket clientSocket, const std::string &host, const std::string &path)
+{
+    std::string response = "",
+                url = std::string ("http://") + host + path;
+
+    if (path == "/users")
+
+        response = HTTPResponseFound ((url + "/").c_str ());
+
+    else if (path == "/users/")
+    {
+        std::string json;
+        UserListJSON (json);
+
+        response = HTTPResponseOK (json.c_str (), json.size (), "text/json; charset=UTF-8");
+    }
+    else if (path == "/chat")
+
+        response = HTTPResponseFound ((url + "/").c_str ());
+
+    else if (path == "/chat/")
+    {
+        std::string json;
+        ChatHistoryJSON (json);
+
+        response = HTTPResponseOK (json.c_str (), json.size (), "text/json; charset=UTF-8");
+    }
+    else
+        response = HTTPResponseNotFound ();
+
+    if (SDLNet_TCP_Send (clientSocket, response.c_str (), response.size ())
+        != response.size ())
+
+        Message (SERVER_MSG_ERROR, "SDLNet_TCP_Send: %s", SDLNet_GetError());
 }
 bool Server::SendToClient (const IPaddress& clientAddress, const Uint8*data, int len)
 {
@@ -831,41 +895,73 @@ bool Server::SendToClient (const IPaddress& clientAddress, const Uint8*data, int
 
     return true;
 }
-void Server::PrintChatHistory () const
+void Server::ChatHistoryJSON (std::string &json)
 {
+    char s [100];
+    bool comma = false;
+
+    json = "";
+
+    if (SDL_LockMutex (pChatMutex) != 0)
+    {
+        Message (SERVER_MSG_ERROR,
+                 "Cannot output chat history, error locking mutex: %s",
+                 SDL_GetError ());
+        return;
+    }
+
+    json += "[";
+
     for (const ChatEntry &entry : chat_history)
     {
-        printf ("%s said: %s\n", entry.username, entry.message);
+        if (comma)
+            json += ",";
+        comma = true;
+
+        sprintf (s, "{\'user\':\'%s\', \'message\':\'%s\'}",
+                 entry.username, entry.message);
+
+        json += s;
     }
+
+    json += "]";
+
+    SDL_UnlockMutex (pChatMutex);
 }
-void Server::PrintUsers ()
+void Server::UserListJSON (std::string &json)
 {
-    bool printedHeader = false;
-    char ipStr[IP_STRINGLENGTH];
-    int nFound = 0;
+    bool comma = false;
+    char ipStr [IP_STRINGLENGTH],
+         s [100];
 
-    if (SDL_LockMutex (pUsersMutex) == 0)
+    json = "";
+
+    if (SDL_LockMutex (pUsersMutex) != 0)
     {
-        for (UserP pUser : users)
-        {
-            if (nFound <= 0)
-            { // only print a header if there are users
-                printf("IP-address:   \taccount-name:  \tlast contact(ms ago):\n");
-            }
-            nFound ++;
-
-            ip2String (pUser->address, ipStr);
-            printf ("%s\t%14s\t%u\n", ipStr, pUser->accountName, pUser->ticksSinceLastContact);
-        }
-
-        SDL_UnlockMutex (pUsersMutex);
-
-        if (nFound <= 0)
-            printf ("nobody is logged in right now\n");
-    }
-    else
-        Message (SERVER_MSG_ERROR, "error printing users, couldn't lock mutex: %s",
+        Message (SERVER_MSG_ERROR, "Cannot output users, couldn't lock mutex: %s",
                  SDL_GetError ());
+
+        return;
+    }
+
+    json += "[";
+
+    for (UserP pUser : users)
+    {
+        if (comma)
+            json += ",";
+        comma = true;
+
+        ip2String (pUser->address, ipStr);
+        sprintf (s, "{\'ip\':\'%s\', \'name\':\'%s\', \'contact\':%u}",
+                 ipStr, pUser->accountName, pUser->ticksSinceLastContact);
+
+        json += s;
+    }
+
+    json += "]";
+
+    SDL_UnlockMutex (pUsersMutex);
 }
 int Server::MainLoop (void)
 {
@@ -1367,6 +1463,9 @@ int Server::ConsoleRun (void)
 }
 int main (int argc, char** argv)
 {
+    int result;
+    SDL_Thread *pThread;
+
     if (!server.Configure ())
         return 1;
 

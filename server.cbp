@@ -46,6 +46,8 @@
 		<Unit filename="src/err.h" />
 		<Unit filename="src/geo2d.cpp" />
 		<Unit filename="src/geo2d.h" />
+		<Unit filename="src/http.cpp" />
+		<Unit filename="src/http.h" />
 		<Unit filename="src/ini.cpp" />
 		<Unit filename="src/ini.h" />
 		<Unit filename="src/server/server.cpp" />

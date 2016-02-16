@@ -22,8 +22,7 @@ std::string HTTPResponseOK (const void *pBytes, const size_t data_len, const cha
 {
     char line [100];
 
-    std::string response = "HTTP/1.1 200 OK\n"
-                           "Content-Type: text/html; charset=UTF-8\n";
+    std::string response = "HTTP/1.1 200 OK\n";
 
     sprintf (line, "Content-Type: %s\n", content_type);
     response += line;
@@ -48,7 +47,8 @@ std::string HTTPResponseFound (const char *url)
     sprintf (line, "Location: %s\n", url);
     response += line;
 
-    response += "\n";
+    response += "Connection: close\n"
+                "\n"; // NEEDS DOUBLE NEWLINE HERE !!
 
     return response;
 }

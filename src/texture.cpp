@@ -260,7 +260,10 @@ bool LoadPNG (const char *zip_path,
 {
     SDL_RWops *f = SDL_RWFromZipArchive (zip_path, png_path);
     if (!f) // file or archive missing
+    {
+        SetError (SDL_GetError ());
         return false;
+    }
 
     bool success = LoadPNG (f, pTex);
     f->close (f);

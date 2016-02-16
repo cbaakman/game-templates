@@ -100,7 +100,10 @@ void HubScene::AddAll (Loader *pLoader)
 
             SDL_RWops *fontInput = SDL_RWFromZipArchive (resPath.c_str(), "Lumean.svg");
             if (!fontInput) // file or archive missing
+            {
+                SetError (SDL_GetError ());
                 return false;
+            }
 
             // Parse the svg as xml document:
             xmlDocPtr pDoc = ParseXML (fontInput);

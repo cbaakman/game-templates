@@ -16,6 +16,7 @@
 
 #include "http.h"
 #include <cstring>
+#include <stdio.h>
 
 std::string HTTPResponseOK (const void *pBytes, const size_t data_len, const char *content_type)
 {

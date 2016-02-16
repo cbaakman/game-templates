@@ -19,9 +19,10 @@ bin/accounts/*
 # auto generated config file
 make.config
 
-# Generated resources
+# Resources
 *.xml
 *.png
+*.html
 
 # Log files
 *.log

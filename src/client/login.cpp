@@ -630,7 +630,10 @@ bool LoginScene::Init ()
 
     f = SDL_RWFromZipArchive (archive.c_str(), "handwriting.svg");
     if (!f) // file or archive missing
+    {
+        SetError (SDL_GetError ());
         return false;
+    }
 
     xmlDocPtr pDoc = ParseXML(f);
     f->close (f);
@@ -658,7 +661,11 @@ bool LoginScene::Init ()
 
     f = SDL_RWFromZipArchive (archive.c_str(), "button.png");
     if (!f)
+    {
+        SetError (SDL_GetError ());
         return false;
+    }
+
     success = LoadPNG (f, &buttonTex);
     f->close (f);
 
@@ -670,7 +677,11 @@ bool LoginScene::Init ()
 
     f = SDL_RWFromZipArchive (archive.c_str(), "bluebg.png");
     if (!f)
+    {
+        SetError (SDL_GetError ());
         return false;
+    }
+
     success = LoadPNG (f, &bgTex);
     f->close (f);
 
@@ -682,7 +693,11 @@ bool LoginScene::Init ()
 
     f = SDL_RWFromZipArchive (archive.c_str(), "cursor.png");
     if (!f)
+    {
+        SetError (SDL_GetError ());
         return false;
+    }
+
     success = LoadPNG (f, &cursorTex);
     f->close (f);
 
@@ -696,7 +711,11 @@ bool LoginScene::Init ()
     {
         f = SDL_RWFromZipArchive (archive.c_str(), "menu.wav");
         if (!f)
+        {
+            SetError (SDL_GetError ());
             return false;
+        }
+
         pSound = Mix_LoadWAV_RW(f, false);
         f->close (f);
 
@@ -1143,7 +1162,11 @@ bool TestConnectionScene::Init (void)
 
     f = SDL_RWFromZipArchive (archive.c_str(), "scroll.png");
     if (!f)
+    {
+        SetError (SDL_GetError ());
         return false;
+    }
+
     success = LoadPNG (f, &scrollTex);
     f->close (f);
 

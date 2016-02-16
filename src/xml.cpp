@@ -35,7 +35,7 @@ xmlDocPtr ParseXML(SDL_RWops *io)
     // read first 4 bytes
     if ((res = io->read (io, buf, 1, 4)) < 4)
     {
-        SetError ("Failed to read first xml bytes");
+        SetError ("Failed to read first xml bytes: %s", SDL_GetError ());
         return NULL;
     }
 

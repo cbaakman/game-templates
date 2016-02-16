@@ -4,7 +4,7 @@ clean:
 	rm -f bin/client bin/test3d bin/server bin/manager obj/*.o obj/*/*.o
 
 CLIENTLIBS = SDL2 SDL2_net SDL2_mixer GL GLEW png crypto xml2 cairo unzip
-SERVERLIBS = SDL2 SDL2_net crypto
+SERVERLIBS = SDL2 SDL2_net crypto unzip
 MANAGERLIBS = crypto ncurses SDL2
 TEST3DLIBS = GL SDL2 GLEW png xml2 cairo unzip
 
@@ -35,7 +35,7 @@ obj/%.o: src/%.cpp
 	mkdir -p $(@D)
 	$(CC) $(CFLAGS) -c $< -o $@ $(INCDIRS:%=-I%)
 
-bin/server: obj/thread.o obj/geo2d.o obj/str.o obj/ini.o obj/account.o obj/server/server.o obj/err.o
+bin/server: obj/thread.o obj/geo2d.o obj/str.o obj/ini.o obj/account.o obj/server/server.o obj/err.o obj/http.o obj/io.o
 	$(CC) $^ -o $@ $(SERVERLIBS:%=-l%) $(LIBDIRS:%=-L%)
 
 bin/client: obj/thread.o obj/geo2d.o obj/ini.o obj/client/client.o obj/util.o obj/client/connection.o obj/str.o obj/err.o obj/client/textscroll.o\

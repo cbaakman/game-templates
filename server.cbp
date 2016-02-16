@@ -39,6 +39,7 @@
 			<Add library="SDL2" />
 			<Add library="SDL2_net" />
 			<Add library="libeay32" />
+			<Add library="unzip" />
 		</Linker>
 		<Unit filename="src/account.cpp" />
 		<Unit filename="src/account.h" />
@@ -50,6 +51,8 @@
 		<Unit filename="src/http.h" />
 		<Unit filename="src/ini.cpp" />
 		<Unit filename="src/ini.h" />
+		<Unit filename="src/io.cpp" />
+		<Unit filename="src/io.h" />
 		<Unit filename="src/server/server.cpp" />
 		<Unit filename="src/server/server.h" />
 		<Unit filename="src/str.cpp" />

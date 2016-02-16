@@ -18,12 +18,14 @@
 SET installDir="C:\Program Files\game-templates"
 SET serverTag=game-templates-server
 
-NET STOP %serverTag%
+NET SESSION >nul 2>&1
 IF /I "%ERRORLEVEL%" NEQ "0" (
 
     ECHO Failure: Need to be ADMIN!
     GOTO :EOF
 )
+
+NET STOP %serverTag%
 
 SC DELETE %serverTag%
 

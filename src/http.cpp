@@ -54,11 +54,15 @@ std::string HTTPResponseFound (const char *url)
 }
 std::string HTTPResponseNotFound ()
 {
-    char line [100];
-
     std::string response = "HTTP/1.1 404 Not Found\n";
 
-    response += "\n";
+    response += "Connection: close\n"
+                "\n"; // NEEDS DOUBLE NEWLINE HERE !!
+
+    response += "<html><head><title>404 Not Found</title>"
+                "</head><body><h1>Not Found</h1>"
+                "<p>The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.</p>"
+                "</body></html>\n";
 
     return response;
 }

@@ -39,6 +39,7 @@
 
 #include "../geo2d.h"
 #include "../account.h"
+#include "../xml.h"
 
 #define PACKET_MAXSIZE 512
 #define MAX_CHAT_LENGTH 100 // must fit inside PACKET_MAXSIZE
@@ -144,7 +145,6 @@ private:
     unsigned int GetNextRand (void);
 
     MessageAppender *pMessageAppender;
-    void Message (MessageType, const char *format, ...);
 
     struct User // created after login, identified by IP-adress
     {
@@ -191,6 +191,11 @@ private:
     UDPsocket udp_socket;
     TCPsocket tcp_socket;
     IPaddress mAddress;
+
+    std::string icon_bytes,
+                base_html,
+                users_html,
+                chat_html;
 
     #if defined IMPL_UNIX_DEAMON || defined IMPL_CONSOLE_SERVER
 
@@ -240,6 +245,9 @@ public:
 
     bool Configure (void);
 
+    bool ResourceInit (void);
+    void ResourceCleanUp (void);
+
     bool NetInit (void);
     void NetCleanUp (void);
 
@@ -261,6 +269,8 @@ public:
 
     int ConsoleRun (void);
 #endif
+
+    void Message (MessageType, const char *format, ...);
 
     Server ();
     ~Server ();

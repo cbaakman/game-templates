@@ -26,6 +26,8 @@
 
 #include "server.h"
 
+#include "../io.h"
+#include "../err.h"
 #include "../ini.h"
 #include "../ip.h"
 #include "../str.h"
@@ -332,6 +334,7 @@ Server::~Server()
 {
     // Clean up anything that was allocated/linked:
     NetCleanUp ();
+    ResourceCleanUp ();
 
     // These must be destroyed last!
     SDL_DestroyMutex (pUsersMutex);
@@ -461,6 +464,47 @@ void Server::NetCleanUp()
     }
     else
         Message (SERVER_MSG_ERROR, "Error deleting users, could not lock mutex!");
+}
+bool RawResourceLoad (const std::string &archive, const std::string &filename, std::string &out)
+{
+    SDL_RWops *f;
+    bool success;
+
+    f = SDL_RWFromZipArchive (archive.c_str (), filename.c_str ());
+    if (!f) // file or archive missing
+    {
+        SetError (SDL_GetError ());
+        return false;
+    }
+
+    success = ReadAll (f, out);
+    f->close (f);
+
+    if (!success)
+    {
+        SetError ("failed to load %s: %s", filename.c_str (), GetError ());
+        return false;
+    }
+
+    return true;
+}
+bool Server::ResourceInit (void)
+{
+    std::string archive = std::string (SDL_GetBasePath ()) + "server.zip";
+
+    if (!(RawResourceLoad (archive, "client-icon.ico", icon_bytes)
+        && RawResourceLoad (archive, "base.html", base_html)
+        && RawResourceLoad (archive, "users.html", users_html)
+        && RawResourceLoad (archive, "chat.html", chat_html)))
+    {
+        Message (SERVER_MSG_ERROR, GetError ());
+        return false;
+    }
+
+    return true;
+}
+void Server::ResourceCleanUp (void)
+{
 }
 bool Server::IsServerFull (void)
 {
@@ -841,12 +885,29 @@ void Server::OnTCPConnection (TCPsocket clientSocket)
 
     SDLNet_TCP_Close (clientSocket);
 }
+void ReplaceIn (std::string &in, const std:: string &what, const std::string &by)
+{
+    in.replace (in.find (what), what.length (), by);
+}
 void Server::OnHttpGet (TCPsocket clientSocket, const std::string &host, const std::string &path)
 {
     std::string response = "",
                 url = std::string ("http://") + host + path;
 
-    if (path == "/users")
+    if (path == "/")
+    {
+        std::string html = base_html;
+
+        ReplaceIn (html, "{{ title }}", "SERVER");
+        ReplaceIn (html, "{{ content }}", users_html + chat_html);
+
+        response = HTTPResponseOK (html.c_str (), html.size (), "text/html; charset=UTF-8");
+    }
+    else if (path == "/favicon.ico")
+    {
+        response = HTTPResponseOK (icon_bytes.c_str (), icon_bytes.size (), "image/x-icon");
+    }
+    else if (path == "/users")
 
         response = HTTPResponseFound ((url + "/").c_str ());
 
@@ -918,7 +979,7 @@ void Server::ChatHistoryJSON (std::string &json)
             json += ",";
         comma = true;
 
-        sprintf (s, "{\'user\':\'%s\', \'message\':\'%s\'}",
+        sprintf (s, "{\"user\":\"%s\", \"message\":\"%s\"}",
                  entry.username, entry.message);
 
         json += s;
@@ -953,7 +1014,7 @@ void Server::UserListJSON (std::string &json)
         comma = true;
 
         ip2String (pUser->address, ipStr);
-        sprintf (s, "{\'ip\':\'%s\', \'name\':\'%s\', \'contact\':%u}",
+        sprintf (s, "{\"ip\":\"%s\", \"name\":\"%s\", \"contact\":%u}",
                  ipStr, pUser->accountName, pUser->ticksSinceLastContact);
 
         json += s;
@@ -1046,7 +1107,7 @@ bool ProcessExists (const pid_t pid)
 }
 bool Server::Start (void)
 {
-    if (!NetInit ())
+    if (!(NetInit () && ResourceInit ()))
         return false;
 
     if (!Deamonize ())
@@ -1348,8 +1409,8 @@ VOID WINAPI Server::ServiceMain (DWORD argc, LPTSTR *argv)
         return;
     }
 
-    // Init Networking:
-    if (!server.NetInit ())
+    // Init Networking & Resources:
+    if (!(server.NetInit () && server.ResourceInit ()))
     {
         // Tell service controller we stopped, then exit:
 
@@ -1442,7 +1503,7 @@ int Server::ConsoleRun (void)
     int result;
     SDL_Thread *pThread;
 
-    if (!NetInit ())
+    if (!(NetInit () && ResourceInit ()))
         return 1;
 
     done = false;

@@ -66,8 +66,6 @@ bool isnewline (const char c)
 {
     return (c == '\n' || c == '\r');
 }
-
-#include <syslog.h>
 bool ParseHttpRequest (const void *pBytes, const size_t data_len,
                        std::string &method, std::string &path, std::string &host)
 {

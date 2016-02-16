@@ -89,27 +89,6 @@ void GLFrameBufferErrorString (char *out, GLenum status)
     }
 }
 
-bool ReadAll (SDL_RWops *io, std::string &out)
-{
-    const size_t bufsize = 256;
-    size_t n;
-    char buf[bufsize];
-
-    do
-    {
-        n = io->read(io, buf, 1, bufsize);
-        if (n == 0)
-        {
-            return true;
-        }
-
-        out.append(buf, n);
-    }
-    while (n == bufsize);
-
-    return true;
-}
-
 void RenderCube (const vec3 &p, const float sz)
 {
     GLfloat size = sz / 2;

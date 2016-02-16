@@ -32,4 +32,9 @@
  */
 SDL_RWops *SDL_RWFromZipArchive (const char *archive_path, const char *entry_path);
 
+/**
+ * Reads the entire content of an input source to a string
+ */
+bool ReadAll (SDL_RWops *io, std::string &out);
+
 #endif // IO_H

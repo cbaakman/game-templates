@@ -63,11 +63,6 @@ void swap (Value& n1, Value& n2)
 char GetKeyChar (const SDL_KeyboardEvent *event);
 
 /**
- * Reads the entire content of an input source to a string
- */
-bool ReadAll (SDL_RWops *, std::string &out);
-
-/**
  * Converts a GL error status to a string.
  */
 void GLErrorString (char *out, GLenum status);

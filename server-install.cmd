@@ -37,6 +37,14 @@ IF NOT EXIST %installDir%\accounts (
 ECHO port=12000 > %installDir%\settings.ini
 ECHO max-login=10 >> %installDir%\settings.ini
 
+SET zipPath=%~dp0\bin\server.zip
+IF NOT EXIST %zipPath% (
+
+    ECHO Failure: Missing %zipPath%
+    GOTO :EOF
+)
+COPY %zipPath% %installDir%\server.zip
+
 SET exePath=%~dp0\bin\manager.exe
 IF NOT EXIST %exePath% (
 

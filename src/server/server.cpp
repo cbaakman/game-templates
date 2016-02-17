@@ -330,7 +330,7 @@ void Server::Message (MessageType type, const char *format, ...)
             return;
     #endif
 
-    if (!SDL_LockMutex (pMessageMutex))
+    if (SDL_LockMutex (pMessageMutex) != 0)
     {
         fprintf (stderr, "Cannot send message, unable to lock mutex: %s",
                  SDL_GetError ());

@@ -34,6 +34,13 @@ IF NOT EXIST %installDir%\accounts (
     MD %installDir%\accounts
 )
 
+:: Try to stop the service first, see if it already exists
+NET STOP %serverTag% 2>nul
+IF /I "%ERRORLEVEL%" EQU "0" (
+	
+	SC DELETE %serverTag%
+)
+
 ECHO port=12000 > %installDir%\settings.ini
 ECHO max-login=10 >> %installDir%\settings.ini
 
@@ -43,7 +50,7 @@ IF NOT EXIST %zipPath% (
     ECHO Failure: Missing %zipPath%
     GOTO :EOF
 )
-COPY %zipPath% %installDir%\server.zip
+COPY /Y %zipPath% %installDir%\server.zip
 
 SET exePath=%~dp0\bin\manager.exe
 IF NOT EXIST %exePath% (
@@ -51,7 +58,7 @@ IF NOT EXIST %exePath% (
     ECHO Failure: Be sure to compile the manager first!
     GOTO :EOF
 )
-COPY %exePath% %installDir%\manager.exe
+COPY /Y %exePath% %installDir%\manager.exe
 
 SET exePath=%~dp0\bin\server.exe
 IF NOT EXIST %exePath% (
@@ -59,7 +66,7 @@ IF NOT EXIST %exePath% (
     ECHO Failure: Be sure to compile the server first!
     GOTO :EOF
 )
-COPY %exePath% %installDir%\server.exe
+COPY /Y %exePath% %installDir%\server.exe
 
 SC CREATE %serverTag% binPath= %installDir%\server.exe start= auto
 

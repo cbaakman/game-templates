@@ -23,6 +23,7 @@
 #include <cstring>
 #include <string.h>
 #include <errno.h>
+#include <ctime>
 
 #include "server.h"
 
@@ -264,6 +265,7 @@ void STDAppender::Message (MessageType type, const char *format, va_list args)
     FILE *stream;
     switch (type)
     {
+    case SERVER_MSG_DEBUG:
     case SERVER_MSG_INFO:
         stream = stdout;
     break;
@@ -287,11 +289,25 @@ FileLogAppender::FileLogAppender (const std::string &log_path)
     : FileLogAppender (log_path.c_str ()) {}
 void FileLogAppender::Message (MessageType type, const char *format, va_list args)
 {
+    time_t rawtime;
+    struct tm * timeinfo;
+    char timebuf [100];
+
     // Append to log file
     FILE *pFile = fopen (path, "a");
 
+    time (&rawtime);
+    timeinfo = localtime (&rawtime);
+
+    strftime (timebuf, 100,"[%d-%m-%Y %H:%M:%S] ",timeinfo);
+    fprintf (pFile, timebuf);
+
     switch (type)
     {
+    case SERVER_MSG_DEBUG:
+
+        fprintf (pFile, "DEBUG: ");
+    break;
     case SERVER_MSG_INFO:
 
         fprintf (pFile, "INFO: ");
@@ -309,6 +325,11 @@ void FileLogAppender::Message (MessageType type, const char *format, va_list arg
 }
 void Server::Message (MessageType type, const char *format, ...)
 {
+    #ifndef DEBUG
+        if (type == SERVER_MSG_DEBUG)
+            return;
+    #endif
+
     if (!SDL_LockMutex (pMessageMutex))
     {
         fprintf (stderr, "Cannot send message, unable to lock mutex: %s",
@@ -866,6 +887,11 @@ void Server::OnTCPConnection (TCPsocket clientSocket)
                  SDLNet_GetError());
         return;
     }
+    char ipString [100];
+    ip2String (*pClientIP, ipString);
+
+    Message (SERVER_MSG_DEBUG, "tcp connection established with client at %s",
+                               ipString);
 
     Uint8 signal;
     if (SDLNet_TCP_Recv (clientSocket, &signal, 1) == 1)
@@ -891,8 +917,8 @@ void Server::OnTCPConnection (TCPsocket clientSocket)
         }
     }
     else
-        Message (SERVER_MSG_ERROR, "Recieved no signal from newly opened tcp socket: %s",
-                 SDLNet_GetError());
+        Message (SERVER_MSG_ERROR, "Recieved no signal from newly opened tcp socket at %s: %s",
+                 ipString, SDLNet_GetError());
 
     SDLNet_TCP_Close (clientSocket);
 }
@@ -1098,6 +1124,9 @@ void SyslogAppender::Message (MessageType type, const char *format, va_list args
     int priority;
     switch (type)
     {
+    case SERVER_MSG_DEBUG:
+        priority = LOG_DEBUG;
+    break;
     case SERVER_MSG_INFO:
         priority = LOG_INFO;
     break;

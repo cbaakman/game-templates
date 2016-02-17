@@ -99,7 +99,7 @@ struct ChatEntry // must fit inside PACKET_MAXSIZE
          message [MAX_CHAT_LENGTH]; // what was said?
 };
 
-enum MessageType {SERVER_MSG_INFO, SERVER_MSG_ERROR};
+enum MessageType {SERVER_MSG_DEBUG, SERVER_MSG_INFO, SERVER_MSG_ERROR};
 class MessageAppender
 {
 public:

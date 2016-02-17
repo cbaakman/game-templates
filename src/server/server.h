@@ -144,6 +144,7 @@ private:
     unsigned int rseed;
     unsigned int GetNextRand (void);
 
+    SDL_mutex *pMessageMutex;
     MessageAppender *pMessageAppender;
 
     struct User // created after login, identified by IP-adress

@@ -309,12 +309,21 @@ void FileLogAppender::Message (MessageType type, const char *format, va_list arg
 }
 void Server::Message (MessageType type, const char *format, ...)
 {
+    if (!SDL_LockMutex (pMessageMutex))
+    {
+        fprintf (stderr, "Cannot send message, unable to lock mutex: %s",
+                 SDL_GetError ());
+        return;
+    }
+
     va_list args;
     va_start (args, format);
 
     pMessageAppender->Message (type, format, args);
 
     va_end (args);
+
+    SDL_UnlockMutex (pMessageMutex);
 }
 Server::Server() :
     pMessageAppender(new STDAppender),
@@ -327,6 +336,7 @@ Server::Server() :
     pUsersMutex = SDL_CreateMutex ();
     pRandMutex = SDL_CreateMutex ();
     pChatMutex = SDL_CreateMutex ();
+    pMessageMutex = SDL_CreateMutex ();
 
     rseed = time (NULL);
 }
@@ -339,7 +349,8 @@ Server::~Server()
     // These must be destroyed last!
     SDL_DestroyMutex (pUsersMutex);
     SDL_DestroyMutex (pRandMutex);
-     SDL_DestroyMutex (pChatMutex);
+    SDL_DestroyMutex (pChatMutex);
+    SDL_DestroyMutex (pMessageMutex);
 
     delete pMessageAppender;
 }

@@ -33,6 +33,10 @@
  */
 #ifdef _WIN32
     #define PATH_SEPARATOR '\\'
+
+    #include <windows.h>
+
+    std::string WindowsErrorString (const DWORD errorCode);
 #else
     #define PATH_SEPARATOR '/'
 #endif

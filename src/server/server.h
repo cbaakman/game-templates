@@ -264,7 +264,7 @@ public:
     static VOID WINAPI ServiceControlHandler (DWORD controlCode);
     static DWORD WINAPI ServiceWorkerThread (LPVOID lpParam);
     static VOID WINAPI ServiceMain (DWORD argc, LPTSTR *argv);
-    static void SetServiceStatusWithDebug (SERVICE_STATUS_HANDLE, SERVICE_STATUS *pServiceStatus);
+    static void TrySetServiceStatus (SERVICE_STATUS_HANDLE, SERVICE_STATUS *pServiceStatus);
 
 #elif defined IMPL_CONSOLE_SERVER
 

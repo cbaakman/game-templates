@@ -1400,11 +1400,12 @@ int _tmain (int argc, TCHAR **argv)
     return 0;
 }
 
-void Server::SetServiceStatusWithDebug (SERVICE_STATUS_HANDLE, SERVICE_STATUS *pServiceStatus)
+void Server::TrySetServiceStatus (SERVICE_STATUS_HANDLE, SERVICE_STATUS *pServiceStatus)
 {
     if (SetServiceStatus (hStatus, pServiceStatus) == FALSE)
     {
-        server.Message (SERVER_MSG_ERROR, "error setting service status");
+        server.Message (SERVER_MSG_ERROR, "error setting service status: %s",
+                        WindowsErrorString (GetLastError ()).c_str ());
     }
 }
 
@@ -1427,7 +1428,7 @@ VOID WINAPI Server::ServiceMain (DWORD argc, LPTSTR *argv)
     serviceStatus.dwServiceSpecificExitCode = 0;
     serviceStatus.dwCheckPoint = 0;
 
-    SetServiceStatusWithDebug (hStatus, &serviceStatus);
+    TrySetServiceStatus (hStatus, &serviceStatus);
 
     // Create a service stop event:
     hServiceStopEvent = CreateEvent (NULL, TRUE, FALSE, NULL);
@@ -1435,7 +1436,7 @@ VOID WINAPI Server::ServiceMain (DWORD argc, LPTSTR *argv)
     {
         DWORD err = GetLastError ();
 
-        server.Message (SERVER_MSG_ERROR, "error creating stop event: Windows error nr. %u", err);
+        server.Message (SERVER_MSG_ERROR, "error creating stop event: %s", WindowsErrorString (err).c_str ());
 
         // Tell service controller we stopped, then exit:
 
@@ -1444,7 +1445,7 @@ VOID WINAPI Server::ServiceMain (DWORD argc, LPTSTR *argv)
         serviceStatus.dwWin32ExitCode = err;
         serviceStatus.dwCheckPoint = 1;
 
-        SetServiceStatusWithDebug (hStatus, &serviceStatus);
+        TrySetServiceStatus (hStatus, &serviceStatus);
 
         return;
     }
@@ -1459,7 +1460,7 @@ VOID WINAPI Server::ServiceMain (DWORD argc, LPTSTR *argv)
         serviceStatus.dwWin32ExitCode = 1;
         serviceStatus.dwCheckPoint = 1;
 
-        SetServiceStatusWithDebug (hStatus, &serviceStatus);
+        TrySetServiceStatus (hStatus, &serviceStatus);
 
         return;
     }
@@ -1470,7 +1471,7 @@ VOID WINAPI Server::ServiceMain (DWORD argc, LPTSTR *argv)
     serviceStatus.dwWin32ExitCode = 0;
     serviceStatus.dwCheckPoint = 0;
 
-    SetServiceStatusWithDebug (hStatus, &serviceStatus);
+    TrySetServiceStatus (hStatus, &serviceStatus);
 
     // Start Working as a server:
     HANDLE hThread = CreateThread (NULL, 0, ServiceWorkerThread, NULL, 0, NULL);
@@ -1489,7 +1490,7 @@ VOID WINAPI Server::ServiceMain (DWORD argc, LPTSTR *argv)
     serviceStatus.dwWin32ExitCode = 0;
     serviceStatus.dwCheckPoint = 3;
 
-    SetServiceStatusWithDebug (hStatus, &serviceStatus);
+    TrySetServiceStatus (hStatus, &serviceStatus);
 
     delete server.pMessageAppender;
     server.pMessageAppender = pOldAppender;
@@ -1513,7 +1514,7 @@ VOID WINAPI Server::ServiceControlHandler (DWORD controlCode)
         serviceStatus.dwWin32ExitCode = 0;
         serviceStatus.dwCheckPoint = 4;
 
-        SetServiceStatusWithDebug (hStatus, &serviceStatus);
+        TrySetServiceStatus (hStatus, &serviceStatus);
 
         // Signal the worker thread to stop
 

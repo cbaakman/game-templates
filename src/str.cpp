@@ -25,6 +25,25 @@
 #include <math.h>
 #include <stdio.h>
 
+#ifdef _WIN32
+
+std::string WindowsErrorString (const DWORD errorCode)
+{
+    if (errorCode == 0)
+        return "";
+
+    LPSTR messageBuffer = NULL;
+    std::size_t size = FormatMessageA (FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                                 NULL, errorCode, MAKELANGID (LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0, NULL);
+
+    std::string message (messageBuffer, size);
+
+    LocalFree (messageBuffer);
+
+    return message;
+}
+#endif
+
 int count_successive_left_1bits (const char byte)
 {
     int n = 0;

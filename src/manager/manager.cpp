@@ -19,6 +19,7 @@
 
 
 #include <stdio.h>
+#include <cerrno>
 #include <cstring>
 #include <cctype>
 
@@ -32,6 +33,53 @@
 #include "../str.h"
 #include "../err.h"
 
+#ifdef __unix__
+    #include <sys/types.h>
+    #include <sys/stat.h>
+#elif defined _WIN32
+    #include <windows.h>
+#endif
+
+/**
+ * If directory is missing, create it.
+ */
+bool ArrangeDirectory (const char *path)
+{
+#ifdef __unix__
+
+    struct stat info;
+
+    if (stat (path, &info ) != 0)
+
+        //                drwxr-xr-x
+        if (mkdir (path, 0b111101101) != 0)
+        {
+            printw ("Cannot make directory %s: %s\n", path, std::strerror (errno));
+            return false;
+        }
+
+    return true;
+
+#elif defined _WIN32
+
+    DWORD dwAttrib = GetFileAttributes (path);
+
+    if (dwAttrib == INVALID_FILE_ATTRIBUTES
+        || !(dwAttrib & FILE_ATTRIBUTE_DIRECTORY))
+    {
+        if (!CreateDirectory (path, NULL))
+        {
+            printw ("Cannot make directory %s: %s\n", path, WindowsErrorString (GetLastError ()).c_str ());
+            return false;
+        }
+    }
+
+    return true;
+
+#else
+    #error "directory creation is not implemented for this os"
+#endif
+}
 void PromptUsername (char *username, const int maxLength)
 {
     // pretty basic, no input masking needed
@@ -99,6 +147,10 @@ void OnMakeAccount (const std::string &exe_dir)
     if (!LoadSettingString (SETTINGS_FILE, "accounts-dir", dirPath))
 
         dirPath = exe_dir + "accounts";
+
+    if (!ArrangeDirectory (dirPath.c_str ()))
+
+        return;
 
     do // keep asking for a user name until a correct input is recieved
     {

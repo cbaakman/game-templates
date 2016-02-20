@@ -23,6 +23,7 @@
 #include "../font.h"
 #include "../xml.h"
 #include "../err.h"
+#include "../io.h"
 
 // Color for the help text in each of the scenes (RGB):
 const GLfloat textColors [][3] = {{1.0f, 1.0f, 1.0f},

@@ -21,19 +21,11 @@
 #ifndef UTIL_H
 #define UTIL_H
 
-#include <GL/glew.h>
-#include <GL/gl.h>
-#include <SDL2/SDL.h>
+#ifndef M_PI
+#define M_PI    3.14159265358979323846264338327950288   /* pi */
+#endif
 
-#include <list>
-#include <string>
-#include <cmath>
-#include "matrix.h"
-#include "geo2d.h"
-#include <libxml/tree.h>
-#include <cstring>
-
-#include "io.h"
+#include <stdlib.h>
 
 /**
  * square function, x must be a number
@@ -56,64 +48,8 @@ void swap (Value& n1, Value& n2)
 }
 
 /**
- * Converts the SDL key code to an ascii character
- *
- * Only works for american key board setting.
- */
-char GetKeyChar (const SDL_KeyboardEvent *event);
-
-/**
- * Converts a GL error status to a string.
- */
-void GLErrorString (char *out, GLenum status);
-
-/**
- * Converts a GL framebuffer error status to a string.
- */
-void GLFrameBufferErrorString (char *out, GLenum status);
-
-/**
- * Renders a S x S x S cube at center P, parallel to the current x, y and z axes.
- */
-void RenderCube (const vec3 &p, const float s);
-
-/**
- * Gives a h,s,v color to OpenGL
- */
-void glColorHSV (float h, float s, float v);
-
-/**
- * Check GL status and sets error string if not OK.
- * See err.h
- */
-bool CheckGLOK (const char *doing);
-
-/**
  * Sets memory to zeros.
  */
 void Zero(void *p, size_t size);
 
-/*
-    Shortcuts to give vec and matrix objects to OpenGL:
- */
-inline void glVertex2f(const vec2& v)
-{
-    glVertex2f((GLfloat)v.x,(GLfloat)v.y);
-}
-inline void glVertex3f(const vec3& v)
-{
-    glVertex3fv((GLfloat*)v.v);
-}
-inline void glNormal3f(const vec3& v)
-{
-    glNormal3fv((GLfloat*)v.v);
-}
-inline void glLoadMatrixf(const matrix4& m)
-{
-    glLoadMatrixf((GLfloat*)m.m);
-}
-inline void glMultMatrixf(const matrix4& m)
-{
-    glMultMatrixf((GLfloat*)m.m);
-}
 #endif // UTIL_H

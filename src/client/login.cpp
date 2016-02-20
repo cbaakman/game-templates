@@ -23,7 +23,8 @@
 #include <openssl/x509.h>
 
 #include "../texture.h"
-#include "../util.h"
+#include "../GLutil.h"
+#include "../io.h"
 #include "../err.h"
 #include "../xml.h"
 #include "../thread.h"
@@ -34,6 +35,7 @@
 #define INPUT_CHAT_SPACING 10.0f
 #define CHAT_VISIBILITY_TIME 7.0f // seconds
 #define CHAT_ALPHA_DECREASE 1.0f // per second
+
 
 void RenderSprite (Texture* tex,
                    GLfloat x, GLfloat y,

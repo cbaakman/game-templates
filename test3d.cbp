@@ -45,6 +45,8 @@
 			<Add library="unzip" />
 			<Add library="glu32" />
 		</Linker>
+		<Unit filename="src/GLutil.cpp" />
+		<Unit filename="src/GLutil.h" />
 		<Unit filename="src/err.cpp" />
 		<Unit filename="src/err.h" />
 		<Unit filename="src/font.cpp" />

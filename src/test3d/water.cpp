@@ -28,6 +28,7 @@
 #include "../err.h"
 
 #include "../util.h"
+#include "../GLutil.h"
 
 #define PLANE_Y -2.0
 #define DROP_INTERVAL 0.3f
@@ -66,8 +67,8 @@ WaterScene::WaterScene (App *pApp) : Scene(pApp),
         }
     }
 
-    std::memset (&vbo_water, 0, sizeof (VertexBuffer));
-    std::memset (&ibo_water, 0, sizeof (VertexBuffer));
+    Zero (&vbo_water, sizeof (VertexBuffer));
+    Zero (&ibo_water, sizeof (VertexBuffer));
 }
 
 const char

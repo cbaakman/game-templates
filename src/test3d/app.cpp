@@ -22,7 +22,7 @@
 
 #include "hub.h"
 #include "water.h"
-#include "../util.h"
+#include "../GLutil.h"
 
 #include "../thread.h"
 #include "../load.h"

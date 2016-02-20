@@ -49,6 +49,8 @@
 			<Add library="xml2" />
 			<Add library="glu32" />
 		</Linker>
+		<Unit filename="src/GLutil.cpp" />
+		<Unit filename="src/GLutil.h" />
 		<Unit filename="src/client/client-icon.ico" />
 		<Unit filename="src/client/client.cpp" />
 		<Unit filename="src/client/client.h" />
@@ -80,8 +82,6 @@
 		<Unit filename="src/texture.h" />
 		<Unit filename="src/thread.cpp" />
 		<Unit filename="src/thread.h" />
-		<Unit filename="src/util.cpp" />
-		<Unit filename="src/util.h" />
 		<Unit filename="src/xml.cpp" />
 		<Unit filename="src/xml.h" />
 		<Extensions>

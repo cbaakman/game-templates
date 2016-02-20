@@ -23,6 +23,7 @@
 #include "../err.h"
 #include "../shader.h"
 #include "../util.h"
+#include "../GLutil.h"
 
 #define VIEW_ANGLE 45.0f
 #define NEAR_VIEW 0.1f

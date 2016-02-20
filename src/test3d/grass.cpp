@@ -18,11 +18,13 @@
 */
 
 #include "grass.h"
+#include "../GLutil.h"
 #include "../util.h"
 #include "../vec.h"
 #include "../err.h"
 #include "../xml.h"
 #include "../random.h"
+#include <cstring>
 
 #include "../shader.h"
 
@@ -198,8 +200,8 @@ GrassScene::GrassScene (App *pApp) : Scene (pApp),
     mode(GRASSMODE_POLYGON)
 {
     texDots.tex = texGrass.tex = 0;
-    std::memset (&vbo_hill, 0, sizeof (VertexBuffer));
-    std::memset (&vbo_grass, 0, sizeof (VertexBuffer));
+    Zero (&vbo_hill, sizeof (VertexBuffer));
+    Zero (&vbo_grass, sizeof (VertexBuffer));
 }
 GrassScene::~GrassScene ()
 {

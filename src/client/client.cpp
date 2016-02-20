@@ -29,7 +29,7 @@
 
 #include "login.h"
 
-#include "../util.h"
+#include "../GLutil.h"
 #include "../ini.h"
 #include "../err.h"
 

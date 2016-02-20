@@ -35,12 +35,12 @@ ToonScene::ToonScene (App *pApp) : App::Scene (pApp),
     shaderProgram(0)
 {
     texBG.tex = 0;
-    std::memset (&vbo_lines, 0, sizeof (VertexBuffer));
-    std::memset (&vbo_hair, 0, sizeof (VertexBuffer));
-    std::memset (&vbo_head, 0, sizeof (VertexBuffer));
-    std::memset (&vbo_eyes, 0, sizeof (VertexBuffer));
-    std::memset (&vbo_pupils, 0, sizeof (VertexBuffer));
-    std::memset (&vbo_mouth, 0, sizeof (VertexBuffer));
+    Zero (&vbo_lines, sizeof (VertexBuffer));
+    Zero (&vbo_hair, sizeof (VertexBuffer));
+    Zero (&vbo_head, sizeof (VertexBuffer));
+    Zero (&vbo_eyes, sizeof (VertexBuffer));
+    Zero (&vbo_pupils, sizeof (VertexBuffer));
+    Zero (&vbo_mouth, sizeof (VertexBuffer));
 }
 ToonScene::~ToonScene ()
 {

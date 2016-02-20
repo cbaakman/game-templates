@@ -21,10 +21,12 @@
 #include "shadow.h"
 #include "app.h"
 #include <math.h>
+#include <cstring>
 #include <string>
 #include "../matrix.h"
 #include <stdio.h>
 #include "../io.h"
+#include "../GLutil.h"
 #include "../util.h"
 #include "../xml.h"
 #include "../random.h"
@@ -120,9 +122,9 @@ ShadowScene::ShadowScene(App *pApp) : Scene(pApp),
     texDummyNormal.tex = texDummy.tex =
     texBox.tex = texSky.tex = texPar.tex = 0;
 
-    std::memset (&vbo_sky, 0, sizeof (VertexBuffer));
-    std::memset (&vbo_box, 0, sizeof (VertexBuffer));
-    std::memset (&vbo_dummy, 0, sizeof (VertexBuffer));
+    Zero (&vbo_sky, sizeof (VertexBuffer));
+    Zero (&vbo_box, sizeof (VertexBuffer));
+    Zero (&vbo_dummy, sizeof (VertexBuffer));
 
     // colliders [0] = new FeetCollider (vec3 (0, -2.0f, 0));
 

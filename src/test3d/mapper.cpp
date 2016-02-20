@@ -3,7 +3,7 @@
 #include "../shader.h"
 #include "../err.h"
 #include "../io.h"
-#include "../util.h"
+#include "../GLutil.h"
 #include "../matrix.h"
 
 #define VIEW_ANGLE 45.0f
@@ -173,7 +173,6 @@ void MapperScene::Render (void)
 
     int w, h;
     SDL_GL_GetDrawableSize (pApp->GetMainWindow (), &w, &h);
-
 
     // Set perspective 3d projection matrix:
     glMatrixMode (GL_PROJECTION);

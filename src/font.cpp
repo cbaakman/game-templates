@@ -26,6 +26,7 @@
 #include <cairo/cairo.h>
 #include <cctype>
 #include <math.h>
+#include <stdlib.h>
 #include <algorithm>
 #include <functional>
 
@@ -118,7 +119,6 @@ void Quadratic2Bezier (float *px1, float *py1, float *px2, float *py2, const flo
  */
 bool Cairo2GLTex (cairo_surface_t *surface, GLuint *pTex)
 {
-    char errorString[128];
     cairo_status_t status;
 
     cairo_format_t format = cairo_image_surface_get_format (surface);
@@ -136,7 +136,7 @@ bool Cairo2GLTex (cairo_surface_t *surface, GLuint *pTex)
     status = cairo_surface_status (surface);
     if (status != CAIRO_STATUS_SUCCESS)
     {
-        SetError ("error accessing cairo surface data: %s", cairo_status_to_string(status));
+        SetError ("error accessing cairo surface data: %s", cairo_status_to_string (status));
         return false;
     }
 

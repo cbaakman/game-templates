@@ -917,8 +917,8 @@ void Server::OnTCPConnection (TCPsocket clientSocket)
         }
     }
     else
-        Message (SERVER_MSG_ERROR, "Recieved no signal from newly opened tcp socket at %s: %s",
-                 ipString, SDLNet_GetError());
+        Message (SERVER_MSG_ERROR, "Recieved no data from newly opened tcp socket at %s: %s",
+                 ipString, SDLNet_GetError ());
 
     SDLNet_TCP_Close (clientSocket);
 }

@@ -924,7 +924,15 @@ void Server::OnTCPConnection (TCPsocket clientSocket)
 }
 void ReplaceIn (std::string &in, const std:: string &what, const std::string &by)
 {
-    in.replace (in.find (what), what.length (), by);
+    size_t pos = in.length ();
+    while (pos > 0)
+    {
+        pos = in.rfind (what, pos - 1);
+        if (pos == std::string::npos)
+            break;
+
+        in.replace (pos, what.length (), by);
+    }
 }
 void Server::OnHttpGet (TCPsocket clientSocket, const std::string &host, const std::string &path)
 {
@@ -1016,8 +1024,11 @@ void Server::ChatHistoryJSON (std::string &json)
             json += ",";
         comma = true;
 
+        std::string message (entry.message);
+        ReplaceIn (message, "\\", "\\\\");
+
         sprintf (s, "{\"user\":\"%s\", \"message\":\"%s\"}",
-                 entry.username, entry.message);
+                 entry.username, message.c_str ());
 
         json += s;
     }

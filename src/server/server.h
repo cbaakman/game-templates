@@ -21,7 +21,9 @@
 #ifndef SERVER_H
 #define SERVER_H
 
-#ifdef __unix__
+#ifdef DEBUG
+    #define IMPL_CONSOLE_SERVER
+#elif defined __unix__
     #define IMPL_UNIX_DEAMON
 #elif defined _WIN32
     #include <windows.h>

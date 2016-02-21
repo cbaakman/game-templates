@@ -712,7 +712,7 @@ void TextInputBox::RightProc()
 
     // See if we can move the cursor one to the right:
     cursorPos++;
- 
+
     if (cursorPos > n)
     {
         // cannot go further
@@ -892,6 +892,13 @@ void TextInputBox::OnKeyPress (const SDL_KeyboardEvent *event)
         // This input box only works for single lined text,
         // ignore '\t' and '\n'.
         return;
+    }
+    else if (bCTRL && sym == SDLK_a)
+    {
+        // CTRL + A
+
+        cursorPos = 0;
+        fixedCursorPos = strlen_utf8 (text);
     }
     else if (bCTRL && sym == SDLK_c)
     {

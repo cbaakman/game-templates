@@ -1,0 +1,8 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Test3D
+Comment=A 3D test
+Exec=test3d
+Icon=test3d
+Terminal=false

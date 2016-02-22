@@ -1,0 +1,8 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Client
+Comment=A client application
+Exec=client
+Icon=client
+Terminal=false

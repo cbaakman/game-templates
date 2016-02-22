@@ -59,6 +59,9 @@ install: bin/server bin/manager
 	mkdir -m755 -p $(CONFDIR)/client $(CONFDIR)/server $(CONFDIR)/server/accounts \
         $(RESDIR)
 	install -m755 bin/server $(BINDIR)/server
+	install -m755 bin/manager $(BINDIR)/manager
+	install -m755 bin/client $(BINDIR)/client
+	install -m755 bin/test3d $(BINDIR)/test3d
 	/bin/echo -e 'max-login=10\nport=12000\naccounts=$(CONFDIR)/server/accounts' \
             > $(CONFDIR)/server.ini
 	/bin/echo -e 'host=localhost\nport=12000\nscreenwidth=800\nscreenheight=600\nfullscreen=0' \
@@ -68,6 +71,10 @@ install: bin/server bin/manager
 	install -m644 bin/server.zip $(RESDIR)/server.zip
 	install -m644 bin/client.zip $(RESDIR)/client.zip
 	install -m644 bin/test3d.zip $(RESDIR)/test3d.zip
+	install -m644 client.desktop /usr/share/applications/client.desktop
+	install -m644 test3d.desktop /usr/share/applications/test3d.desktop
+	install -m644 art/client-icon.svg /usr/share/icons/hicolor/scalable/apps/client.svg
+	install -m644 art/dummy-icon.svg /usr/share/icons/hicolor/scalable/apps/test3d.svg
 	sed -e "s|__DEAMON__|$(BINDIR)/server|g" init.d/game-templates-server > /etc/init.d/game-templates-server
 	chmod 755 /etc/init.d/game-templates-server
 
@@ -75,4 +82,8 @@ uninstall:
 	rm -rf $(BINDIR)/server $(BINDIR)/account $(BINDIR)/client $(BINDIR)/test3d \
            $(CONFDIR)/server.ini $(CONFDIR)/client.ini $(CONFDIR)/test3d.ini \
            $(RESDIR)/server.zip $(RESDIR)/client.zip $(RESDIR)/test3d.zip \
+           /etc/init.d/game-templates-server \
+           /usr/share/applications/test3d.desktop /usr/share/icons/hicolor/scalable/apps/test3d.svg \
+           /usr/share/applications/client.desktop /usr/share/icons/hicolor/scalable/apps/client.svg
+
 endif

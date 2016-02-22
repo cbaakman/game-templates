@@ -33,8 +33,6 @@
 #include "../ini.h"
 #include "../err.h"
 
-#define SETTINGS_FILE "settings.ini"
-
 #define FULLSCREEN_SETTING "fullscreen"
 #define SCREENWIDTH_SETTING "screenwidth"
 #define SCREENHEIGHT_SETTING "screenheight"
@@ -54,13 +52,12 @@ Client::Client():
     udp_socket(NULL),
 
     done(false),
-    pScene(NULL)
+    pScene(NULL),
+    settingsPath("")
 {
 #ifdef _WIN32
     icon = NULL;
 #endif
-
-    settingsPath [0] = NULL;
 }
 Client::~Client()
 {
@@ -282,18 +279,32 @@ bool Client::SendToServer(const Uint8* data, const int len)
     return true;
 }
 
-bool Client::Init()
+bool Client::Init ()
 {
-    strcpy (settingsPath, (std::string(SDL_GetBasePath()) + SETTINGS_FILE).c_str());
+#ifdef CONFDIR
+    settingsPath = std::string (CONFDIR) + PATH_SEPARATOR + "client.ini";
+#else
+    settingsPath = std::string (SDL_GetBasePath()) + "settings.ini";
+#endif
 
     // initialize SDL_net:
     char hostName [100];
-    int port = LoadSetting (settingsPath, PORT_SETTING),
+    int port,
         w, h;
 
-    LoadSettingString (settingsPath, HOST_SETTING, hostName);
+    if (!LoadSettingString (settingsPath.c_str (), HOST_SETTING, hostName))
+    {
+        SetError ("cannot read \'%s\' from %s", HOST_SETTING, settingsPath.c_str ());
+        return false;
+    }
 
-    if (SDLNet_Init() < 0)
+    if ((port = LoadSetting (settingsPath.c_str (), PORT_SETTING)) <= 0)
+    {
+        SetError ("cannot read \'%s\' from %s", PORT_SETTING, settingsPath.c_str ());
+        return false;
+    }
+
+    if (SDLNet_Init () < 0)
     {
         SetError ("SDLNet_Init: %s", SDLNet_GetError());
         return false;
@@ -323,15 +334,15 @@ bool Client::Init()
     fromServer = udpPackets[1];
 
     // initialize SDL with screen sizes from settings file:
-    w = LoadSetting (settingsPath, SCREENWIDTH_SETTING);
-    if (w < 800)
+    w = LoadSetting (settingsPath.c_str (), SCREENWIDTH_SETTING);
+    if (w <= 0)
         w = 800;
 
-    h = LoadSetting (settingsPath, SCREENHEIGHT_SETTING);
-    if (h < 600)
+    h = LoadSetting (settingsPath.c_str (), SCREENHEIGHT_SETTING);
+    if (h <= 0)
         h = 600;
 
-    fullscreen = LoadSetting (settingsPath, FULLSCREEN_SETTING) > 0 ? true : false;
+    fullscreen = LoadSetting (settingsPath.c_str (), FULLSCREEN_SETTING) > 0 ? true : false;
 
     int error = SDL_Init (SDL_INIT_EVERYTHING);
     if (error != 0)
@@ -343,17 +354,17 @@ bool Client::Init()
     SDL_StartTextInput ();
 
     // Set the openGL parameters we want:
-    SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
-    SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
-    SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
-    SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
+    SDL_GL_SetAttribute (SDL_GL_RED_SIZE, 8);
+    SDL_GL_SetAttribute (SDL_GL_GREEN_SIZE, 8);
+    SDL_GL_SetAttribute (SDL_GL_BLUE_SIZE, 8);
+    SDL_GL_SetAttribute (SDL_GL_ALPHA_SIZE, 8);
 
-    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetAttribute (SDL_GL_STENCIL_SIZE, 8);
+    SDL_GL_SetAttribute (SDL_GL_DEPTH_SIZE, 24);
+    SDL_GL_SetAttribute (SDL_GL_DOUBLEBUFFER, 1);
 
-    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
+    SDL_GL_SetAttribute (SDL_GL_MULTISAMPLEBUFFERS, 1);
+    SDL_GL_SetAttribute (SDL_GL_MULTISAMPLESAMPLES, 4);
 
     Uint32 flags = SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL ;
     if (fullscreen)
@@ -494,7 +505,7 @@ bool Client::SetFullScreen (const bool want_fullscreen)
     }
 
     fullscreen = want_fullscreen;
-    SaveSetting (settingsPath, FULLSCREEN_SETTING, fullscreen);
+    SaveSetting (settingsPath.c_str (), FULLSCREEN_SETTING, fullscreen);
 
     // Some final adjustments
     if (fullscreen)
@@ -539,8 +550,8 @@ bool Client::SetResolution (const int w, const int h)
             return false;
     }
 
-    SaveSetting (settingsPath, SCREENWIDTH_SETTING, w);
-    SaveSetting (settingsPath, SCREENHEIGHT_SETTING, h);
+    SaveSetting (settingsPath.c_str (), SCREENWIDTH_SETTING, w);
+    SaveSetting (settingsPath.c_str (), SCREENHEIGHT_SETTING, h);
 
     return true;
 }

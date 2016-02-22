@@ -22,6 +22,7 @@
 #include "util.h"
 #include "err.h"
 
+#include <cstring>
 #include <string>
 #include <cairo/cairo.h>
 #include <cctype>

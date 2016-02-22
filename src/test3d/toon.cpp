@@ -196,12 +196,10 @@ void RenderToonVertices (const VertexBuffer *pBuffer)
 }
 void ToonScene::AddAll (Loader *pLoader)
 {
-    const std::string resPath = std::string (SDL_GetBasePath()) + "test3d.zip";
-
     pLoader->Add (
-        [&, resPath] ()
+        [&, zipPath] ()
         {
-            if (!LoadMesh (resPath, "head.xml", &meshDataHead))
+            if (!LoadMesh (zipPath, "head.xml", &meshDataHead))
                 return false;
 
             /*
@@ -264,7 +262,7 @@ void ToonScene::AddAll (Loader *pLoader)
         }
     );
 
-    pLoader->Add (LoadPNGFunc (resPath, "toonbg.png", &texBG));
+    pLoader->Add (LoadPNGFunc (zipPath, "toonbg.png", &texBG));
 
     pLoader->Add (
         [&] ()

@@ -625,7 +625,11 @@ void LoginScene::GetLoginParams (LoginParams *p)
 }
 bool LoginScene::Init ()
 {
-    std::string archive = std::string(SDL_GetBasePath()) + "client.zip";
+#ifdef RESDIR
+    std::string archive = std::string (RESDIR) + PATH_SEPARATOR + "client.zip";
+#else
+    std::string archive = std::string (SDL_GetBasePath()) + "client.zip";
+#endif
 
     SDL_RWops *f;
     bool success;
@@ -1157,7 +1161,11 @@ bool TestConnectionScene::Init (void)
      * Make the TestConnectionScene load at least one resource by itself to see that works too:
      */
 
+#ifdef RESDIR
+    std::string archive = std::string (RESDIR) + PATH_SEPARATOR + "client.zip";
+#else
     std::string archive = std::string (SDL_GetBasePath()) + "client.zip";
+#endif
 
     SDL_RWops *f;
     bool success;

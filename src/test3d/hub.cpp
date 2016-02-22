@@ -97,9 +97,7 @@ void HubScene::AddAll (Loader *pLoader)
     pLoader->Add (
         [this] ()
         {
-            const std::string resPath = std::string (SDL_GetBasePath()) + "test3d.zip";
-
-            SDL_RWops *fontInput = SDL_RWFromZipArchive (resPath.c_str(), "Lumean.svg");
+            SDL_RWops *fontInput = SDL_RWFromZipArchive (zipPath.c_str (), "Lumean.svg");
             if (!fontInput) // file or archive missing
             {
                 SetError (SDL_GetError ());

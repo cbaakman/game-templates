@@ -39,6 +39,12 @@
 #include <SDL2/SDL_syswm.h>
 #endif
 
+#ifdef RESDIR
+const std::string zipPath = std::string (RESDIR) + PATH_SEPARATOR + "test3d.zip";
+#else
+const std::string zipPath = std::string (SDL_GetBasePath ()) + "test3d.zip";
+#endif
+
 // Constructor
 App::App (void) : pScene(0), done(false), fullscreen (false)
 {
@@ -154,14 +160,16 @@ int ProgressLoop (SDL_Window *pWindow, Progress *pProgress, bool &error)
 
 // Initialization functions
 
-#define SETTINGS_FILE "settings.ini"
-
 #define FULLSCREEN_SETTING "fullscreen"
 #define SCREENWIDTH_SETTING "screenwidth"
 #define SCREENHEIGHT_SETTING "screenheight"
 bool App::InitApp (void)
 {
-    strcpy (settings_path, (std::string (SDL_GetBasePath()) + SETTINGS_FILE).c_str());
+#ifdef CONFDIR
+    strcpy (settings_path, (std::string (CONFDIR) + PATH_SEPARATOR + "test3d.ini").c_str());
+#else
+    strcpy (settings_path, (std::string (SDL_GetBasePath ()) + "settings.ini").c_str());
+#endif
 
     int w, h;
 

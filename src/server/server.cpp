@@ -35,8 +35,6 @@
 #include "../thread.h"
 #include "../http.h"
 
-#define SETTINGS_FILE "settings.ini"
-
 #define PORT_SETTING "port"
 #define MAXLOGIN_SETTING "max-login"
 #define ACCOUNTSDIR_SETTING "accounts-dir"
@@ -377,7 +375,11 @@ Server::~Server()
 }
 bool Server::Configure (void)
 {
-    settingsPath = std::string (SDL_GetBasePath()) + SETTINGS_FILE;
+#ifdef CONFDIR
+    settingsPath = std::string (CONFDIR) + PATH_SEPARATOR + "server.ini";
+#else
+    settingsPath = std::string (SDL_GetBasePath()) + "settings.ini";
+#endif
 
     if (!LoadSettingString (settingsPath, ACCOUNTSDIR_SETTING, accountsPath))
         accountsPath = std::string (SDL_GetBasePath()) + ACCOUNT_DIR;
@@ -522,7 +524,11 @@ bool RawResourceLoad (const std::string &archive, const std::string &filename, s
 }
 bool Server::ResourceInit (void)
 {
+#ifdef RESDIR
+    std::string archive = std::string (RESDIR) + PATH_SEPARATOR + "server.zip";
+#else
     std::string archive = std::string (SDL_GetBasePath ()) + "server.zip";
+#endif
 
     if (!(RawResourceLoad (archive, "client-icon.ico", icon_bytes)
         && RawResourceLoad (archive, "base.html", base_html)

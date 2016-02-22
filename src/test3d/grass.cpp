@@ -493,8 +493,6 @@ bool SetHillVertices (VertexBuffer *pBuffer, const MeshData *pMeshData, const st
 }
 void GrassScene::AddAll (Loader *pLoader)
 {
-    const std::string zipPath = std::string (SDL_GetBasePath()) + "test3d.zip";
-
     pLoader->Add (
         [this, zipPath] ()
         {

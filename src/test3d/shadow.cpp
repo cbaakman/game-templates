@@ -388,19 +388,17 @@ void ShadowScene::AddAll (Loader *pLoader)
         On failure, set the error message and return false.
      */
 
-    const std::string resPath = std::string (SDL_GetBasePath()) + "test3d.zip";
-
     // Load dummy texture:
-    pLoader->Add (LoadPNGFunc (resPath, "dummy.png", &texDummy));
+    pLoader->Add (LoadPNGFunc (zipPath, "dummy.png", &texDummy));
 
     // Load dummy normal texture:
-    pLoader->Add (LoadPNGFunc (resPath, "dummy_n.png", &texDummyNormal));
+    pLoader->Add (LoadPNGFunc (zipPath, "dummy_n.png", &texDummyNormal));
 
     // Load dummy mesh as xml document:
     pLoader->Add (
-        [resPath, this] ()
+        [zipPath, this] ()
         {
-            if (!LoadMesh (resPath, "dummy.xml", &meshDataDummy))
+            if (!LoadMesh (zipPath, "dummy.xml", &meshDataDummy))
                 return false;
 
             pMeshDummy = new MeshState (&meshDataDummy);
@@ -426,13 +424,13 @@ void ShadowScene::AddAll (Loader *pLoader)
     );
 
     // Load environment texture:
-    pLoader->Add (LoadPNGFunc (resPath, "box.png", &texBox));
+    pLoader->Add (LoadPNGFunc (zipPath, "box.png", &texBox));
 
     // Load environment mesh as xml:
     pLoader->Add (
-        [resPath, this] ()
+        [zipPath, this] ()
         {
-            if (!LoadMesh (resPath, "box.xml", &meshDataBox))
+            if (!LoadMesh (zipPath, "box.xml", &meshDataBox))
                 return false;
 
             /*
@@ -459,13 +457,13 @@ void ShadowScene::AddAll (Loader *pLoader)
     );
 
     // Load skybox texture:
-    pLoader->Add (LoadPNGFunc (resPath, "sky.png", &texSky));
+    pLoader->Add (LoadPNGFunc (zipPath, "sky.png", &texSky));
 
     // Load skybox mesh as xml:
     pLoader->Add (
-        [resPath, this] ()
+        [zipPath, this] ()
         {
-            if (!LoadMesh (resPath, "sky.xml", &meshDataSky))
+            if (!LoadMesh (zipPath, "sky.xml", &meshDataSky))
                 return false;
 
             /*
@@ -485,7 +483,7 @@ void ShadowScene::AddAll (Loader *pLoader)
     );
 
     // Load texture for the particles:
-    pLoader->Add (LoadPNGFunc (resPath, "particle.png", &texPar));
+    pLoader->Add (LoadPNGFunc (zipPath, "particle.png", &texPar));
 
     // Create shader object for player:
     pLoader->Add (

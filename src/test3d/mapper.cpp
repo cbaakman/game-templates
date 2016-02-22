@@ -123,13 +123,11 @@ MapperScene::~MapperScene ()
 }
 void MapperScene::AddAll (Loader *pLoader)
 {
-    const std::string resPath = std::string (SDL_GetBasePath()) + "test3d.zip";
-
     // Load color texture
-    pLoader->Add (LoadPNGFunc (resPath, "granite.png", &texColor));
+    pLoader->Add (LoadPNGFunc (zipPath, "granite.png", &texColor));
 
     // Load displace texture
-    pLoader->Add (LoadPNGFunc (resPath, "granite_d.png", &texDisplace));
+    pLoader->Add (LoadPNGFunc (zipPath, "granite_d.png", &texDisplace));
 
     // Create shader from sources:
     pLoader->Add (

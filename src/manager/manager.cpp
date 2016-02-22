@@ -23,7 +23,6 @@
 #include <cstring>
 #include <cctype>
 
-#define SETTINGS_FILE "settings.ini"
 #include "../ini.h"
 
 #include "../account.h" // MakeAccount
@@ -139,12 +138,19 @@ void OnMakeAccount (const std::string &exe_dir)
     char username [USERNAME_MAXLENGTH],
          password [PASSWORD_MAXLENGTH];
 
-    std::string dirPath;
+    std::string dirPath,
+                settingsPath;
 
     bool usernameError;
     int i;
 
-    if (!LoadSettingString (SETTINGS_FILE, "accounts-dir", dirPath))
+#ifdef CONFDIR
+    settingsPath = std::string (CONFDIR) + PATH_SEPARATOR + "server.ini";
+#else
+    settingsPath = std::string (exe_dir) + "settings.ini";
+#endif
+
+    if (!LoadSettingString (settingsPath, "accounts-dir", dirPath))
 
         dirPath = exe_dir + "accounts";
 
@@ -231,7 +237,7 @@ int main (int argc, char** argv)
         stripr (cmd);
 
         // execute command
-        running = OnCommand(cmd, exe_dir);
+        running = OnCommand (cmd, exe_dir);
     }
 
     endwin (); // disable ncurses

@@ -28,8 +28,11 @@
 #include <SDL2/SDL_opengl.h>
 
 #include <stdio.h>
+#include <string>
 
 #include "../load.h"
+
+extern const std::string zipPath;
 
 class App
 {

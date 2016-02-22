@@ -31,6 +31,7 @@
 #define WINDOW_TITLE "client"
 
 #include <stdio.h>
+#include <string>
 
 class EventListener
 {
@@ -52,7 +53,7 @@ class Client
 private:
 
     bool fullscreen, has_audio;
-    char settingsPath [FILENAME_MAX];
+    std::string settingsPath;
 
     SDL_Window *mainWindow;
     SDL_GLContext mainGLContext;

@@ -8,7 +8,7 @@ SERVERLIBS = SDL2 SDL2_net crypto unzip
 MANAGERLIBS = crypto ncurses SDL2
 TEST3DLIBS = GL SDL2 GLEW png xml2 cairo unzip
 
-BINDIR = /usr/local/bin/game-templates
+BINDIR = /usr/local/bin
 
 CC = /usr/bin/g++
 CCVERSION = $(strip $(shell $(CC) --version | grep -o ' [0-9\.]\+$$'))
@@ -25,6 +25,10 @@ ifdef DEBUG
 CFLAGS += -g -D DEBUG
 else
 CFLAGS += -O3
+
+CONFDIR = /usr/local/etc
+RESDIR = /usr/local/share
+CFLAGS += -D CONFDIR=\"$(CONFDIR)\" -D RESDIR=\"$(RESDIR)\"
 endif
 
 include make.config
@@ -50,13 +54,25 @@ bin/test3d: obj/test3d/grass.o obj/load.o obj/thread.o obj/progress.o obj/test3d
 bin/manager: obj/manager/manager.o obj/ini.o obj/str.o obj/account.o obj/err.o
 	$(CC) $^ -o $@ -lstdc++ $(MANAGERLIBS:%=-l%) $(LIBDIRS:%=-L%)
 
+ifndef DEBUG
 install: bin/server bin/manager
-	mkdir -p $(BINDIR)/accounts
+	mkdir -m755 -p $(CONFDIR)/client $(CONFDIR)/server $(CONFDIR)/server/accounts \
+        $(RESDIR)
 	install -m755 bin/server $(BINDIR)/server
-	install -m755 bin/manager $(BINDIR)/account
-	/bin/echo -e 'max-login=10\nport=12000' > $(BINDIR)/settings.ini
+	/bin/echo -e 'max-login=10\nport=12000\naccounts=$(CONFDIR)/server/accounts' \
+            > $(CONFDIR)/server.ini
+	/bin/echo -e 'host=localhost\nport=12000\nscreenwidth=800\nscreenheight=600\nfullscreen=0' \
+            > $(CONFDIR)/client.ini
+	/bin/echo -e 'screenwidth=800\nscreenheight=600\nfullscreen=0' \
+            > $(CONFDIR)/test3d.ini
+	install -m644 bin/server.zip $(RESDIR)/server.zip
+	install -m644 bin/client.zip $(RESDIR)/client.zip
+	install -m644 bin/test3d.zip $(RESDIR)/test3d.zip
 	sed -e "s|__DEAMON__|$(BINDIR)/server|g" init.d/game-templates-server > /etc/init.d/game-templates-server
 	chmod 755 /etc/init.d/game-templates-server
 
 uninstall:
-	rm -rf $(BINDIR)/* /etc/init.d/game-templates-server
+	rm -rf $(BINDIR)/server $(BINDIR)/account $(BINDIR)/client $(BINDIR)/test3d \
+           $(CONFDIR)/server.ini $(CONFDIR)/client.ini $(CONFDIR)/test3d.ini \
+           $(RESDIR)/server.zip $(RESDIR)/client.zip $(RESDIR)/test3d.zip \
+endif

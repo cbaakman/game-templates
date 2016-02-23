@@ -55,7 +55,7 @@ bin/manager: obj/manager/manager.o obj/ini.o obj/str.o obj/account.o obj/err.o
 	$(CC) $^ -o $@ -lstdc++ $(MANAGERLIBS:%=-l%) $(LIBDIRS:%=-L%)
 
 ifndef DEBUG
-install: bin/server bin/manager
+install: bin/server bin/manager bin/client bin/test3d
 	mkdir -m755 -p $(CONFDIR)/client $(CONFDIR)/server $(CONFDIR)/server/accounts \
         $(RESDIR)
 	install -m755 bin/server $(BINDIR)/server

@@ -378,11 +378,11 @@ bool Server::Configure (void)
 #ifdef CONFDIR
     settingsPath = std::string (CONFDIR) + PATH_SEPARATOR + "server.ini";
 #else
-    settingsPath = std::string (SDL_GetBasePath()) + "settings.ini";
+    settingsPath = std::string (SDL_GetBasePath ()) + "settings.ini";
 #endif
 
     if (!LoadSettingString (settingsPath, ACCOUNTSDIR_SETTING, accountsPath))
-        accountsPath = std::string (SDL_GetBasePath()) + ACCOUNT_DIR;
+        accountsPath = std::string (SDL_GetBasePath ()) + ACCOUNT_DIR;
 
     #ifdef IMPL_UNIX_DEAMON
         pidPath = "/var/run/server.pid";
@@ -890,17 +890,19 @@ void Server::OnTCPConnection (TCPsocket clientSocket)
     if (!pClientIP)
     {
         Message (SERVER_MSG_ERROR, "SDLNet_TCP_GetPeerAddress: %s",
-                 SDLNet_GetError());
+                 SDLNet_GetError ());
         return;
     }
     char ipString [100];
     ip2String (*pClientIP, ipString);
 
-    Message (SERVER_MSG_DEBUG, "tcp connection established with client at %s",
-                               ipString);
+    Message (SERVER_MSG_DEBUG,
+             "tcp connection established with client at socket %u with address %s",
+             clientSocket, ipString);
 
     Uint8 signal;
-    if (SDLNet_TCP_Recv (clientSocket, &signal, 1) == 1)
+    int nrecv;
+    if ((nrecv = SDLNet_TCP_Recv (clientSocket, &signal, 1)) == 1)
     {
         if (signal == NETSIG_LOGINREQUEST)
 
@@ -917,14 +919,23 @@ void Server::OnTCPConnection (TCPsocket clientSocket)
                         path,
                         host;
 
-            if (ParseHttpRequest (data, len, method, path, host) && method == "GET")
+            if (ParseHttpRequest (data, len, method, path, host)
+                && method == "GET")
 
                 OnHttpGet (clientSocket, host, path);
         }
     }
+    else if (nrecv == 0)
+
+        Message (SERVER_MSG_ERROR,
+                 "Newly opened tcp socket %u at %s was unexpectedly closed by the peer",
+                 clientSocket, ipString);
+
     else
-        Message (SERVER_MSG_ERROR, "Recieved no data from newly opened tcp socket at %s: %s",
-                 ipString, SDLNet_GetError ());
+
+        Message (SERVER_MSG_ERROR,
+                 "Recieved no data from newly opened tcp socket %u at %s: %s",
+                 clientSocket, ipString, SDLNet_GetError ());
 
     SDLNet_TCP_Close (clientSocket);
 }
@@ -1088,12 +1099,12 @@ int Server::MainLoop (void)
     while (!StopCondition ())
     {
         // Poll for incoming tcp connections:
-        while ((clientSocket = SDLNet_TCP_Accept (tcp_socket)))
+        while ((clientSocket = SDLNet_TCP_Accept (tcp_socket)) != NULL)
         {
             SDL_Thread *pThread = MakeSDLThread (
-            [&]
+            [this, clientSocket]
             {
-                OnTCPConnection (clientSocket);
+                this->OnTCPConnection (clientSocket);
                 return 0;
             },
             (std::string (PROCESS_TAG) + "_tcp_thread").c_str ());
@@ -1582,9 +1593,6 @@ int Server::ConsoleRun (void)
 }
 int main (int argc, char** argv)
 {
-    int result;
-    SDL_Thread *pThread;
-
     if (!server.Configure ())
         return 1;
 

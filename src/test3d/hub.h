@@ -51,13 +51,17 @@ private:
     Font font;
 
     // text alpha value
-    GLfloat alphaH;
+    GLfloat alphaH, alphaBlurInfo;
 
     // current help string index:
     int help;
 
     // help strings:
     std::string helpText [6];
+
+    // Used for calculating motion blur
+    float blurTimeStep;
+    int nBlurFrames;
 public:
     void OnEvent (const SDL_Event *event);
 

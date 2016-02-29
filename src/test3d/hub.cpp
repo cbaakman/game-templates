@@ -39,15 +39,17 @@ HubScene::HubScene (App *pApp) : Scene (pApp),
     pToonScene (NULL),
     pMapperScene (NULL),
     pCurrent (NULL),
-    alphaH(0),
-    help(0)
+    alphaH(0), alphaBlurInfo(0),
+    help(0),
+    blurTimeStep(0.0f), nBlurFrames(1)
 {
     std::string nav = "F1: Dummy Test\n"
                       "F2: Water Test\n"
                       "F3: Toon Test\n"
                       "F4: Displacement map Test\n"
                       "F5: Grass Test\n"
-                      "F6: Vector Test";
+                      "F6: Vector Test\n"
+                      "Press \'[\' and \']\' to change the motion blur value";
 
     helpText [0] = "Use w,a,s,d & SPACE to move mr. Dummy around\n"
                     "Use the mouse to move the camera\n"
@@ -81,7 +83,6 @@ HubScene::HubScene (App *pApp) : Scene (pApp),
 
     // Start with this scene:
     pCurrent = pShadowScene;
-    help = 0;
 }
 HubScene::~HubScene()
 {
@@ -137,8 +138,7 @@ void HubScene::AddAll (Loader *pLoader)
 }
 void HubScene::Update (float dt)
 {
-    // Update current scene:
-    pCurrent -> Update (dt);
+    blurTimeStep = dt;
 
     /*
         Update help text alpha.
@@ -152,16 +152,56 @@ void HubScene::Update (float dt)
     }
     else if (alphaH > 0.0f)
         alphaH -= dt;
+
+    if (alphaBlurInfo > 0.0f && 
+            !state [SDL_SCANCODE_LEFTBRACKET] &&
+            !state [SDL_SCANCODE_RIGHTBRACKET])
+
+        alphaBlurInfo -= dt;
+}
+void HubScene::OnEvent (const SDL_Event *event)
+{
+    Scene :: OnEvent (event);
+
+    // pass on event to current scene:
+    pCurrent -> OnEvent (event);
 }
 void HubScene::Render ()
 {
-    int w, h;
+    int w, h, i;
+    char text [100];
+
     SDL_GL_GetDrawableSize (pApp->GetMainWindow (), &w, &h);
 
     glViewport (0, 0, w, h);
 
-    // Render current scene:
-    pCurrent -> Render ();
+    // Clear the buffers before rendering multiple times:
+    glClearColor (0, 0, 0, 0);
+    glClearDepth (1.0f);
+    glClearStencil (0);
+    glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+    for (i = 0; i < nBlurFrames; i++)
+    {
+        // Pass on events for this frame:
+        SDL_Event event;
+        while (SDL_PollEvent (&event))
+        {
+            OnEvent (&event);
+        }
+
+        // Update current scene:
+        pCurrent -> Update (blurTimeStep / nBlurFrames);
+
+        // Render current scene:
+        pCurrent -> Render ();
+
+        if (i == 0)
+            glAccum (GL_LOAD, 1.0f / nBlurFrames);
+        else
+            glAccum (GL_ACCUM, 1.0f / nBlurFrames);
+    }
+    glAccum (GL_RETURN, 1.0);
 
     // Render the text:
     glDisable (GL_DEPTH_TEST);
@@ -176,12 +216,12 @@ void HubScene::Render ()
         Positive y means down.
      */
     glMatrixMode(GL_PROJECTION);
-    matrix4 matScreen = matOrtho(0.0f, w, 0.0f, h, -1.0f, 1.0f);
+    matrix4 matScreen = matOrtho (0.0f, w, 0.0f, h, -1.0f, 1.0f);
     glLoadMatrixf (matScreen.m);
 
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    glMultMatrixf (matTranslation(10.0f, 10.0f, 0.0f).m);
+    glMultMatrixf (matTranslation (10.0f, 10.0f, 0.0f).m);
 
     /*
         When the help key is down (alpha = 1.0), help is shown.
@@ -194,57 +234,71 @@ void HubScene::Render ()
 
     glColor4f (textColors [help][0], textColors [help][1], textColors [help][2], alphaH);
     glRenderText (&font, helpText [help].c_str(), TEXTALIGN_LEFT, maxWidth);
-}
-void HubScene::OnEvent(const SDL_Event *event)
-{
-    Scene :: OnEvent (event);
 
-    // pass on event to current scene:
-    pCurrent -> OnEvent (event);
+    // Same for the blur info:
+
+    sprintf (text, "blur: %d", nBlurFrames);
+    glLoadMatrixf (matTranslation (w - 10.0f, h - 30.0f, 0.0f).m);
+    glColor4f (textColors [help][0], textColors [help][1], textColors [help][2], alphaBlurInfo);
+    glRenderText (&font, text, TEXTALIGN_RIGHT, maxWidth);
 }
 void HubScene::OnKeyPress (const SDL_KeyboardEvent *event)
 {
-    if(event->type == SDL_KEYDOWN)
+    if (event->type == SDL_KEYDOWN)
     {
-        if(event->keysym.sym == SDLK_ESCAPE)
+        if (event->keysym.sym == SDLK_ESCAPE)
             pApp->ShutDown();
 
         // These keys switch between scenes:
 
-        if(event->keysym.sym == SDLK_F1)
+        if (event->keysym.sym == SDLK_F1)
         {
             pCurrent = pShadowScene;
             help = 0;
         }
 
-        if(event->keysym.sym == SDLK_F2)
+        if (event->keysym.sym == SDLK_F2)
         {
             pCurrent = pWaterScene;
             help = 1;
         }
 
-        if(event->keysym.sym == SDLK_F3)
+        if (event->keysym.sym == SDLK_F3)
         {
             pCurrent = pToonScene;
             help = 2;
         }
 
-        if(event->keysym.sym == SDLK_F4)
+        if (event->keysym.sym == SDLK_F4)
         {
             pCurrent = pMapperScene;
             help = 3;
         }
 
-        if(event->keysym.sym == SDLK_F5)
+        if (event->keysym.sym == SDLK_F5)
         {
             pCurrent = pGrassScene;
             help = 4;
         }
 
-        if(event->keysym.sym == SDLK_F6)
+        if (event->keysym.sym == SDLK_F6)
         {
             pCurrent = pVecScene;
             help = 5;
+        }
+
+        if (event->keysym.sym == SDLK_LEFTBRACKET)
+        {
+            alphaBlurInfo = 1.0f;
+
+            if (nBlurFrames > 1)
+
+                nBlurFrames --;
+        }
+        else if (event->keysym.sym == SDLK_RIGHTBRACKET)
+        {
+            alphaBlurInfo = 1.0f;
+            nBlurFrames ++;
         }
     }
 }

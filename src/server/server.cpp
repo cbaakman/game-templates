@@ -25,6 +25,8 @@
 #include <errno.h>
 #include <ctime>
 
+#include <openssl/err.h>
+
 #include "server.h"
 
 #include "../io.h"
@@ -59,22 +61,113 @@ Server::User::User (const IPaddress *pAddr, const char *_accountName, const User
     ticksSinceLastContact = 0;
 }
 
+#define RSA_ERRBUF_SIZE 256
+
+int RecieveEncrypted (TCPsocket clientSocket,
+                      void *decrypted_data, const int decrypted_maxlen)
+{
+    int n_sent,
+        n_recieved,
+        keySize, keyPackageSize,
+        decryptedSize,
+        maxflen;
+    unsigned char *public_key_package, *public_key,
+                  encrypted [PACKET_MAXSIZE];
+    char errbuf [RSA_ERRBUF_SIZE];
+
+    RSA* keyPair;
+    BIGNUM *bn;
+    bool success;
+    Uint8 signal;
+
+
+    bn = BN_new ();
+    BN_set_word (bn, 65537);
+    keyPair = RSA_new ();
+    success = RSA_generate_key_ex (keyPair, 1024, bn, NULL) &&
+              RSA_check_key (keyPair);
+
+    BN_free (bn);
+
+    if (!success)
+    {
+        ERR_error_string_n (ERR_get_error (), errbuf, RSA_ERRBUF_SIZE);
+        SetError ("RSA key generation failed: %s", errbuf);
+
+        RSA_free (keyPair);
+
+        signal = NETSIG_INTERNALERROR;
+        if (SDLNet_TCP_Send (clientSocket, &signal, 1) != 1)
+        {
+            fprintf (stderr, "Could not send internal error to user: %s",
+                     SDLNet_GetError ());
+        }
+
+        return -1;
+    }
+
+    // Copy public key to byte array and send to user:
+    keySize = i2d_RSAPublicKey (keyPair, NULL);
+    keyPackageSize = keySize + 1;
+    public_key_package = new unsigned char [keyPackageSize];
+    public_key_package [0] = NETSIG_RSAPUBLICKEY;
+    public_key = public_key_package + 1;
+    i2d_RSAPublicKey (keyPair, &public_key);
+
+    n_sent = SDLNet_TCP_Send (clientSocket, public_key_package, keyPackageSize);
+    delete [] public_key_package;
+
+    if (n_sent != keyPackageSize)
+    {
+        SetError ("Error sending key: %s", SDLNet_GetError());
+        RSA_free (keyPair);
+        return -1;
+    }
+
+    // Receive encrypted data from user:
+    n_recieved = SDLNet_TCP_Recv (clientSocket, encrypted, PACKET_MAXSIZE);
+    if (n_recieved <= 0)
+    {
+        if (n_recieved < 0)
+
+            SetError ("Error recieving encrypted login: %s", SDLNet_GetError ());
+        else
+            SetError ("Connection unexpectedly closed while recieving encrypted login");
+
+        RSA_free (keyPair);
+        return -1;
+    }
+
+    // Decrypt login parameters:
+    maxflen = maxFLEN (keyPair);
+    if (maxflen > decrypted_maxlen)
+    {
+        SetError ("Allocated decryption buffer is too small");
+        return -1;
+    }
+
+    decryptedSize = RSA_private_decrypt (n_recieved, encrypted,
+                                         (unsigned char *)decrypted_data,
+                                         keyPair, SERVER_RSA_PADDING);
+    RSA_free (keyPair);
+
+    if (decryptedSize < 0)
+    {
+        ERR_error_string_n (ERR_get_error (), errbuf, RSA_ERRBUF_SIZE);
+        SetError ("Error decrypting: %s", errbuf);
+    }
+
+    return decryptedSize;
+}
+
 /**
  * This runs in a temporary thread.
  */
 void Server::OnLogin (TCPsocket clientSocket, const IPaddress *pClientIP)
 {
-    int n_sent,
-        n_recieved,
-        keySize, keyDataSize,
-        decryptedSize,
-        maxflen;
-    unsigned char *public_key_data, *public_key,
-                  encrypted [PACKET_MAXSIZE],
-                  *decrypted;
-    RSA* key;
-    BIGNUM *bn;
-    Uint8 signal;
+    int decryptedSize, n_sent, len;
+    unsigned char decrypted [PACKET_MAXSIZE];
+    Uint8 signal, *data;
 
     // If the server is full at this point, don't bother.
     if (IsServerFull ())
@@ -88,76 +181,21 @@ void Server::OnLogin (TCPsocket clientSocket, const IPaddress *pClientIP)
         return;
     }
 
-    // Generate a RSA key to encrypt login password in
-    bn = BN_new ();
-    BN_set_word (bn, 65537);
-    key = RSA_new ();
-    bool keySuccess = RSA_generate_key_ex (key, 1024, bn, NULL) &&
-                      RSA_check_key (key);
-    BN_free (bn);
-
-    if (!keySuccess)
+    decryptedSize = RecieveEncrypted (clientSocket, decrypted, PACKET_MAXSIZE);
+    if (decryptedSize <= 0)
     {
-        Message (SERVER_MSG_ERROR, "rsa key generation failed");
-        RSA_free (key);
+        char ip [100];
+        ip2String (*pClientIP, ip);
 
-        signal = NETSIG_INTERNALERROR;
-        if (SDLNet_TCP_Send (clientSocket, &signal, 1) != 1)
-        {
-            Message (SERVER_MSG_ERROR, "WARNING, could not send internal error to user: %s",
-                     SDLNet_GetError ());
-        }
-
+        Message (SERVER_MSG_ERROR,
+                 "Error recieving encrypted login from %s: %s",
+                 ip, GetError ());
         return;
     }
-
-    // Convert public key to byte array and send to user:
-    keySize = i2d_RSAPublicKey (key, NULL);
-    keyDataSize = keySize + 1;
-    public_key_data = new unsigned char [keyDataSize];
-    public_key_data [0] = NETSIG_RSAPUBLICKEY;
-    public_key = public_key_data + 1;
-    i2d_RSAPublicKey (key, &public_key);
-
-    n_sent = SDLNet_TCP_Send (clientSocket, public_key_data, keyDataSize);
-    delete [] public_key_data;
-
-    if (n_sent != keyDataSize)
-    {
-        Message (SERVER_MSG_ERROR, "error sending key: %s", SDLNet_GetError());
-        RSA_free (key);
-        return;
-    }
-
-    // Receive encrypted login parameters from user:
-    n_recieved = SDLNet_TCP_Recv (clientSocket, encrypted, PACKET_MAXSIZE);
-    if (n_recieved <= 0)
-    {
-        if (n_recieved < 0)
-            Message (SERVER_MSG_ERROR, "error recieving encrypted login: %s", SDLNet_GetError());
-        else
-        {
-            char ip [100];
-            ip2String (*pClientIP, ip);
-            Message (SERVER_MSG_ERROR, "client at %s hung up while recieving encrypted login", ip);
-        }
-
-        RSA_free (key);
-        return;
-    }
-
-    // Decrypt login parameters:
-    maxflen = maxFLEN (key);
-    decrypted = new Uint8 [maxflen];
-
-    decryptedSize = RSA_private_decrypt (n_recieved, encrypted, decrypted, key, SERVER_RSA_PADDING);
-    RSA_free (key);
-
-    if (decryptedSize != sizeof (LoginParams))
+    else if (decryptedSize != sizeof (LoginParams))
     {
         Message (SERVER_MSG_ERROR,
-                 "error decrypting login parameters, wrong size");
-        delete [] decrypted;
+                 "error recieving login parameters, wrong data size recieved");
 
         signal = NETSIG_AUTHENTICATIONERROR;
         if (SDLNet_TCP_Send (clientSocket, &signal, 1) != 1)
@@ -190,7 +228,7 @@ void Server::OnLogin (TCPsocket clientSocket, const IPaddress *pClientIP)
         clientAddress.port = pParams->udp_port;
 
         UserParams userParams;
-        userParams.hue = GetNextRand() % 360; // give the user a random color
+        userParams.hue = GetNextRand () % 360; // give the user a random color
 
         UserP pUser = new User (&clientAddress, pParams->username, &userParams);
 
@@ -201,8 +239,8 @@ void Server::OnLogin (TCPsocket clientSocket, const IPaddress *pClientIP)
         {
             // Send client the message that login succeeded,
             // along with the user's first state and parameters:
-            int len = 1 + sizeof (UserParams) + sizeof (UserState);
-            Uint8* data = new Uint8 [len];
+            len = 1 + sizeof (UserParams) + sizeof (UserState);
+            data = new Uint8 [len];
             data [0] = NETSIG_LOGINSUCCESS;
             memcpy (data + 1, &userParams, sizeof (UserParams));
             memcpy (data + 1 + sizeof (UserParams), &startState, sizeof (UserState));
@@ -254,8 +292,6 @@ void Server::OnLogin (TCPsocket clientSocket, const IPaddress *pClientIP)
                      SDLNet_GetError ());
         }
     }
-
-    delete [] decrypted;
 }
 
 void STDAppender::Message (MessageType type, const char *format, va_list args)
@@ -298,7 +334,7 @@ void FileLogAppender::Message (MessageType type, const char *format, va_list arg
     timeinfo = localtime (&rawtime);
 
     strftime (timebuf, 100,"[%d-%m-%Y %H:%M:%S] ",timeinfo);
-    fprintf (pFile, timebuf);
+    fputs (timebuf, pFile);
 
     switch (type)
     {
@@ -897,7 +933,7 @@ void Server::OnTCPConnection (TCPsocket clientSocket)
     ip2String (*pClientIP, ipString);
 
     Message (SERVER_MSG_DEBUG,
-             "tcp connection established with client at socket %u with address %s",
+             "tcp connection established with client at socket 0x%x with address %s",
              clientSocket, ipString);
 
     Uint8 signal;

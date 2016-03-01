@@ -27,7 +27,7 @@ std::string HTTPResponseOK (const void *pBytes, const size_t data_len, const cha
     sprintf (line, "Content-Type: %s\n", content_type);
     response += line;
 
-    sprintf (line, "Content-Length: %u\n", data_len);
+    sprintf (line, "Content-Length: %lu\n", data_len);
     response += line;
 
     response += "Accept-Ranges: bytes\n"

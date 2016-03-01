@@ -457,7 +457,7 @@ void LoginScene::LoginProc (const LoginParams params)
         strcpy (errorMessage, "Serverside Internal Error");
         goto login_fail;
     }
-    else if (signal == NETSIG_RSAPUBLICKEY)
+    else if (signal == NETSIG_RSAPUBLICKEY) // server says: proceed login
     {
         if (n_recieved <= 1)
         {

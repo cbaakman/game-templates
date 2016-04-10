@@ -153,7 +153,7 @@ void HubScene::Update (float dt)
     else if (alphaH > 0.0f)
         alphaH -= dt;
 
-    if (alphaBlurInfo > 0.0f && 
+    if (alphaBlurInfo > 0.0f &&
             !state [SDL_SCANCODE_LEFTBRACKET] &&
             !state [SDL_SCANCODE_RIGHTBRACKET])
 
@@ -175,14 +175,14 @@ void HubScene::Render ()
 
     glViewport (0, 0, w, h);
 
-    // Clear the buffers before rendering multiple times:
-    glClearColor (0, 0, 0, 0);
-    glClearDepth (1.0f);
-    glClearStencil (0);
-    glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-
     for (i = 0; i < nBlurFrames; i++)
     {
+        // Clear the buffers before rendering the accumulation frame:
+        glClearColor (0, 0, 0, 0);
+        glClearDepth (1.0f);
+        glClearStencil (0);
+        glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
         // Pass on events for this frame:
         SDL_Event event;
         while (SDL_PollEvent (&event))

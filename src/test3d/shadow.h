@@ -27,7 +27,6 @@
 #include "collision.h"
 #include "../texture.h"
 
-#define N_PLAYER_COLLIDERS 2
 #define N_PARTICLES 10
 
 struct Particle
@@ -92,14 +91,13 @@ private:
     Particle particles [N_PARTICLES];
 
     // Objects to represent the collision boundaries around the player
-    ColliderP colliders [N_PLAYER_COLLIDERS];
+    std::list <ColliderP> colliders;
 
     /*
         These triangles represent the environment.
         They're used for collision detection.
      */
-    size_t n_collision_triangles;
-    Triangle *collision_triangles;
+    std::list <Triangle> collision_triangles;
 
     MeshData meshDataDummy, // the movable character, with bones and animation data
              meshDataBox, // environment: ground and walls

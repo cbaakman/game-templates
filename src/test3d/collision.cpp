@@ -265,8 +265,8 @@ bool FeetCollider :: HitsTriangle (const Triangle &tri, const vec3 &p, const vec
 #define COLLISION_MAXITERATION 10
 #define MIN_WALL_DISTANCE 1.0e-3f
 vec3 CollisionMove (const vec3& p1, const vec3& p2,
-                    const ColliderP *colliders, const int n_colliders,
-                    const Triangle *triangles, const int n_triangles)
+                    const std::list<ColliderP> &colliders,
+                    const std::list<Triangle> &triangles)
 {
     vec3 contactPoint,
          closestPointOnObject,
@@ -293,13 +293,11 @@ vec3 CollisionMove (const vec3& p1, const vec3& p2,
         bool pushingSomething = false;
 
         // Iterate over every triangle and every collider to detect hits:
-        for(int i = 0; i < n_triangles; i++)
+        for (const Triangle &triangle : triangles)
         {
-            for (int c = 0; c < n_colliders; c++)
+            for (const ColliderP &pCollider : colliders)
             {
-                ColliderP pCollider = colliders [c];
-
-                if (pCollider->HitsTriangle (triangles [i], current_p, targetMovement,
+                if (pCollider->HitsTriangle (triangle, current_p, targetMovement,
                         testClosestPointOnObject, testContactPoint, testNormal))
                 {
                     // Collider hit a triangle
@@ -362,8 +360,8 @@ vec3 CollisionMove (const vec3& p1, const vec3& p2,
     return current_p;
 }
 bool TestOnGround (const vec3& p,
-                   const ColliderP *colliders, const int n_colliders,
-                   const Triangle *triangles, const int n_triangles,
+                   const std::list<ColliderP> &colliders,
+                   const std::list<Triangle> &triangles,
                    const float min_cosine, const vec3 &_up)
 {
     float dist, cosine, max_dist = (1.0f + sqrt(0.5f)) * MIN_WALL_DISTANCE;
@@ -374,9 +372,9 @@ bool TestOnGround (const vec3& p,
 
     const vec3 up = _up.Unit();
 
-    for(int i = 0; i < n_triangles; i++)
+    for (const Triangle &triangle : triangles)
     {
-        plane = triangles[i].GetPlane();
+        plane = triangle.GetPlane();
 
         // Make sure the normal points up
         if (Dot (plane.n, up) < 0)
@@ -388,13 +386,11 @@ bool TestOnGround (const vec3& p,
             continue;
         }
 
-        for (int c = 0; c < n_colliders; c++)
+        for (const ColliderP &pCollider : colliders)
         {
-            ColliderP pCollider = colliders [c];
-
             // Move it down and see if it hits the triangle:
 
-            if (pCollider->HitsTriangle (triangles [i], p, -up,
+            if (pCollider->HitsTriangle (triangle, p, -up,
                     testClosestPointOnObject, testContactPoint, testNormal))
             {
                 // Collider hits floor when moved down, now see if the floor's close enough:
@@ -415,8 +411,8 @@ bool TestOnGround (const vec3& p,
     return false;
 }
 vec3 PutOnGround (const vec3& p,
-                  const ColliderP *colliders, const int n_colliders,
-                  const Triangle *triangles, const int n_triangles,
+                  const std::list<ColliderP> &colliders,
+                  const std::list<Triangle> &triangles,
                   const float min_cosine, const vec3 &_up)
 {
     float dist2,
@@ -431,9 +427,9 @@ vec3 PutOnGround (const vec3& p,
 
     const vec3 &up = _up.Unit();
 
-    for(int i = 0; i < n_triangles; i++)
+    for (const Triangle &triangle : triangles)
     {
-        plane = triangles[i].GetPlane();
+        plane = triangle.GetPlane();
 
         // Make sure the normal points up
         if (Dot (plane.n, up) < 0)
@@ -445,13 +441,11 @@ vec3 PutOnGround (const vec3& p,
             continue;
         }
 
-        for (int c = 0; c < n_colliders; c++)
+        for (const ColliderP &pCollider : colliders)
         {
-            ColliderP pCollider = colliders [c];
-
             // Move it down and see if it hits the triangle:
 
-            if (pCollider->HitsTriangle (triangles [i], p, -smallest * up,
+            if (pCollider->HitsTriangle (triangle, p, -smallest * up,
                     testClosestPointOnObject, testContactPoint, testNormal))
             {
                 // Collider hits floor when moved down, now see if the floor's close enough:
@@ -472,8 +466,8 @@ vec3 PutOnGround (const vec3& p,
     return smallest_p;
 }
 vec3 CollisionWalk (const vec3& p1, const vec3& p2,
-                    const ColliderP *colliders, const int n_colliders,
-                    const Triangle *triangles, const int n_triangles,
+                    const std::list<ColliderP> &colliders,
+                    const std::list<Triangle> &triangles,
                     const float min_cosine, const vec3 &_up)
 {
     vec3 ground_p,
@@ -501,13 +495,11 @@ vec3 CollisionWalk (const vec3& p1, const vec3& p2,
 
         bool pushingSomething = false;
 
-        for(int i = 0; i < n_triangles; i++)
+        for (const Triangle &triangle : triangles)
         {
-            for (int c = 0; c < n_colliders; c++)
+            for (const ColliderP &pCollider : colliders)
             {
-                ColliderP pCollider = colliders [c];
-
-                if (pCollider->HitsTriangle (triangles [i], current_p, targetMovement,
+                if (pCollider->HitsTriangle (triangle, current_p, targetMovement,
                         testClosestPointOnObject, testContactPoint, testNormal))
                 {
                     // The collider hit the triangle on the way.
@@ -558,7 +550,7 @@ vec3 CollisionWalk (const vec3& p1, const vec3& p2,
             if (wall)
             {
                 // Put it back on the ground, if any
-                ground_p = PutOnGround (current_p, colliders, n_colliders, triangles, n_triangles, min_cosine, up);
+                ground_p = PutOnGround (current_p, colliders, triangles, min_cosine, up);
                 if ((ground_p - current_p).Length2() < targetMovement.Length2())
                 {
                     pushingMovement += ground_p - current_p;
@@ -582,7 +574,7 @@ vec3 CollisionWalk (const vec3& p1, const vec3& p2,
             current_p += targetMovement;
 
             // Put it back on the ground, if any
-            ground_p = PutOnGround (current_p, colliders, n_colliders, triangles, n_triangles, min_cosine, up);
+            ground_p = PutOnGround (current_p, colliders, triangles, min_cosine, up);
 
             /*
                 Distance to unground position must not be too large.
@@ -602,7 +594,8 @@ vec3 CollisionWalk (const vec3& p1, const vec3& p2,
     return current_p;
 }
 
-vec3 CollisionTraceBeam(const vec3 &p1, const vec3 &p2, const Triangle *triangles, const int n_triangles)
+vec3 CollisionTraceBeam(const vec3 &p1, const vec3 &p2,
+                        const std::list <Triangle> &triangles)
 {
     if(p1 == p2)
         return p1; // otherwise we might get unexpected results
@@ -610,11 +603,11 @@ vec3 CollisionTraceBeam(const vec3 &p1, const vec3 &p2, const Triangle *triangle
     vec3 p12 = p2 - p1, isect = p2, newisect;
 
     // For every triangle, see if the beam goes through:
-    for(int i = 0; i < n_triangles; i++)
+    for (const Triangle &triangle : triangles)
     {
-        newisect = LinePlaneIntersectionDir (p1, p12, triangles[i].GetPlane());
+        newisect = LinePlaneIntersectionDir (p1, p12, triangle.GetPlane());
 
-        if (!PointInsideTriangle (triangles[i], newisect))
+        if (!PointInsideTriangle (triangle, newisect))
             continue;
 
         vec3 delta = newisect - p1;

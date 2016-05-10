@@ -116,7 +116,6 @@ ShadowScene::ShadowScene(App *pApp) : Scene(pApp),
     onGround (false), touchDown (false),
     show_bones (false), show_normals (false), show_triangles (false),
     pMeshDummy (NULL),
-    collision_triangles (NULL), n_collision_triangles (0),
     shader_normal(0)
 {
     texDummyNormal.tex = texDummy.tex =
@@ -131,8 +130,8 @@ ShadowScene::ShadowScene(App *pApp) : Scene(pApp),
     /*
         Decided not to use the feet collider here. it's too buggy for onGround tests.
      */
-    colliders [0] = new SphereCollider (vec3 (0, -1.999f, 0), 0.001f);
-    colliders [1] = new SphereCollider (VEC_O, PLAYER_RADIUS);
+    colliders.push_back (new SphereCollider (vec3 (0, -1.999f, 0), 0.001f));
+    colliders.push_back (new SphereCollider (VEC_O, PLAYER_RADIUS));
 
     // Place particles at random positions with random speeds and sizes
     for (int i = 0; i < N_PARTICLES; i++)
@@ -164,10 +163,9 @@ ShadowScene::~ShadowScene()
 
     delete pMeshDummy;
     delete [] shadowTriangles;
-    delete [] collision_triangles;
 
-    for (int i=0; i < N_PLAYER_COLLIDERS; i++)
-        delete colliders [i];
+    for (ColliderP pCollider : colliders)
+        delete pCollider;
 }
 void GetTangentBitangent (const int n_vertices,
                           const MeshVertex **p_vertices,
@@ -446,11 +444,11 @@ void ShadowScene::AddAll (Loader *pLoader)
             }
 
             // Derive collision objects from mesh:
-            ToTriangles (&meshDataBox, &collision_triangles, &n_collision_triangles);
+            ToTriangles (&meshDataBox, collision_triangles);
 
             // Put the player on the ground we just generated:
             posPlayer = CollisionMove (posPlayer, vec3 (posPlayer.x, -1000.0f, posPlayer.z),
-                                       colliders, N_PLAYER_COLLIDERS, collision_triangles, n_collision_triangles);
+                                       colliders, collision_triangles);
 
             return true;
         }
@@ -583,7 +581,7 @@ void ShadowScene::Update (const float dt)
     rotationPlayer = Slerp (rotationPlayer, targetRotationPlayer, fracRotate);
 
     // if falling, see if player hit the ground
-    onGround = (vy <= 0.0f) && TestOnGround (posPlayer, colliders, N_PLAYER_COLLIDERS, collision_triangles, n_collision_triangles);
+    onGround = (vy <= 0.0f) && TestOnGround (posPlayer, colliders, collision_triangles);
 
     if (onGround)
         vy = 0.0f;
@@ -601,9 +599,9 @@ void ShadowScene::Update (const float dt)
      */
     if (onGround)
 
-        posPlayer = CollisionWalk (posPlayer, newPosPlayer, colliders, N_PLAYER_COLLIDERS, collision_triangles, n_collision_triangles);
+        posPlayer = CollisionWalk (posPlayer, newPosPlayer, colliders, collision_triangles);
     else
-        posPlayer = CollisionMove (posPlayer, newPosPlayer, colliders, N_PLAYER_COLLIDERS, collision_triangles, n_collision_triangles);
+        posPlayer = CollisionMove (posPlayer, newPosPlayer, colliders, collision_triangles);
 
     // animate the mesh:
 
@@ -952,7 +950,7 @@ void ShadowScene::Render ()
 
     // We want the camera to stay at some minimal distance from the walls:
     vec3 shift = 0.5f * (posCamera - posPlayer).Unit(),
-         intersection = CollisionTraceBeam(posPlayer, posCamera + shift, collision_triangles, n_collision_triangles) - shift;
+         intersection = CollisionTraceBeam (posPlayer, posCamera + shift, collision_triangles) - shift;
     if (intersection != posCamera)
     {
         posCamera = intersection;
@@ -1035,14 +1033,14 @@ void ShadowScene::Render ()
     {
         glDisable (GL_DEPTH_TEST);
         glColor4f (0.8f, 0.0f, 0.0f, 1.0f);
-        for (int i = 0; i < n_collision_triangles; i++)
+        for (const Triangle &triangle : collision_triangles)
         {
             glBegin (GL_LINES);
             for (int j=0; j < 3; j++)
             {
                 int k = (j + 1) % 3;
-                glVertex3f(collision_triangles[i].p[j].x, collision_triangles[i].p[j].y, collision_triangles[i].p[j].z);
-                glVertex3f(collision_triangles[i].p[k].x, collision_triangles[i].p[k].y, collision_triangles[i].p[k].z);
+                glVertex3f (triangle.p[j].x, triangle.p[j].y, triangle.p[j].z);
+                glVertex3f (triangle.p[k].x, triangle.p[k].y, triangle.p[k].z);
             }
             glEnd ();
         }

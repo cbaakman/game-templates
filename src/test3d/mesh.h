@@ -220,7 +220,7 @@ void ThroughFaces (const MeshData *, MeshFaceFunc func);
 void RenderSubset (const MeshData *, const std::string &subset_id);
 
 // ToTriangles is useful for collision detection
-void ToTriangles (const MeshData *, Triangle **triangles, size_t *n_triangles);
+void ToTriangles (const MeshData *, std::list <Triangle> &triangles);
 
 /**
  * Converts a given xml document to a mesh.

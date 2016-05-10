@@ -23,6 +23,8 @@
 
 #include "../vec.h"
 
+#include <list>
+
 /**
  *  The basic moving collision object.
  *  When it hits a triangle, it must return:
@@ -70,24 +72,24 @@ typedef Collider *ColliderP;
 #define DEFAULT_COSINE 0.70710678118654757f // aka 45 degrees
 
 vec3 CollisionMove (const vec3& p1, const vec3& p2,
-                    const ColliderP *colliders, const int n_colliders,
-                    const Triangle *triangles, const int n_triangles);
+                    const std::list<ColliderP> &colliders,
+                    const std::list<Triangle> &triangles);
 
 vec3 CollisionTraceBeam (const vec3& p1, const vec3 &p2,
-                         const Triangle *triangles, const int n_triangles);
+                         const std::list<Triangle> &triangles);
 
 /**
  * Slightly different from CollisionMove, keeps colliders stuck to the ground. (if possible)
  */
 vec3 CollisionWalk (const vec3& p1, const vec3& p2,
-                    const ColliderP *colliders, const int n_colliders,
-                    const Triangle *triangles, const int n_triangles,
+                    const std::list<ColliderP> &colliders,
+                    const std::list<Triangle> &triangles,
                     const float min_cosine = DEFAULT_COSINE, const vec3 &up = VEC_UP);
 
 
 bool TestOnGround (const vec3& feet_p,
-                   const ColliderP *colliders, const int n_colliders,
-                   const Triangle *triangles, const int n_triangles,
+                   const std::list<ColliderP> &colliders,
+                   const std::list<Triangle> &triangles,
                    const float min_cosine = DEFAULT_COSINE, const vec3 &up = VEC_UP);
 
 #endif // COLLISION_H

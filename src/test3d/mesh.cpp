@@ -59,38 +59,34 @@ void MeshState::InitStates()
 MeshState::~MeshState()
 {
 }
-void ToTriangles (const MeshData *pMeshData, Triangle **pT, size_t *pN)
+void ToTriangles (const MeshData *pMeshData, std::list <Triangle> &triangle_list)
 {
-    size_t n_triangles = pMeshData->quads.size() * 2 + pMeshData->triangles.size();
-    Triangle *triangles = new Triangle [n_triangles];
+    Triangle triangles [2];
 
-    size_t i = 0;
     for (std::map<std::string, MeshQuad>::const_iterator it = pMeshData->quads.begin(); it != pMeshData->quads.end(); it++)
     {
         // Convert a quad to two triangles:
 
         const PMeshQuad pQuad = &(it -> second);
 
-        triangles [i + 1].p[0] = triangles [i].p[0] = pMeshData->vertices.at (pQuad->GetVertexID (0)).p;
-                                 triangles [i].p[1] = pMeshData->vertices.at (pQuad->GetVertexID (1)).p;
-        triangles [i + 1].p[1] = triangles [i].p[2] = pMeshData->vertices.at (pQuad->GetVertexID (2)).p;
-        triangles [i + 1].p[2] = pMeshData->vertices.at (pQuad->GetVertexID (3)).p;
+        triangles [1].p[0] = triangles [0].p[0] = pMeshData->vertices.at (pQuad->GetVertexID (0)).p;
+                             triangles [0].p[1] = pMeshData->vertices.at (pQuad->GetVertexID (1)).p;
+        triangles [1].p[1] = triangles [0].p[2] = pMeshData->vertices.at (pQuad->GetVertexID (2)).p;
+        triangles [1].p[2] = pMeshData->vertices.at (pQuad->GetVertexID (3)).p;
 
-        i += 2;
+        triangle_list.push_back (triangles [0]);
+        triangle_list.push_back (triangles [1]);
     }
     for (std::map<std::string, MeshTriangle>::const_iterator it = pMeshData->triangles.begin(); it != pMeshData->triangles.end(); it++)
     {
         const PMeshTriangle pTriangle = &(it -> second);
 
-        triangles [i].p[0] = pMeshData->vertices.at (pTriangle->GetVertexID (0)).p;
-        triangles [i].p[1] = pMeshData->vertices.at (pTriangle->GetVertexID (1)).p;
-        triangles [i].p[2] = pMeshData->vertices.at (pTriangle->GetVertexID (2)).p;
+        triangles [0].p[0] = pMeshData->vertices.at (pTriangle->GetVertexID (0)).p;
+        triangles [0].p[1] = pMeshData->vertices.at (pTriangle->GetVertexID (1)).p;
+        triangles [0].p[2] = pMeshData->vertices.at (pTriangle->GetVertexID (2)).p;
 
-        i ++;
+        triangle_list.push_back (triangles [0]);
     }
-
-    *pN = n_triangles;
-    *pT = triangles;
 }
 void ThroughSubsetFaces (const MeshData *pMeshData, const std::string &id, MeshFaceFunc func)
 {

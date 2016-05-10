@@ -175,6 +175,7 @@ void HubScene::Render ()
 
     glViewport (0, 0, w, h);
 
+    glClear (GL_ACCUM_BUFFER_BIT);
     for (i = 0; i < nBlurFrames; i++)
     {
         // Clear the buffers before rendering the accumulation frame:

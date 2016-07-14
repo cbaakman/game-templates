@@ -56,11 +56,10 @@ private:
     // camera angles
     GLfloat angleY, angleX, distCamera;
 
-    // fall speed
-    float vy;
     bool onGround, touchDown;
 
     vec3 posPlayer;
+    float vy;
     Quaternion rotationPlayer;
 
     GLuint shader_normal;
@@ -104,6 +103,10 @@ private:
              meshDataSky; // skybox, half a sphere
 
     MeshState *pMeshDummy; // animatable object, representing the player
+
+    void UpdatePlayerMovement (const float dt, const vec3 &movementDirUnit);
+
+    void UpdatePlayerAnimation (const float dt, const Quaternion &targetRotationPlayer, bool forwardMovement);
 
 public:
     ShadowScene (App*);

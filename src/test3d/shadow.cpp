@@ -528,9 +528,8 @@ void getCameraPosition( const vec3 &center,
 void ShadowScene::Update (const float dt)
 {
     vec3 posCamera,
-         currentDirectionPlayer = Rotate (rotationPlayer, VEC_FORWARD),
-         targetDirectionPlayer = currentDirectionPlayer,
-         newPosPlayer = posPlayer;
+         targetDirectionPlayer = VEC_O;
+    Quaternion targetRotationPlayer = rotationPlayer;
     bool forward = false;
 
     // Detect movement input:
@@ -565,20 +564,27 @@ void ShadowScene::Update (const float dt)
         vec3 camX = Cross (VEC_UP, camZ);
 
         targetDirectionPlayer = (mx * camX + mz * camZ).Unit ();
+        targetRotationPlayer = Rotation (VEC_FORWARD, mx * camX + mz * camZ);
 
-        newPosPlayer += 5 * targetDirectionPlayer * dt;
         forward = true;
     }
+    UpdatePlayerMovement (dt, targetDirectionPlayer);
 
-    // Rotate 3D mesh over time, to facing direction:
-    Quaternion targetRotationPlayer = Rotation (VEC_FORWARD, targetDirectionPlayer);
+    UpdatePlayerAnimation (dt, targetRotationPlayer, forward);
 
-    float angle = Angle (rotationPlayer, targetRotationPlayer),
-          fracRotate = PLAYER_ROTATEPERSEC * dt / angle;
-    if (fracRotate > 1.0f || angle <= 0.0)
-        fracRotate = 1.0f;
+    // Update the new animation pose to the vertex buffer:
+    UpdateNormalMapVertices (&vbo_dummy, pMeshDummy, "0");
 
-    rotationPlayer = Slerp (rotationPlayer, targetRotationPlayer, fracRotate);
+    // Move the particles, according to time passed.
+    for (int i = 0; i < N_PARTICLES; i++)
+    {
+        particles [i].vel += -0.03f * particles [i].pos * dt;
+        particles [i].pos += particles [i].vel * dt;
+    }
+}
+void ShadowScene::UpdatePlayerMovement (const float dt, const vec3 &movementDirUnit)
+{
+    vec3 newPosPlayer = posPlayer + 5 * movementDirUnit * dt;
 
     // if falling, see if player hit the ground
     onGround = (vy <= 0.0f) && TestOnGround (posPlayer, colliders, collision_triangles);
@@ -586,10 +592,7 @@ void ShadowScene::Update (const float dt)
     if (onGround)
         vy = 0.0f;
     else
-    {
-        touchDown = true;
         vy -= 30.0f * dt;
-    }
 
     newPosPlayer.y += vy * dt;
 
@@ -598,13 +601,21 @@ void ShadowScene::Update (const float dt)
         We try to keep the feet on the ground. Unless the fall is too long
      */
     if (onGround)
-
         posPlayer = CollisionWalk (posPlayer, newPosPlayer, colliders, collision_triangles);
     else
         posPlayer = CollisionMove (posPlayer, newPosPlayer, colliders, collision_triangles);
+}
+void ShadowScene::UpdatePlayerAnimation (const float dt, const Quaternion &targetRotationPlayer, bool forward)
+{
+    // Rotate 3D mesh over time, to facing direction:
+    float angle = Angle (rotationPlayer, targetRotationPlayer),
+          fracRotate = PLAYER_ROTATEPERSEC * dt / angle;
+    if (fracRotate > 1.0f || angle <= 0.0)
+        fracRotate = 1.0f;
+
+    rotationPlayer = Slerp (rotationPlayer, targetRotationPlayer, fracRotate);
 
     // animate the mesh:
-
     if (onGround && forward) // walking / running animation
     {
         frame += 15 * dt;
@@ -639,15 +650,8 @@ void ShadowScene::Update (const float dt)
             pMeshDummy->SetAnimationState (NULL, 0);
     }
 
-    // Update the new animation pose to the vertex buffer:
-    UpdateNormalMapVertices (&vbo_dummy, pMeshDummy, "0");
-
-    // Move the particles, according to time passed.
-    for (int i = 0; i < N_PARTICLES; i++)
-    {
-        particles [i].vel += -0.03f * particles [i].pos * dt;
-        particles [i].pos += particles [i].vel * dt;
-    }
+    if (!onGround)
+        touchDown = true; //must play this animation again when landing
 }
 const GLfloat ambient [] = {0.3f, 0.3f, 0.3f, 1.0f},
               diffuse [] = {1.0f, 1.0f, 1.0f, 1.0f};

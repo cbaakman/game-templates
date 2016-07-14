@@ -24,7 +24,7 @@ endif
 ifdef DEBUG
 CFLAGS += -g -D DEBUG
 else
-CFLAGS += -O3
+#CFLAGS += -O3
 
 CONFDIR = /usr/local/etc
 RESDIR = /usr/local/share

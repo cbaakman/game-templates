@@ -950,10 +950,13 @@ void ShadowScene::Render ()
 
     // We want the camera to stay at some minimal distance from the walls:
     vec3 shift = 0.5f * (posCamera - posPlayer).Unit(),
-         intersection = CollisionTraceBeam (posPlayer, posCamera + shift, collision_triangles) - shift;
-    if (intersection != posCamera)
+         intersection;
+    bool hit;
+    Triangle tr;
+    std::tie (hit, tr, intersection) = CollisionTraceBeam (posPlayer, posCamera + shift, collision_triangles);
+    if (hit)
     {
-        posCamera = intersection;
+        posCamera = intersection - shift;
     }
 
     // Set the 3d projection matrix:

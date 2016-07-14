@@ -359,6 +359,75 @@ vec3 CollisionMove (const vec3& p1, const vec3& p2,
 
     return current_p;
 }
+vec3 CollisionClosestBump (const vec3& p1, const vec3& p2,
+                           const std::list<ColliderP> &colliders,
+                           const std::list<Triangle> &triangles)
+{
+    vec3 contactPoint,
+         closestPointOnObject,
+
+         testContactPoint,
+         testClosestPointOnObject,
+         testNormal,
+
+         current_p = p1,
+         targetMovement = p2 - p1,
+         freeMovement = targetMovement,
+         pushingMovement;
+
+    const vec3 inputMovement = targetMovement;
+
+    Plane pushedPlane;
+
+    float smallestDist = 1.0e+15f,
+          dist2;
+
+    bool pushingSomething = false;
+
+    // Iterate over every triangle and every collider to detect hits:
+    for (const Triangle &triangle : triangles)
+    {
+        for (const ColliderP &pCollider : colliders)
+        {
+            if (pCollider->HitsTriangle (triangle, current_p, targetMovement,
+                    testClosestPointOnObject, testContactPoint, testNormal))
+            {
+                // Collider hit a triangle
+
+                dist2 = (testContactPoint - testClosestPointOnObject).Length2();
+                if (dist2 < smallestDist)
+                {
+                    // The closest hit on the path gets priority
+
+                    smallestDist = dist2;
+
+                    contactPoint = testContactPoint;
+                    closestPointOnObject = testClosestPointOnObject;
+                    pushedPlane.n = testNormal;
+                }
+                pushingSomething = true;
+            }
+        }
+    }
+
+    if (pushingSomething)
+    {
+        // movement up to the plane
+        freeMovement = contactPoint - closestPointOnObject;
+
+        pushedPlane.d = -Dot (pushedPlane.n, contactPoint);
+
+        current_p += freeMovement + pushedPlane.n * MIN_WALL_DISTANCE;
+
+        return current_p;
+    }
+    else // unhindered movement
+    {
+        current_p += targetMovement;
+
+        return current_p;
+    }
+}
 bool TestOnGround (const vec3& p,
                    const std::list<ColliderP> &colliders,
                    const std::list<Triangle> &triangles,
@@ -594,11 +663,14 @@ vec3 CollisionWalk (const vec3& p1, const vec3& p2,
     return current_p;
 }
 
-vec3 CollisionTraceBeam(const vec3 &p1, const vec3 &p2,
+std::tuple <bool, Triangle, vec3> CollisionTraceBeam(const vec3 &p1, const vec3 &p2,
                         const std::list <Triangle> &triangles)
 {
+    bool hit = false;
+    Triangle rt (p2, p2, p2);
+
     if(p1 == p2)
-        return p1; // otherwise we might get unexpected results
+        return std::make_tuple (hit, rt, p1); // otherwise we might get unexpected results
 
     vec3 p12 = p2 - p1, isect = p2, newisect;
 
@@ -613,8 +685,11 @@ vec3 CollisionTraceBeam(const vec3 &p1, const vec3 &p2,
         vec3 delta = newisect - p1;
 
         if (delta.Length2() < (p1 - isect).Length2() && Dot (delta, p12) > 0)
-
+        {
+            rt = triangle;
             isect = newisect;
+            hit = true;
+        }
     }
-    return isect;
+    return std::make_tuple (hit, rt, isect);;
 }

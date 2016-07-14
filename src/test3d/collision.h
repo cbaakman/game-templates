@@ -24,6 +24,7 @@
 #include "../vec.h"
 
 #include <list>
+#include <tuple>
 
 /**
  *  The basic moving collision object.
@@ -75,8 +76,12 @@ vec3 CollisionMove (const vec3& p1, const vec3& p2,
                     const std::list<ColliderP> &colliders,
                     const std::list<Triangle> &triangles);
 
-vec3 CollisionTraceBeam (const vec3& p1, const vec3 &p2,
-                         const std::list<Triangle> &triangles);
+vec3 CollisionClosestBump (const vec3& p1, const vec3& p2,
+                           const std::list<ColliderP> &colliders,
+                           const std::list<Triangle> &triangles);
+
+std::tuple <bool, Triangle, vec3> CollisionTraceBeam (const vec3& p1, const vec3 &p2,
+                                           const std::list<Triangle> &triangles);
 
 /**
  * Slightly different from CollisionMove, keeps colliders stuck to the ground. (if possible)

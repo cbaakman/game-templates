@@ -54,6 +54,8 @@ const char
             vec2 texCoord;
         } VertexOut;
 
+        out vec3 lightPos;
+
         void main ()
         {
             gl_Position = projMatrix * modelViewMatrix * vec4 (vertex, 1.0);
@@ -64,6 +66,7 @@ const char
             VertexOut.eyeNormal = (normalMatrix * vec4 (normalize (normal), 0.0)).xyz;
 
             VertexOut.texCoord = texCoord;
+            lightPos = (modelViewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz;
         }
     )shader",
 
@@ -94,7 +97,8 @@ const char
         } VertexIn [];
 
         out VertexData {
-            vec3 eyeNormal;
+            vec3 eyePos,
+                 eyeNormal;
             vec2 texCoord;
             float extension;
         } VertexOut;
@@ -115,6 +119,7 @@ const char
 
                 gl_Position = projMatrix * vec4 (newVertex, 1.0);
 
+                VertexOut.eyePos = newVertex;
                 VertexOut.eyeNormal = VertexIn [i].eyeNormal;
                 VertexOut.texCoord = VertexIn [i].texCoord;
 
@@ -134,10 +139,13 @@ const char
                      bottom_color;
 
         in VertexData {
-            vec3 eyeNormal;
+            vec3 eyePos,
+                 eyeNormal;
             vec2 texCoord;
             float extension;
         } VertexIn;
+
+        in vec3 lightPos;
 
         void main ()
         {
@@ -158,9 +166,12 @@ const char
             else
                 alpha = 0.0;
 
+            vec3 L = normalize (lightPos - VertexIn.eyePos);
+            float lum = min (1.0, 0.7 + clamp (dot (VertexIn.eyeNormal, L), 0.0, 1.0));
+
             vec3 color = (1.0 - VertexIn.extension) * bottom_color + VertexIn.extension * top_color;
 
-            gl_FragColor = vec4 (color, alpha);
+            gl_FragColor = vec4 (color * lum, alpha);
         }
 
     )shader",

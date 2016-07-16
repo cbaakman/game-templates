@@ -51,6 +51,8 @@
 		<Unit filename="src/err.h" />
 		<Unit filename="src/font.cpp" />
 		<Unit filename="src/font.h" />
+		<Unit filename="src/geo2d.cpp" />
+		<Unit filename="src/geo2d.h" />
 		<Unit filename="src/ini.cpp" />
 		<Unit filename="src/ini.h" />
 		<Unit filename="src/io.cpp" />
@@ -68,6 +70,8 @@
 		<Unit filename="src/str.h" />
 		<Unit filename="src/test3d/app.cpp" />
 		<Unit filename="src/test3d/app.h" />
+		<Unit filename="src/test3d/chunk.cpp" />
+		<Unit filename="src/test3d/chunk.h" />
 		<Unit filename="src/test3d/collision.cpp" />
 		<Unit filename="src/test3d/collision.h" />
 		<Unit filename="src/test3d/dummy-icon.ico" />
@@ -83,6 +87,7 @@
 		<Unit filename="src/test3d/mesh.h" />
 		<Unit filename="src/test3d/shadow.cpp" />
 		<Unit filename="src/test3d/shadow.h" />
+		<Unit filename="src/test3d/terragen.h" />
 		<Unit filename="src/test3d/toon.cpp" />
 		<Unit filename="src/test3d/toon.h" />
 		<Unit filename="src/test3d/vecs.cpp" />

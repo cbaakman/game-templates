@@ -25,4 +25,6 @@ void RandomSeed ();
 
 float RandomFloat (float _min, float _max);
 
+float NoiseFrom (const int);
+
 #endif // RANDOM_H

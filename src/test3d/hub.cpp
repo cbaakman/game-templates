@@ -64,7 +64,7 @@ HubScene::HubScene (App *pApp) : Scene (pApp),
 
     helpText [3] = "Use the mouse to move the camera\n" + nav ;
 
-    helpText [4] = "Press 'a' to switch modes\n" + nav ;
+    helpText [4] = "Press 'm' to switch modes\n" + nav ;
 
     helpText [5] = "Press 'a' to see the axis system: x, y & z\n"
                    "Press 'x' to see a cross product\n" + nav;

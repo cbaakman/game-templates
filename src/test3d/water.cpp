@@ -592,6 +592,9 @@ void WaterScene::OnMouseWheel (const SDL_MouseWheelEvent *event)
 }
 void WaterScene::OnMouseMove(const SDL_MouseMotionEvent *event)
 {
+    if (SDL_GetRelativeMouseMode ())
+        SDL_SetRelativeMouseMode(SDL_FALSE);
+
     if(event -> state & SDL_BUTTON_LMASK)
     {
         // Change the camera angles

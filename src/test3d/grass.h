@@ -17,38 +17,30 @@
   3. This notice may not be removed or altered from any source distribution.
 */
 
-#ifndef GRASS_H
-#define GRASS_H
+#ifndef PLAY_H
+#define PLAY_H
 
 #include "app.h"
-#include "buffer.h"
-#include "mesh.h"
 #include "../texture.h"
+#include "../matrix.h"
+#include "terragen.h"
+#include "collision.h"
 
-/**
- * Demonstrates different techniques for rendering grass.
- *
- * Currently implemented methods:
- * - layer by layer (looks better from the top)
- * - one polygon per blade (more expensive)
- */
+#include "../random.h"
+#include "chunk.h"
+#include <map>
+
+#define GRID_SIZE 20
+#define N_PLAYER_COLLIDERS 2
+
 class GrassScene : public App::Scene
 {
 private:
-
-    float angleX, angleY, distCamera;
-
-    VertexBuffer vbo_hill,
-                 vbo_grass;
-    MeshData meshDataHill;
-
-    vec3 *grass_neutral_positions;
-
-    Texture texDots,
-            texGrass;
-
-    GLuint layerShader,
-           polyShader;
+    vec3 playerVelocity;
+    bool playerOnGround;
+    vec3 playerPos;
+    float playerLookAngleX,
+          playerLookAngleY;
 
     // wind parameters, makes the grass move
     vec3 wind;
@@ -66,19 +58,30 @@ private:
 
         N_GRASSMODES
     };
-public:
 
+    Texture texDots,
+            texGrass;
+
+    GLuint layerShader,
+           polyShader,
+           groundShader;
+
+    TerraGen <TerrainType> *pTerraGen;
+
+    std::map <ChunkID, GrassChunk*> chunks;
+
+    std::list <ColliderP> playerColliders;
+public:
     GrassScene (App *);
     ~GrassScene ();
 
-    void Update (const float dt);
-    void Render (void);
-
     void AddAll (Loader *);
 
-    void OnMouseWheel (const SDL_MouseWheelEvent *);
     void OnMouseMove (const SDL_MouseMotionEvent *);
     void OnKeyPress (const SDL_KeyboardEvent *);
+
+    void Update (const float dt);
+    void Render (void);
 };
 
-#endif // GRASS_H
+#endif // PLAY_H

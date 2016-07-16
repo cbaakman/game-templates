@@ -52,4 +52,16 @@ void swap (Value& n1, Value& n2)
  */
 void Zero(void *p, size_t size);
 
+template <typename Type>
+Type InterpolateCubic (const Type &p0, const Type &p1,
+                       const Type &p2, const Type &p3, const float t)
+{
+    Type a = 0.5f * (p3 - p0 + 3 * (p1 - p2)),
+         b = p0 - 0.5f * (5 * p1 + p3) + 2 * p2,
+         c = 0.5f * (p2 - p0),
+         d = p1;
+
+    return t*t*t * a + t*t * b + t * c + d;
+}
+
 #endif // UTIL_H

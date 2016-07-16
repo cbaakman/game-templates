@@ -37,3 +37,10 @@ float RandomFloat(float _min, float _max)
 
     return _min + f * (_max - _min);
 }
+
+float NoiseFrom (const int x)
+{
+    int y = (x << 13) ^ x;
+    return (1.0 - ((y * (y * y * 15731 + 789221) + 1376312589) & 0x7fffffff)
+            / 1073741824.0);
+}

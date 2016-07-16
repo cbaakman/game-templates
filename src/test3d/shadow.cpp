@@ -981,9 +981,6 @@ void ShadowScene::Render ()
     glClearStencil (0);
     glClear (GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-    glColorMaterial (GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
-    glEnable(GL_COLOR_MATERIAL);
-
     glDisable (GL_STENCIL_TEST);
 
     glDisable (GL_BLEND);
@@ -1012,9 +1009,9 @@ void ShadowScene::Render ()
 
     // Light settings, position will be set later
     glEnable (GL_LIGHTING);
-    glLightModelfv (GL_LIGHT_MODEL_AMBIENT, ambient);
-    glLightfv (GL_LIGHT0, GL_DIFFUSE, diffuse);
     glEnable (GL_LIGHT0);
+    glLightfv (GL_LIGHT0, GL_AMBIENT, ambient);
+    glLightfv (GL_LIGHT0, GL_DIFFUSE, diffuse);
     GLfloat vLightPos [4] = {posLight.x, posLight.y, posLight.z, 1.0f};// 0 is directional
     glLightfv (GL_LIGHT0, GL_POSITION, vLightPos);
 
@@ -1213,6 +1210,9 @@ void ShadowScene::OnKeyPress (const SDL_KeyboardEvent *event)
 }
 void ShadowScene::OnMouseMove(const SDL_MouseMotionEvent *event)
 {
+    if (SDL_GetRelativeMouseMode ())
+        SDL_SetRelativeMouseMode(SDL_FALSE);
+
     if(event -> state & SDL_BUTTON_LMASK)
     {
         // Change camera angles, if mouse key is pressed

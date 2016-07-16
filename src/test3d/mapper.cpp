@@ -266,6 +266,9 @@ void MapperScene::Render (void)
 }
 void MapperScene::OnMouseMove (const SDL_MouseMotionEvent *event)
 {
+    if (SDL_GetRelativeMouseMode ())
+        SDL_SetRelativeMouseMode(SDL_FALSE);
+
     if(event -> state & SDL_BUTTON_LMASK)
     {
         // Change camera angles

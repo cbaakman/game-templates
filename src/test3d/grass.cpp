@@ -29,7 +29,7 @@
 #include <GL/gl.h>
 
 const GLfloat GRASS_TOP_COLOR [3] = {0.0f, 0.8f, 0.0f},
-              GRASS_BOTTOM_COLOR [3] = {0.0f, 0.3f, 0.0f};
+              GRASS_BOTTOM_COLOR [3] = {0.0f, 0.5f, 0.0f};
 
 const char
 
@@ -54,8 +54,6 @@ const char
             vec2 texCoord;
         } VertexOut;
 
-        out vec3 lightPos;
-
         void main ()
         {
             gl_Position = projMatrix * modelViewMatrix * vec4 (vertex, 1.0);
@@ -66,7 +64,6 @@ const char
             VertexOut.eyeNormal = (normalMatrix * vec4 (normalize (normal), 0.0)).xyz;
 
             VertexOut.texCoord = texCoord;
-            lightPos = (modelViewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz;
         }
     )shader",
 
@@ -97,7 +94,7 @@ const char
         } VertexIn [];
 
         out VertexData {
-            vec3 eyePos,
+            vec3 eyeVertex,
                  eyeNormal;
             vec2 texCoord;
             float extension;
@@ -119,7 +116,7 @@ const char
 
                 gl_Position = projMatrix * vec4 (newVertex, 1.0);
 
-                VertexOut.eyePos = newVertex;
+                VertexOut.eyeVertex = newVertex;
                 VertexOut.eyeNormal = VertexIn [i].eyeNormal;
                 VertexOut.texCoord = VertexIn [i].texCoord;
 
@@ -138,14 +135,16 @@ const char
         uniform vec3 top_color,
                      bottom_color;
 
+        uniform mat4 modelViewMatrix;
+
+        uniform vec3 eyeLightDir;
+
         in VertexData {
-            vec3 eyePos,
+            vec3 eyeVertex,
                  eyeNormal;
             vec2 texCoord;
             float extension;
         } VertexIn;
-
-        in vec3 lightPos;
 
         void main ()
         {
@@ -166,12 +165,14 @@ const char
             else
                 alpha = 0.0;
 
-            vec3 L = normalize (lightPos - VertexIn.eyePos);
-            float lum = min (1.0, 0.7 + clamp (dot (VertexIn.eyeNormal, L), 0.0, 1.0));
+            vec3 L = normalize (-eyeLightDir),
+                 N = normalize (VertexIn.eyeNormal);
+
+            float lum = clamp (dot (N, L), 0.0, 1.0);
 
             vec3 color = (1.0 - VertexIn.extension) * bottom_color + VertexIn.extension * top_color;
 
-            gl_FragColor = vec4 (color * lum, alpha);
+            gl_FragColor = vec4 (color * lum * lum, alpha);
         }
 
     )shader",
@@ -187,24 +188,21 @@ const char
         in vec2 texCoord;
 
         out VertexData {
-            vec3 vertex,
-                 normal;
+            vec3 eyeVertex,
+                 eyeNormal;
             vec2 texCoord;
         } VertexOut;
 
-        out vec3 lightPos;
-
         void main()
         {
-            VertexOut.vertex = (modelViewMatrix * vec4 (vertex, 0.0)).xyz;
+            VertexOut.eyeVertex = (modelViewMatrix * vec4 (vertex, 1.0)).xyz;
 
             mat4 normalMatrix = transpose (inverse (modelViewMatrix));
-            VertexOut.normal = normalize (normalMatrix * vec4 (normal, 0)).xyz;
+            VertexOut.eyeNormal = normalize (normalMatrix * vec4 (normal, 0)).xyz;
 
             gl_Position = projMatrix * modelViewMatrix * vec4 (vertex, 1.0);
 
             VertexOut.texCoord = texCoord;
-            lightPos = (modelViewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz;
         }
 
     )shader",
@@ -218,19 +216,20 @@ const char
                      bottom_color;
 
         in VertexData {
-            vec3 vertex,
-                 normal;
+            vec3 eyeVertex,
+                 eyeNormal;
             vec2 texCoord;
         } VertexIn;
 
-        in vec3 lightPos;
+        uniform vec3 eyeLightDir;
 
         void main ()
         {
-            vec3 L = normalize (lightPos - VertexIn.vertex);
+            vec3 L = normalize (-eyeLightDir),
+                 N = normalize (VertexIn.eyeNormal);
 
             // Rendering two faces of the triangle, so take abs value of dot product:
-            float lum = min (1.0, 0.7 + clamp (abs (dot (VertexIn.normal, L)), 0.0, 1.0));
+            float lum = clamp (dot (N, L), 0.0, 1.0);
 
             // On the texture, black is opaque, white is transparent.
             vec4 sample = texture2D (tex_grass, VertexIn.texCoord.st);
@@ -238,7 +237,7 @@ const char
             float a = VertexIn.texCoord.t * VertexIn.texCoord.t;
             vec3 color = (1.0 - a) * bottom_color + a * top_color;
 
-            gl_FragColor = vec4 (color * lum, 1.0 - sample.r);
+            gl_FragColor = vec4 (color * lum * lum, 1.0 - sample.r);
         }
 
     )shader",
@@ -249,20 +248,21 @@ const char
         uniform vec3 bottom_color;
 
         in VertexData {
-            vec3 vertex,
-                 normal;
+            vec3 eyeVertex,
+                 eyeNormal;
             vec2 texCoord;
         } VertexIn;
 
-        in vec3 lightPos;
+        uniform vec3 eyeLightDir;
 
         void main ()
         {
-            vec3 L = normalize (lightPos - VertexIn.vertex);
+            vec3 L = normalize (-eyeLightDir),
+                 N = normalize (VertexIn.eyeNormal);
 
-            float lum = min (1.0, 0.3 + clamp (dot (VertexIn.normal, L), 0.0, 1.0));
+            float lum = clamp (dot (N, L), 0.0, 1.0);
 
-            gl_FragColor = vec4 (bottom_color * lum, 1.0);
+            gl_FragColor = vec4 (bottom_color * lum * lum, 1.0);
         }
 
     )shader";
@@ -650,6 +650,7 @@ void GrassScene::Update (const float dt)
 
 const GLfloat ambient [] = {0.3f, 0.3f, 0.3f, 1.0f},
               diffuse [] = {0.7f, 0.7f, 0.7f, 1.0f};
+const vec3 lightDir = vec3 (0.0f, -1.0f, 0.0f);
 
 #define VIEW_ANGLE 45.0f
 #define NEAR_VIEW 0.1f
@@ -677,7 +678,8 @@ void GrassScene::Render (void)
                               playerPos.y + PLAYER_EYE_Y,
                               playerPos.z);
     const matrix4 matView = matLookAt (camPos,
-                                       camPos + lookDir, VEC_UP);
+                                       camPos + lookDir, VEC_UP),
+                  matViewNorm = matTranspose (matInverse (matView));
     glMatrixMode (GL_MODELVIEW);
     glLoadMatrixf (matView.m);
 
@@ -717,6 +719,9 @@ void GrassScene::Render (void)
         loc = glGetUniformLocation (layerShader, "modelViewMatrix");
         glUniformMatrix4fv (loc, 1, GL_FALSE, matView.m);
 
+        loc = glGetUniformLocation (layerShader, "eyeLightDir");
+        glUniform3fv(loc, 1, (matViewNorm * lightDir).v);
+
         loc = glGetUniformLocation (layerShader, "wind");
         glUniform3fv (loc, 1, wind.v);
 
@@ -743,6 +748,9 @@ void GrassScene::Render (void)
         loc = glGetUniformLocation (groundShader, "modelViewMatrix");
         glUniformMatrix4fv (loc, 1, GL_FALSE, matView.m);
 
+        loc = glGetUniformLocation (groundShader, "eyeLightDir");
+        glUniform3fv(loc, 1, (matViewNorm * lightDir).v);
+
         glEnable (GL_BLEND);
         glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -767,6 +775,9 @@ void GrassScene::Render (void)
 
         loc = glGetUniformLocation (polyShader, "modelViewMatrix");
         glUniformMatrix4fv (loc, 1, GL_FALSE, matView.m);
+
+        loc = glGetUniformLocation (polyShader, "eyeLightDir");
+        glUniform3fv(loc, 1, (matViewNorm * lightDir).v);
 
         /*
             Transparent fragments must not be rendered,

@@ -33,7 +33,7 @@
     Set these 2 parameters higher to get better looking grass.
     Set them lower for faster rendering.
  */
-#define GRASS_PER_M2 200
+#define GRASS_PER_M2 80
 #define N_GRASS_LAYERS 20
 
 #define MAX_GRASS_ANGLE 0.785
@@ -94,6 +94,10 @@ private:
     VertexBuffer vbo_ground,
                  vbo_grass;
     vec3 *grass_neutral_positions;
+
+    enum VertexBufferState {VBO_EMPTY, VBO_FILLED,
+                            VBO_ERROR, VBO_DONE} bladeState;
+
 public:
     GrassChunk (ChunkNumber x, ChunkNumber z);
     ~GrassChunk ();

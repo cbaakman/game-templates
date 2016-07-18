@@ -77,16 +77,157 @@ const std::list <Triangle> &GrassChunk::GetCollisionTriangles (void) const
 {
     return collTriangles;
 }
-bool FillGrassBladeVertexBuffer (VertexBuffer *pBuffer, const std::list <Triangle> &groundTriangles,
-                                 vec3 **p_grass_neutral_positions)
+void SetGrassBladeVertices (GrassVertex *pbuf, const int i,
+                            const vec3 &base, const vec3 &horizontal,
+                            const vec3 &vertical, const vec3 &normal)
 {
-    size_t i = 0,
-           m, u, j, k;
+    // Make a quad from two triangles (6 vertices):
 
-    const int triangles [][3] = {{0, 1, 2}, {0, 2, 3}};
+    pbuf [i].v.p = base - (GRASS_WIDTH / 2) * horizontal;
+    pbuf [i].v.n = normal;
+    pbuf [i].t = {0.0f, 0.0f};
 
+    pbuf [i + 1].v.p = pbuf [i].v.p + GRASS_HEIGHT * vertical;
+    pbuf [i + 1].v.n = normal;
+    pbuf [i + 1].t = {0.0f, 1.0f};
+
+    pbuf [i + 2].v.p = base + (GRASS_WIDTH / 2) * horizontal;
+    pbuf [i + 2].v.n = normal;
+    pbuf [i + 2].t = {1.0f, 0.0f};
+
+    pbuf [i + 3] = pbuf [i + 1];
+
+    pbuf [i + 4].v.p = pbuf [i + 2].v.p + GRASS_HEIGHT * vertical;
+    pbuf [i + 4].v.n = normal;
+    pbuf [i + 4].t = {1.0f, 1.0f};
+
+    pbuf [i + 5] = pbuf [i + 2];
+}
+float GetTriangleArea (const vec3 &p0, const vec3 &p1, const vec3 &p2)
+{
+    const float l01 = (p1 - p0).Length (),
+                l02 = (p2 - p0).Length (),
+                l12 = (p2 - p1).Length (),
+                s = (l01 + l02 + l12) / 2,
+                area = sqrt (s * (s - l01) * (s - l02) * (s - l12));
+    return area;
+}
+struct GrassBladeParams {
+
+    vec3 base, horizontal, vertical, normal;
+};
+void RandomGrassPosition (const GroundVertex *pv0, const GroundVertex* &pv1,
+                          const GroundVertex *pv2, const vec3 &n,
+                          GrassBladeParams &blade)
+{
+    // Give each blade a random orientation and position on the triangle.
+    float r1 = RandomFloat (0.0f, 1.0f),
+          r2 = RandomFloat (0.0f, 1.0f),
+          a = RandomFloat (0, 2 * M_PI),
+          b = RandomFloat (-MAX_GRASS_ANGLE, MAX_GRASS_ANGLE),
+          c = RandomFloat (-MAX_GRASS_ANGLE, MAX_GRASS_ANGLE);
+
+    // r1 and r2 are interpolation values on the triangle.
+    if (r2 > (1.0f - r1))
+    {
+        /*
+            Point is outside the triangle, but inside the parallelogram.
+            Rotate 180 degrees to fix
+         */
+
+        r2 = 1.0f - r2;
+        r1 = 1.0f - r1;
+    }
+
+    matrix4 transf = matRotX (c) * matRotZ (b) * matRotY (a);
+
+    blade.base = pv0->v.p + r1 * (pv1->v.p - pv0->v.p) +
+                            r2 * (pv2->v.p - pv0->v.p);
+    blade.vertical = transf * n;
+    blade.horizontal = transf * Cross (n, VEC_FORWARD);
+    blade.normal = pv0->v.n + r1 * (pv1->v.n - pv0->v.n) +
+                              r2 * (pv2->v.n - pv0->v.n);
+
+    // move grass down into the ground to correct for angle:
+    blade.base -= blade.vertical * (GRASS_WIDTH / 2) * sin (b);
+}
+
+/**
+ * This function is quite expensive and needs to be called during chunk loading
+ * when the player is moving. Might need to move this to a separate thread.
+ */
+bool CalcGrassPolygons (VertexBuffer *pBuffer,
+                        GrassVertex *pbuf, const size_t max_vertices,
+                        vec3 **p_grass_neutral_positions,
+                        const GroundVertex grid [][PER_CHUNK_SIZE + 1])
+{
+    size_t i = 0, x, z,
+           u, j, k;
+    const GroundVertex *pv0, *pv1, *pv2;
+
+    // Generate blade quads for the entire surface of the mesh:
+    for (x = 0; x < PER_CHUNK_SIZE; x++)
+    {
+        for (z = 0; z < PER_CHUNK_SIZE; z++)
+        {
+            // two triangles per grid quad:
+            for (u = 0; u < 2; u++)
+            {
+                if (u == 0)
+                {
+                    pv0 = &grid [x][z + 1];
+                    pv1 = &grid [x + 1][z + 1];
+                    pv2 = &grid [x + 1][z];
+                }
+                else
+                {
+                    pv0 = &grid [x][z + 1];
+                    pv1 = &grid [x + 1][z];
+                    pv2 = &grid [x][z];
+                }
+
+                const vec3 p0 = pv0->v.p,
+                           p1 = pv1->v.p,
+                           p2 = pv2->v.p,
+                           n = Cross (p1 - p0, p2 - p0).Unit ();
+
+                const float area = GetTriangleArea (p0, p1, p2);
+
+                const size_t n_blades = area * GRASS_PER_M2;
+                for (j = 0; j < n_blades; j++)
+                {
+                    if ((i + 6) >= max_vertices)
+                    {
+                        SetError ("max vertices exceeded");
+                        return false;
+                    }
+
+                    GrassBladeParams blade;
+                    RandomGrassPosition (pv0, pv1, pv2, n, blade);
+
+                    SetGrassBladeVertices (pbuf, i, blade.base,
+                                           blade.horizontal,
+                                           blade.vertical, blade.normal);
+
+                    // Register these so that the wind can be calculated
+                    for (k=0; k < 6; k++)
+                        (*p_grass_neutral_positions) [i + k] = pbuf [i + k].v.p;
+
+                    i += 6;
+                }
+            }
+        }
+    }
+    pBuffer->n_vertices = i;
+
+    return true;
+}
+bool FillGrassPolygonsVertexBuffer (VertexBuffer *pBuffer,
+                                    vec3 **p_grass_neutral_positions,
+                                    const GroundVertex grid [][PER_CHUNK_SIZE + 1])
+{
     // Hard to predict this exactly, depends on the surface area of the floor:
-    const size_t n_vertices_estimate = GRASS_PER_M2 * 10 * groundTriangles.size ();
+    const size_t n_vertices_estimate = GRASS_PER_M2 * 10 * PER_CHUNK_SIZE * PER_CHUNK_SIZE;
 
     // The buffer must be dynamic, because the wind will deform the blades all the time:
     glBindBuffer (GL_ARRAY_BUFFER, pBuffer->handle);
@@ -101,93 +242,13 @@ bool FillGrassBladeVertexBuffer (VertexBuffer *pBuffer, const std::list <Triangl
         return false;
     }
 
-    // Generate blade quads for the entire surface of the mesh:
-    for (const Triangle &groundTriangle : groundTriangles)
-    {
-        const vec3 p0 = groundTriangle.p[0],
-                   p1 = groundTriangle.p[1],
-                   p2 = groundTriangle.p[2],
-                   n = Cross (p1 - p0, p2 - p0).Unit ();
-
-        const float l01 = (p1 - p0).Length (),
-                    l02 = (p2 - p0).Length (),
-                    l12 = (p2 - p1).Length (),
-                    s = (l01 + l02 + l12) / 2,
-                    area = sqrt (s * (s - l01) * (s - l02) * (s - l12));
-
-        const size_t n_blades = area * GRASS_PER_M2;
-        for (j = 0; j < n_blades; j++)
-        {
-            if ((i + 6) >= n_vertices_estimate)
-            {
-                SetError ("vertex estimate exceeded");
-                return false;
-            }
-
-            // Give each blade a random orientation and position on the triangle.
-            float r1 = RandomFloat (0.0f, 1.0f),
-                  r2 = RandomFloat (0.0f, 1.0f),
-                  a = RandomFloat (0, 2 * M_PI),
-                  b = RandomFloat (-MAX_GRASS_ANGLE, MAX_GRASS_ANGLE),
-                  c = RandomFloat (-MAX_GRASS_ANGLE, MAX_GRASS_ANGLE);
-
-            if (r2 > (1.0f - r1))
-            {
-                /*
-                    Point is outside the triangle, but inside the parallelogram.
-                    Rotate 180 degrees to fix
-                 */
-
-                r2 = 1.0f - r2;
-                r1 = 1.0f - r1;
-            }
-
-            matrix4 transf = matRotX (c) * matRotZ (b) * matRotY (a);
-
-            vec3 base = p0 + r1 * (p1 - p0) + r2 * (p2 - p0),
-                 vertical = transf * n,
-                 horizontal = transf * Cross (n, VEC_FORWARD),
-                 normal = transf * VEC_BACK;
-
-            // move grass down into the ground to correct for angle:
-            base -= vertical * (GRASS_WIDTH / 2) * sin (b);
-
-            // Make a quad from two triangles (6 vertices):
-
-            pbuf [i].v.p = base - (GRASS_WIDTH / 2) * horizontal;
-            pbuf [i].v.n = normal;
-            pbuf [i].t = {0.0f, 0.0f};
-
-            pbuf [i + 1].v.p = pbuf [i].v.p + GRASS_HEIGHT * vertical;
-            pbuf [i + 1].v.n = normal;
-            pbuf [i + 1].t = {0.0f, 1.0f};
-
-            pbuf [i + 2].v.p = base + (GRASS_WIDTH / 2) * horizontal;
-            pbuf [i + 2].v.n = normal;
-            pbuf [i + 2].t = {1.0f, 0.0f};
-
-            pbuf [i + 3] = pbuf [i + 1];
-
-            pbuf [i + 4].v.p = pbuf [i + 2].v.p + GRASS_HEIGHT * vertical;
-            pbuf [i + 4].v.n = normal;
-            pbuf [i + 4].t = {1.0f, 1.0f};
-
-            pbuf [i + 5] = pbuf [i + 2];
-
-            // Register these so that wind can be calculated
-            for (k=0; k < 6; k++)
-                (*p_grass_neutral_positions) [i + k] = pbuf [i + k].v.p;
-
-            i += 6;
-        }
-    }
-
-    pBuffer->n_vertices = i;
+    bool success = CalcGrassPolygons (pBuffer, pbuf, n_vertices_estimate,
+                                      p_grass_neutral_positions, grid);
 
     glUnmapBuffer (GL_ARRAY_BUFFER);
     glBindBuffer (GL_ARRAY_BUFFER, 0);
 
-    return true;
+    return success;
 }
 void UpdateGrassPolygons (VertexBuffer *pBuffer, const vec3 *grass_neutral_positions, const vec3 &wind)
 {
@@ -207,6 +268,11 @@ void UpdateGrassPolygons (VertexBuffer *pBuffer, const vec3 *grass_neutral_posit
         pbuf [i + 1].v.p = grass_neutral_positions [i + 1] + wind;
         pbuf [i + 3].v.p = grass_neutral_positions [i + 3] + wind;
         pbuf [i + 4].v.p = grass_neutral_positions [i + 4] + wind;
+
+        /* vec3 new_normal = Cross (pbuf [i + 1].v.p - pbuf [i].v.p,
+                                    pbuf [i + 2].v.p - pbuf [i].v.p).Unit ();
+        for (size_t j = 0; j < 6; j++)
+            pbuf [i + j].v.n = new_normal; */
     }
 
     glUnmapBuffer (GL_ARRAY_BUFFER);
@@ -290,7 +356,7 @@ bool GrassChunk::Generate (const TerraGen <TerrainType> *pTerraGen)
         SetError ("error filling vertex buffer for ground: %s", GetError());
         return false;
     }
-    if (!FillGrassBladeVertexBuffer (&vbo_grass, collTriangles, &grass_neutral_positions))
+    if (!FillGrassPolygonsVertexBuffer (&vbo_grass, &grass_neutral_positions, grid))
     {
         SetError ("error filling vertex buffer for grass: %s", GetError());
         return false;

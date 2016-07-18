@@ -1,4 +1,4 @@
-Game templates version 1.10.0
+Game templates version 1.11.0
 
 [test3d]
 
@@ -11,6 +11,7 @@ Contains examples of some basic 3D features:
 * render to texture
 * parsing and rendering svg fonts with kerning tables. These fonts can be created in fontforge. (http://fontforge.github.io/en-US/)
 * using meshes with skeletal animation, created in blender 2.49b (http://www.blender.org/) and exported with the script: xml_exporter.py
+* auto terrain generation
 
 [manager]
 

@@ -409,8 +409,8 @@ void App::MainLoop (void)
         dt = float(ticks - ticks0) / 1000;
         ticks0 = ticks;
 
-        if (dt > 0.2f)
-            dt = 0.2f;
+        if (dt > 0.05f)
+            dt = 0.05f;
 
         pScene->Update(dt);
         pScene->Render();

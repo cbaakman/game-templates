@@ -941,6 +941,37 @@ void RenderNBT (const int n_vertices, const MeshVertex **p_vertices, const MeshT
 
     glEnd ();
 }
+void RenderCollisionTriangles (const std::list <Triangle> &collision_triangles)
+{
+    glDisable (GL_DEPTH_TEST);
+    glDisable (GL_LIGHTING);
+    glDisable (GL_TEXTURE_2D);
+    glColor4f (0.8f, 0.0f, 0.0f, 1.0f);
+    for (const Triangle &triangle : collision_triangles)
+    {
+        glBegin (GL_LINES);
+        for (int j=0; j < 3; j++)
+        {
+            int k = (j + 1) % 3;
+            glVertex3f (triangle.p[j].x, triangle.p[j].y, triangle.p[j].z);
+            glVertex3f (triangle.p[k].x, triangle.p[k].y, triangle.p[k].z);
+        }
+        glEnd ();
+    }
+
+    glColor4f (1.0f, 1.0f, 1.0f, 1.0f);
+    glEnable (GL_LIGHTING);
+    glEnable (GL_DEPTH_TEST);
+}
+void RenderQuadCoverScreen (const float distance)
+{
+    glBegin (GL_QUADS);
+    glVertex3f (-1.0e+15f, 1.0e+15f, distance);
+    glVertex3f ( 1.0e+15f, 1.0e+15f, distance);
+    glVertex3f ( 1.0e+15f,-1.0e+15f, distance);
+    glVertex3f (-1.0e+15f,-1.0e+15f, distance);
+    glEnd ();
+}
 #define SHADOW_STENCIL_MASK 0xFFFFFFFFL
 void ShadowScene::Render ()
 {
@@ -1024,7 +1055,7 @@ void ShadowScene::Render ()
     glEnable (GL_BLEND);
     glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    // Render the world:
+    // Render the world, shadows will be drawn on it later.
     glActiveTexture (GL_TEXTURE0);
     glBindTexture (GL_TEXTURE_2D, texBox.tex);
 
@@ -1034,26 +1065,9 @@ void ShadowScene::Render ()
     glDisable (GL_TEXTURE_2D);
 
     if (show_triangles)
-    {
-        glDisable (GL_DEPTH_TEST);
-        glColor4f (0.8f, 0.0f, 0.0f, 1.0f);
-        for (const Triangle &triangle : collision_triangles)
-        {
-            glBegin (GL_LINES);
-            for (int j=0; j < 3; j++)
-            {
-                int k = (j + 1) % 3;
-                glVertex3f (triangle.p[j].x, triangle.p[j].y, triangle.p[j].z);
-                glVertex3f (triangle.p[k].x, triangle.p[k].y, triangle.p[k].z);
-            }
-            glEnd ();
-        }
+        RenderCollisionTriangles (collision_triangles);
 
-        glColor4f (1.0f, 1.0f, 1.0f, 1.0f);
-        glEnable (GL_DEPTH_TEST);
-    }
-
-    // Render player (and bones/normals if requested)
+    // Render player
     glEnable (GL_TEXTURE_2D);
     glActiveTexture (GL_TEXTURE0);
     glBindTexture (GL_TEXTURE_2D, texDummy.tex);
@@ -1083,6 +1097,7 @@ void ShadowScene::Render ()
     glBindTexture (GL_TEXTURE_2D, 0);
 
 
+    // Render bones (if switched on) and normals (if switched on)
     glDisable (GL_DEPTH_TEST);
     glDisable (GL_LIGHTING);
     glDisable (GL_TEXTURE_2D);
@@ -1097,7 +1112,7 @@ void ShadowScene::Render ()
         pMeshDummy->ThroughSubsetFaces ("0", RenderNBT);
     }
 
-    // We need to have the light position in player space, because that's where the triangles are.
+    // We need to have the light position in mesh space, because that's where the triangles are.
 
     const vec3 invPosLight = matInverse (transformPlayer) * posLight;
     const int n_triangles = GetTriangles (pMeshDummy, shadowTriangles);
@@ -1122,7 +1137,10 @@ void ShadowScene::Render ()
     glStencilOp (GL_KEEP, GL_KEEP, GL_DECR);
     ShadowPass (edges, invPosLight);
 
-    // Set the stencil pixels to zero where the dummy is drawn and where nothing is drawn (background)
+    /*
+        Set the stencil pixels to zero where the dummy is drawn and where the
+        sky is drawn.
+     */
     glFrontFace (GL_CW);
     glStencilOp (GL_KEEP, GL_KEEP, GL_ZERO);
     RenderNormalMapVertices (&vbo_dummy, index_tangent, index_bitangent);
@@ -1130,12 +1148,7 @@ void ShadowScene::Render ()
     glLoadIdentity ();
 
     // Set every stencil pixel behind the walls/floor to zero
-    glBegin (GL_QUADS);
-        glVertex3f (-1.0e+15f, 1.0e+15f, 0.9f * SHADOW_INFINITY);
-        glVertex3f ( 1.0e+15f, 1.0e+15f, 0.9f * SHADOW_INFINITY);
-        glVertex3f ( 1.0e+15f,-1.0e+15f, 0.9f * SHADOW_INFINITY);
-        glVertex3f (-1.0e+15f,-1.0e+15f, 0.9f * SHADOW_INFINITY);
-    glEnd ();
+    RenderQuadCoverScreen (0.9f * SHADOW_INFINITY);
 
     // Turn color rendering back on and draw to nonzero stencil pixels
     glColorMask (GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
@@ -1148,12 +1161,7 @@ void ShadowScene::Render ()
     glDisable(GL_DEPTH_TEST);
 
     glColor4f (0.0f, 0.0f, 0.0f, 0.4f);
-    glBegin (GL_QUADS);
-        glVertex3f (-1.0f, 1.0f, NEAR_VIEW + 0.1f);
-        glVertex3f ( 1.0f, 1.0f, NEAR_VIEW + 0.1f);
-        glVertex3f ( 1.0f,-1.0f, NEAR_VIEW + 0.1f);
-        glVertex3f (-1.0f,-1.0f, NEAR_VIEW + 0.1f);
-    glEnd ();
+    RenderQuadCoverScreen (NEAR_VIEW + 0.1f);
 
     /*
        Render the particles after the shadows, because they're transparent

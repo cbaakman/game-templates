@@ -1039,6 +1039,7 @@ void ShadowScene::Render ()
     glLoadMatrixf(matCameraView.m);
 
     // Light settings, position will be set later
+    glEnable (GL_COLOR_MATERIAL);
     glEnable (GL_LIGHTING);
     glEnable (GL_LIGHT0);
     glLightfv (GL_LIGHT0, GL_AMBIENT, ambient);

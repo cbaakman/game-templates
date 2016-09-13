@@ -39,7 +39,7 @@
 #include <list>
 #include <cstdarg>
 
-#include "../geo2d.h"
+#include "../vec.h"
 #include "../account.h"
 #include "../xml.h"
 

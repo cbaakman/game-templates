@@ -23,7 +23,7 @@
 #include <string>
 #include <sstream>
 #include <list>
-#include "../geo2d.h"
+#include "../vec.h"
 #include "../util.h"
 
 #include <math.h>

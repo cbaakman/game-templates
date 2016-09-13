@@ -25,7 +25,6 @@
 #include <GL/gl.h>
 
 #include "matrix.h"
-#include "geo2d.h"
 
 /**
  * Converts a GL error status to a string.
